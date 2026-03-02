@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1] - 2026-03-02
+
+### Bug Fixes
+- Respect --dangerously-skip-permissions flag (43245de)
+  - Auto-allow all commands when Claude Code runs with `--dangerously-skip-permissions`
+  - Closes #2
+
 ## [1.5.0] - 2026-03-02
 
 ### Features

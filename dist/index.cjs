@@ -19745,6 +19745,9 @@ async function main() {
   if (input.tool_name !== "Bash") {
     process.exit(0);
   }
+  if (input.permission_mode === "dangerously-skip-permissions") {
+    process.exit(0);
+  }
   const command = input.tool_input?.command;
   if (!command || typeof command !== "string") {
     process.exit(0);
