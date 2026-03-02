@@ -117,6 +117,9 @@ export const DEFAULT_CONFIG: WardenConfig = {
       'ps', 'top', 'htop', 'uptime', 'free', 'df', 'du', 'lsof',
       // Text processing
       'sed', 'awk', 'jq', 'yq', 'xargs', 'seq',
+      // Network diagnostics (read-only)
+      'nslookup', 'dig', 'host', 'ping', 'traceroute', 'mtr',
+      'netstat', 'ss', 'ifconfig', 'ip', 'nmap',
       // Pagers and formatters
       'bat', 'pygmentize', 'highlight',
       // Version managers (read-only)
