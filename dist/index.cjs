@@ -18515,8 +18515,8 @@ function globToRegex(pattern) {
   }
   return new RegExp(`^${regex}$`);
 }
-function matchesPattern(value, patterns) {
-  return patterns.some((p) => globToRegex(p).test(value));
+function findMatchingTarget(value, targets) {
+  return targets.find((t) => globToRegex(t.name).test(value)) || null;
 }
 function parseSSHArgs(args2) {
   let host = null;
@@ -18560,19 +18560,21 @@ function evaluateSSHCommand(cmd, config) {
   const trustedHosts = config.trustedSSHHosts || [];
   if (command === "scp" || command === "rsync") {
     const host2 = extractHostFromRemotePath(args2);
-    if (host2 && matchesPattern(host2, trustedHosts)) {
-      return {
-        command,
-        args: args2,
-        decision: "allow",
-        reason: `Trusted SSH host "${host2}"`,
-        matchedRule: "trustedSSHHosts"
-      };
-    }
-    return null;
+    if (!host2) return null;
+    const target2 = findMatchingTarget(host2, trustedHosts);
+    if (!target2) return null;
+    return {
+      command,
+      args: args2,
+      decision: "allow",
+      reason: `Trusted SSH host "${host2}"`,
+      matchedRule: "trustedSSHHosts"
+    };
   }
   const { host, remoteCommand } = parseSSHArgs(args2);
-  if (!host || !matchesPattern(host, trustedHosts)) return null;
+  if (!host) return null;
+  const target = findMatchingTarget(host, trustedHosts);
+  if (!target) return null;
   if (!remoteCommand) {
     return {
       command,
@@ -18582,8 +18584,17 @@ function evaluateSSHCommand(cmd, config) {
       matchedRule: "trustedSSHHosts"
     };
   }
+  if (target.allowAll) {
+    return {
+      command,
+      args: args2,
+      decision: "allow",
+      reason: `Trusted SSH host "${host}" (allowAll)`,
+      matchedRule: "trustedSSHHosts"
+    };
+  }
   const parsed = parseCommand(remoteCommand);
-  const result = evaluate(parsed, configWithContextOverrides(config));
+  const result = evaluate(parsed, configWithContextOverrides(config, target));
   return {
     command,
     args: args2,
@@ -18603,15 +18614,21 @@ var DOCKER_EXEC_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
   "--detach-keys"
 ]);
 var INTERACTIVE_SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh"]);
-function configWithContextOverrides(config) {
-  if (!config.trustedContextOverrides) return config;
+function configWithContextOverrides(config, target) {
+  const overrideLayers = [];
+  if (target?.overrides) overrideLayers.push(target.overrides);
+  if (config.trustedContextOverrides) overrideLayers.push(config.trustedContextOverrides);
+  if (overrideLayers.length === 0) return config;
   return {
     ...config,
-    layers: [config.trustedContextOverrides, ...config.layers]
+    layers: [...overrideLayers, ...config.layers]
   };
 }
-function evaluateRemoteCommand(remoteArgs, config) {
-  const overriddenConfig = configWithContextOverrides(config);
+function evaluateRemoteCommand(remoteArgs, config, target) {
+  if (target?.allowAll) {
+    return { decision: "allow", reason: "allowAll target", details: [] };
+  }
+  const overriddenConfig = configWithContextOverrides(config, target);
   if (remoteArgs.length === 0) {
     return { decision: "allow", reason: "interactive", details: [] };
   }
@@ -18625,9 +18642,10 @@ function evaluateRemoteCommand(remoteArgs, config) {
     return evaluate(parsed2, overriddenConfig);
   }
   const parsed = {
-    commands: [{ command: remoteCmd, args: remoteArgs.slice(1) }],
+    commands: [{ command: remoteCmd, args: remoteArgs.slice(1), envPrefixes: [], raw: remoteArgs.join(" ") }],
     hasSubshell: false,
-    subshellCommands: []
+    subshellCommands: [],
+    parseError: false
   };
   return evaluate(parsed, overriddenConfig);
 }
@@ -18661,14 +18679,16 @@ function parseDockerExecArgs(args2) {
 function evaluateDockerExec(cmd, config) {
   const { command, args: args2 } = cmd;
   if (args2[0] !== "exec") return null;
-  const { target, remoteArgs } = parseDockerExecArgs(args2.slice(1));
-  if (!target || !matchesPattern(target, config.trustedDockerContainers || [])) return null;
-  const result = evaluateRemoteCommand(remoteArgs, config);
+  const { target: containerName, remoteArgs } = parseDockerExecArgs(args2.slice(1));
+  if (!containerName) return null;
+  const matched = findMatchingTarget(containerName, config.trustedDockerContainers || []);
+  if (!matched) return null;
+  const result = evaluateRemoteCommand(remoteArgs, config, matched);
   return {
     command,
     args: args2,
     decision: result.decision,
-    reason: `Trusted Docker container "${target}" (${result.reason})`,
+    reason: `Trusted Docker container "${containerName}" (${result.reason})`,
     matchedRule: "trustedDockerContainers"
   };
 }
@@ -18740,9 +18760,10 @@ function evaluateKubectlExec(cmd, config) {
   const { command, args: args2 } = cmd;
   if (args2[0] !== "exec") return null;
   const { context, pod, remoteArgs } = parseKubectlExecArgs(args2.slice(1));
-  const trustedContexts = config.trustedKubectlContexts || [];
-  if (!context || !matchesPattern(context, trustedContexts)) return null;
-  const result = evaluateRemoteCommand(remoteArgs, config);
+  if (!context) return null;
+  const matched = findMatchingTarget(context, config.trustedKubectlContexts || []);
+  if (!matched) return null;
+  const result = evaluateRemoteCommand(remoteArgs, config, matched);
   return {
     command,
     args: args2,
@@ -18805,9 +18826,10 @@ function parseSpriteExecArgs(args2) {
 function evaluateSpriteExec(cmd, config) {
   const { command, args: args2 } = cmd;
   const { spriteName, remoteArgs } = parseSpriteExecArgs(args2);
-  const trustedSprites = config.trustedSprites || [];
-  if (!spriteName || !matchesPattern(spriteName, trustedSprites)) return null;
-  const result = evaluateRemoteCommand(remoteArgs, config);
+  if (!spriteName) return null;
+  const matched = findMatchingTarget(spriteName, config.trustedSprites || []);
+  if (!matched) return null;
+  const result = evaluateRemoteCommand(remoteArgs, config, matched);
   return {
     command,
     args: args2,
@@ -19335,18 +19357,33 @@ function extractLayer(raw) {
     rules: Array.isArray(raw.rules) ? raw.rules : []
   };
 }
+function parseTrustedList(raw) {
+  return raw.map((entry) => {
+    if (typeof entry === "string") return { name: entry };
+    if (entry && typeof entry === "object" && "name" in entry) {
+      const obj = entry;
+      const target = { name: String(obj.name) };
+      if (obj.allowAll === true) target.allowAll = true;
+      if (obj.overrides && typeof obj.overrides === "object") {
+        target.overrides = extractLayer(obj.overrides);
+      }
+      return target;
+    }
+    return null;
+  }).filter((t) => t !== null);
+}
 function mergeNonLayerFields(config, raw) {
   if (Array.isArray(raw.trustedSSHHosts)) {
-    config.trustedSSHHosts = [...config.trustedSSHHosts || [], ...raw.trustedSSHHosts];
+    config.trustedSSHHosts = [...config.trustedSSHHosts || [], ...parseTrustedList(raw.trustedSSHHosts)];
   }
   if (Array.isArray(raw.trustedDockerContainers)) {
-    config.trustedDockerContainers = [...config.trustedDockerContainers || [], ...raw.trustedDockerContainers];
+    config.trustedDockerContainers = [...config.trustedDockerContainers || [], ...parseTrustedList(raw.trustedDockerContainers)];
   }
   if (Array.isArray(raw.trustedKubectlContexts)) {
-    config.trustedKubectlContexts = [...config.trustedKubectlContexts || [], ...raw.trustedKubectlContexts];
+    config.trustedKubectlContexts = [...config.trustedKubectlContexts || [], ...parseTrustedList(raw.trustedKubectlContexts)];
   }
   if (Array.isArray(raw.trustedSprites)) {
-    config.trustedSprites = [...config.trustedSprites || [], ...raw.trustedSprites];
+    config.trustedSprites = [...config.trustedSprites || [], ...parseTrustedList(raw.trustedSprites)];
   }
   if (typeof raw.defaultDecision === "string") {
     config.defaultDecision = raw.defaultDecision;
@@ -19408,15 +19445,15 @@ function formatSystemMessage(decision, rawCommand, details) {
     const header = `[warden] ${parts.join(" | ")}`;
     const subcommandHints = relevant.filter((d) => d.args.length > 0).map((d) => {
       const sub = d.args[0];
-      return `  Option A: Allow all \`${d.command}\` \u2192 \`/warden-allow ${d.command}\`
-  Option B: Allow only \`${d.command} ${sub}\` \u2192 \`/warden-allow ${d.command} ${sub}\``;
+      return `  Option A: Allow all \`${d.command}\` \u2192 \`/claude-warden:warden-allow ${d.command}\`
+  Option B: Allow only \`${d.command} ${sub}\` \u2192 \`/claude-warden:warden-allow ${d.command} ${sub}\``;
     });
     if (subcommandHints.length > 0) {
       return `${header}
 ${subcommandHints.join("\n")}
-See /warden-allow`;
+See /claude-warden:warden-allow`;
     }
-    return `${header} \u2014 To auto-allow, see /warden-allow`;
+    return `${header} \u2014 To auto-allow, see /claude-warden:warden-allow`;
   }
   const lines = ["[warden] Command blocked", ""];
   if (relevant.length > 0) {
