@@ -127,14 +127,14 @@ rules:
         description: Read-only docker commands
 ```
 
-## Feedback and `/warden-allow`
+## Feedback and `/claude-warden:warden-allow`
 
 When Warden blocks or flags a command, it includes a system message explaining:
 
 1. **Why** the command was blocked/flagged (per-command reasons)
 2. **How to allow it** — a ready-to-use YAML snippet for your config
 
-Use the `/warden-allow` slash command to apply the suggested config change. It will ask which scope (project or user) to use.
+Use the `/claude-warden:warden-allow` slash command to apply the suggested config change. It will ask which scope (project or user) to use.
 
 ## Built-in defaults
 
