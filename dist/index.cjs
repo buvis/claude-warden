@@ -19092,6 +19092,7 @@ var DEFAULT_CONFIG = {
       "ifconfig",
       "ip",
       "nmap",
+      "arp",
       // Pagers and formatters
       "bat",
       "pygmentize",
@@ -19106,6 +19107,74 @@ var DEFAULT_CONFIG = {
       "tput",
       "reset",
       "clear",
+      // System/hardware info
+      "lscpu",
+      "lsblk",
+      "lsusb",
+      "lspci",
+      "lsmod",
+      "dmesg",
+      "sysctl",
+      "sw_vers",
+      "system_profiler",
+      "hostinfo",
+      "lsb_release",
+      "hostnamectl",
+      "arch",
+      "getconf",
+      // User/group info
+      "groups",
+      "getent",
+      "w",
+      "last",
+      "lastlog",
+      "finger",
+      "users",
+      // Process info
+      "pgrep",
+      "pidof",
+      "jobs",
+      // Compression/archive
+      "tar",
+      "gzip",
+      "gunzip",
+      "bzip2",
+      "bunzip2",
+      "xz",
+      "unxz",
+      "zip",
+      "unzip",
+      "7z",
+      "zcat",
+      "bzcat",
+      "xzcat",
+      "zless",
+      "zmore",
+      "zgrep",
+      // Clipboard
+      "pbcopy",
+      "pbpaste",
+      "xclip",
+      "xsel",
+      "wl-copy",
+      "wl-paste",
+      // Binary analysis
+      "strings",
+      "nm",
+      "objdump",
+      "readelf",
+      "ldd",
+      "otool",
+      "size",
+      // macOS utilities (read-only)
+      "mdfind",
+      "mdls",
+      "mdutil",
+      "plutil",
+      "sips",
+      "xcode-select",
+      "xcrun",
+      "xcodebuild",
       // Misc safe
       "cd",
       "pushd",
@@ -19123,7 +19192,18 @@ var DEFAULT_CONFIG = {
       "shasum",
       "cksum",
       "base64",
-      "openssl"
+      "openssl",
+      "watch",
+      "timeout",
+      "nohup",
+      "nice",
+      "iconv",
+      "locale",
+      "localedef",
+      "numfmt",
+      "factor",
+      "bc",
+      "dc"
     ],
     alwaysDeny: [
       "sudo",
@@ -19147,7 +19227,9 @@ var DEFAULT_CONFIG = {
       "crontab",
       "systemctl",
       "service",
-      "launchctl"
+      "launchctl",
+      "wipefs",
+      "shred"
     ],
     rules: [
       // --- CLI tools ---
@@ -19262,7 +19344,15 @@ var DEFAULT_CONFIG = {
         ]
       },
       { command: "docker-compose", default: "ask" },
-      { command: "kubectl", default: "ask" },
+      {
+        command: "kubectl",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$"] }, decision: "allow", description: "Read-only kubectl commands" },
+          { match: { anyArgMatches: ["^(delete|drain|cordon|taint)$"] }, decision: "ask", reason: "Destructive kubectl operation" },
+          VERSION_HELP_FLAGS
+        ]
+      },
       // --- File operations ---
       {
         command: "rm",
@@ -19302,7 +19392,92 @@ var DEFAULT_CONFIG = {
       // --- Terraform / IaC ---
       { command: "terraform", default: "ask", argPatterns: [
         { match: { anyArgMatches: ["^(plan|validate|fmt|show|state|output|providers|version|graph|console)$"] }, decision: "allow", description: "Read-only terraform commands" }
-      ] }
+      ] },
+      // --- macOS open ---
+      { command: "open", default: "ask" },
+      // --- Text editors ---
+      ...["vi", "vim", "nvim", "nano", "emacs"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [VERSION_HELP_FLAGS]
+      })),
+      // --- Scripting languages ---
+      ...["ruby", "perl", "php"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^-e$", "^--eval"] }, decision: "ask", reason: "Inline code execution" },
+          VERSION_HELP_FLAGS
+        ]
+      })),
+      // --- Java ecosystem ---
+      { command: "java", default: "ask", argPatterns: [VERSION_HELP_FLAGS] },
+      { command: "javac", default: "allow" },
+      // --- Swift / Zig / Dotnet ---
+      { command: "swift", default: "allow", argPatterns: [
+        { match: { anyArgMatches: ["^(build|test|run|package)$"] }, decision: "allow" }
+      ] },
+      { command: "swiftc", default: "allow" },
+      { command: "zig", default: "allow" },
+      { command: "dotnet", default: "allow", argPatterns: [
+        { match: { anyArgMatches: ["^(publish|nuget)$"] }, decision: "ask", reason: "Publishing" }
+      ] },
+      // --- Database CLIs ---
+      ...["psql", "mysql", "mariadb", "sqlite3", "redis-cli", "mongosh"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [VERSION_HELP_FLAGS]
+      })),
+      // --- Cloud CLIs ---
+      { command: "gcloud", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(info|version|help|config|components)$"] }, decision: "allow", description: "Config/info" },
+        { match: { anyArgMatches: ["^(list|describe|get-iam-policy|get)$"] }, decision: "allow", description: "Read-only ops" },
+        VERSION_HELP_FLAGS
+      ] },
+      { command: "az", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(list|show|get)$"] }, decision: "allow", description: "Read-only ops" },
+        VERSION_HELP_FLAGS
+      ] },
+      { command: "aws", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(describe|list|get|sts)$"] }, decision: "allow", description: "Read-only ops" },
+        VERSION_HELP_FLAGS
+      ] },
+      // --- Helm ---
+      { command: "helm", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(list|search|show|status|get|template|version|env|history)$"] }, decision: "allow", description: "Read-only helm commands" },
+        VERSION_HELP_FLAGS
+      ] },
+      // --- Screen/tmux ---
+      ...["screen", "tmux"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(list-sessions|ls|list)$"] }, decision: "allow", description: "List sessions" },
+          VERSION_HELP_FLAGS
+        ]
+      })),
+      // --- GPG ---
+      { command: "gpg", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(--verify|--list-keys|--list-secret-keys|--fingerprint)$"] }, decision: "allow", description: "Read-only gpg" },
+        VERSION_HELP_FLAGS
+      ] },
+      // --- macOS-specific ---
+      { command: "defaults", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(read|read-type|find|domains)$"] }, decision: "allow", description: "Read-only defaults operations" }
+      ] },
+      { command: "diskutil", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(list|info|apfs|cs|appleRAID)$"] }, decision: "allow", description: "Read-only diskutil" }
+      ] },
+      { command: "codesign", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(-vv|--verify|--display|-d)$"] }, decision: "allow", description: "Verify codesign" }
+      ] },
+      { command: "osascript", default: "ask" },
+      { command: "say", default: "ask" },
+      // --- Process management ---
+      { command: "kill", default: "ask" },
+      { command: "killall", default: "ask" },
+      { command: "pkill", default: "ask" },
+      { command: "renice", default: "ask" }
     ]
   }]
 };

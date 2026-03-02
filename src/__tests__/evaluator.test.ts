@@ -473,7 +473,8 @@ describe('evaluator', () => {
     });
 
     it('does not intercept non-exec kubectl commands', () => {
-      expect(evalWith('kubectl get pods --context minikube', { trustedKubectlContexts: toTargets(contexts) }).decision).toBe('ask');
+      // 'get' is now always allowed as a read-only kubectl command, so test with a non-read-only subcommand
+      expect(evalWith('kubectl apply -f deployment.yaml --context minikube', { trustedKubectlContexts: toTargets(contexts) }).decision).toBe('ask');
     });
 
     it('handles namespace and container flags', () => {
