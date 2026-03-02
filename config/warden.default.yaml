@@ -13,6 +13,12 @@ defaultDecision: ask
 # If true, commands containing $() or backticks trigger "ask"
 askOnSubshell: true
 
+# Send OS notifications when warden prompts for permission or blocks a command.
+# On macOS, uses terminal-notifier (click to activate terminal) or osascript fallback.
+# On Linux, uses notify-send.
+notifyOnAsk: true
+notifyOnDeny: true
+
 # Additional commands to always allow (checked after alwaysDeny within this scope)
 # alwaysAllow:
 #   - terraform

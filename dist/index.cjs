@@ -18988,6 +18988,8 @@ function pkgRunnerRule(command) {
 var DEFAULT_CONFIG = {
   defaultDecision: "ask",
   askOnSubshell: true,
+  notifyOnAsk: true,
+  notifyOnDeny: true,
   trustedSSHHosts: [],
   trustedDockerContainers: [],
   trustedKubectlContexts: [],
@@ -19578,6 +19580,12 @@ function mergeNonLayerFields(config, raw) {
   if (typeof raw.askOnSubshell === "boolean") {
     config.askOnSubshell = raw.askOnSubshell;
   }
+  if (typeof raw.notifyOnAsk === "boolean") {
+    config.notifyOnAsk = raw.notifyOnAsk;
+  }
+  if (typeof raw.notifyOnDeny === "boolean") {
+    config.notifyOnDeny = raw.notifyOnDeny;
+  }
   if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === "object") {
     const overrides = raw.trustedContextOverrides;
     const layer = extractLayer(overrides);
@@ -19666,6 +19674,62 @@ See /claude-warden:warden-allow`;
   return lines.join("\n");
 }
 
+// src/notify.ts
+var import_child_process = require("child_process");
+var TERMINAL_BUNDLE_IDS = {
+  "iTerm.app": "com.googlecode.iterm2",
+  "Apple_Terminal": "com.apple.Terminal",
+  "Alacritty": "com.github.alacritty.Alacritty",
+  "WezTerm": "io.wezfurlong.wezterm"
+};
+var terminalNotifierAvailable = null;
+function hasTerminalNotifier() {
+  if (terminalNotifierAvailable !== null) return terminalNotifierAvailable;
+  try {
+    (0, import_child_process.execFileSync)("which", ["terminal-notifier"], { stdio: "ignore" });
+    terminalNotifierAvailable = true;
+  } catch {
+    terminalNotifierAvailable = false;
+  }
+  return terminalNotifierAvailable;
+}
+function getBundleId() {
+  const termProgram = process.env.TERM_PROGRAM;
+  if (!termProgram) return void 0;
+  return TERMINAL_BUNDLE_IDS[termProgram];
+}
+function buildNotifyCommand(title, message) {
+  const platform = process.platform;
+  if (platform === "darwin") {
+    if (hasTerminalNotifier()) {
+      const args2 = ["-title", title, "-message", message];
+      const bundleId = getBundleId();
+      if (bundleId) {
+        args2.push("-activate", bundleId);
+      }
+      return { cmd: "terminal-notifier", args: args2 };
+    }
+    const script = `display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)}`;
+    return { cmd: "osascript", args: ["-e", script] };
+  }
+  if (platform === "linux") {
+    return { cmd: "notify-send", args: [title, message] };
+  }
+  return null;
+}
+function sendNotification(title, message, config) {
+  try {
+    const notifyCmd = buildNotifyCommand(title, message);
+    if (!notifyCmd) return;
+    const child = (0, import_child_process.spawn)(notifyCmd.cmd, notifyCmd.args, {
+      detached: true,
+      stdio: "ignore"
+    });
+    child.unref();
+  } catch {
+  }
+}
+
 // src/index.ts
 async function main() {
   let raw = "";
@@ -19700,6 +19764,10 @@ async function main() {
     process.exit(0);
   }
   if (result.decision === "deny") {
+    if (config.notifyOnDeny) {
+      const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
+      sendNotification("Claude Warden", `Blocked: ${truncated}`, config);
+    }
     const msg2 = formatSystemMessage("deny", command, result.details);
     const output2 = {
       hookSpecificOutput: {
@@ -19712,6 +19780,10 @@ async function main() {
     process.stderr.write(`[warden] Blocked: ${result.reason}
 `);
     process.exit(2);
+  }
+  if (config.notifyOnAsk) {
+    const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
+    sendNotification("Claude Warden", `Permission needed: ${truncated}`, config);
   }
   const msg = formatSystemMessage("ask", command, result.details);
   const output = {

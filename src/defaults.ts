@@ -90,6 +90,8 @@ function pkgRunnerRule(command: string): CommandRule {
 export const DEFAULT_CONFIG: WardenConfig = {
   defaultDecision: 'ask',
   askOnSubshell: true,
+  notifyOnAsk: true,
+  notifyOnDeny: true,
   trustedSSHHosts: [],
   trustedDockerContainers: [],
   trustedKubectlContexts: [],

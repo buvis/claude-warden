@@ -2,6 +2,7 @@ import { parseCommand } from './parser';
 import { evaluate } from './evaluator';
 import { loadConfig } from './rules';
 import { formatSystemMessage } from './suggest';
+import { sendNotification } from './notify';
 import type { HookInput, HookOutput } from './types';
 
 async function main() {
@@ -44,6 +45,10 @@ async function main() {
   }
 
   if (result.decision === 'deny') {
+    if (config.notifyOnDeny) {
+      const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
+      sendNotification('Claude Warden', `Blocked: ${truncated}`, config);
+    }
     const msg = formatSystemMessage('deny', command, result.details);
     const output: HookOutput = {
       hookSpecificOutput: {
@@ -58,6 +63,10 @@ async function main() {
   }
 
   // decision === 'ask' — provide feedback via systemMessage
+  if (config.notifyOnAsk) {
+    const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
+    sendNotification('Claude Warden', `Permission needed: ${truncated}`, config);
+  }
   const msg = formatSystemMessage('ask', command, result.details);
   const output: HookOutput = {
     hookSpecificOutput: {

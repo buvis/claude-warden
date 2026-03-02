@@ -61,6 +61,8 @@ export interface WardenConfig {
   trustedContextOverrides?: ConfigLayer;
   defaultDecision: Decision;
   askOnSubshell: boolean;
+  notifyOnAsk: boolean;
+  notifyOnDeny: boolean;
 }
 
 export interface EvalResult {
