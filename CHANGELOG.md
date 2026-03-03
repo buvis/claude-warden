@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.3] - 2026-03-03
+
+### Bug Fixes
+- Handle unquoted parentheses in file paths, e.g. Next.js route groups like `(app)` (8a25a61)
+  - bash-parser treats `(` `)` as shell metacharacters, causing parse failures for paths like `apps/(app)/_layout.tsx`
+  - Added preprocessing step that auto-quotes path-like tokens containing parentheses
+  - Preserves `$()` command substitution and actual subshell syntax
+  - Closes #1
+
 ## [1.5.2] - 2026-03-03
 
 ### Features
