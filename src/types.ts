@@ -1,5 +1,6 @@
 export interface ParsedCommand {
   command: string;
+  originalCommand: string;
   args: string[];
   envPrefixes: string[];
   raw: string;

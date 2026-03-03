@@ -74,9 +74,10 @@ function preprocessCatHeredocs(input: string): string {
 function convertCommand(node: CommandNode): ParsedCommand | null {
   if (!node.name) return null;
 
-  const command = node.name.text.includes('/')
-    ? basename(node.name.text)
-    : node.name.text;
+  const originalCommand = node.name.text;
+  const command = originalCommand.includes('/')
+    ? basename(originalCommand)
+    : originalCommand;
 
   const envPrefixes: string[] = [];
   if (node.prefix) {
@@ -105,7 +106,7 @@ function convertCommand(node: CommandNode): ParsedCommand | null {
   ];
   const raw = rawParts.join(' ');
 
-  return { command, args, envPrefixes, raw };
+  return { command, originalCommand, args, envPrefixes, raw };
 }
 
 function collectCommandExpansions(node: AstNode): string[] {

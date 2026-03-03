@@ -754,4 +754,98 @@ describe('evaluator', () => {
       }).decision).toBe('allow');
     });
   });
+
+  describe('full-path whitelist', () => {
+    it('full-path in alwaysAllow matches only that exact path', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['/home/user/bin/my-script.sh'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/home/user/bin/my-script.sh arg1'), config).decision).toBe('allow');
+    });
+
+    it('full-path in alwaysAllow does not match different path with same basename', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['/home/user/bin/my-script.sh'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/other/path/my-script.sh'), config).decision).toBe('ask');
+    });
+
+    it('full-path in alwaysDeny blocks only that exact path', () => {
+      const layer: ConfigLayer = { alwaysAllow: [], alwaysDeny: ['/opt/dangerous/tool'], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/opt/dangerous/tool --flag'), config).decision).toBe('deny');
+    });
+
+    it('full-path in alwaysDeny does not block different path with same basename', () => {
+      const layer: ConfigLayer = { alwaysAllow: [], alwaysDeny: ['/opt/dangerous/tool'], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      // basename 'tool' is unknown, should fall through to default (ask)
+      expect(evaluate(parseCommand('/safe/path/tool'), config).decision).toBe('ask');
+    });
+
+    it('full-path in rules matches only that exact path', () => {
+      const layer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{ command: '/home/user/bin/deploy.sh', default: 'allow' }],
+      };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/home/user/bin/deploy.sh --env prod'), config).decision).toBe('allow');
+      // Different path with same basename should not match the full-path rule
+      expect(evaluate(parseCommand('/other/deploy.sh --env prod'), config).decision).toBe('ask');
+    });
+
+    it('/usr/bin/ls still matches basename ls in alwaysAllow (existing behavior)', () => {
+      expect(eval_('/usr/bin/ls -la').decision).toBe('allow');
+    });
+
+    it('/usr/bin/node --version still matches basename node rule', () => {
+      expect(eval_('/usr/bin/node --version').decision).toBe('allow');
+    });
+
+    it('basename rules still work unchanged', () => {
+      expect(eval_('cat file.txt').decision).toBe('allow');
+      expect(eval_('sudo rm -rf /').decision).toBe('deny');
+    });
+
+    it('mixed full-path and basename rules coexist', () => {
+      const layer: ConfigLayer = {
+        alwaysAllow: ['/home/user/bin/safe-tool'],
+        alwaysDeny: ['/opt/dangerous/script'],
+        rules: [],
+      };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/home/user/bin/safe-tool'), config).decision).toBe('allow');
+      expect(evaluate(parseCommand('/opt/dangerous/script'), config).decision).toBe('deny');
+      // Basename commands still work from default layer
+      expect(evaluate(parseCommand('cat file.txt'), config).decision).toBe('allow');
+      expect(evaluate(parseCommand('sudo rm'), config).decision).toBe('deny');
+    });
+
+    it('tilde path in alwaysAllow expands to home directory', () => {
+      const home = require('os').homedir();
+      const layer: ConfigLayer = { alwaysAllow: ['~/bin/my-tool'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand(`${home}/bin/my-tool arg1`), config).decision).toBe('allow');
+    });
+  });
 });

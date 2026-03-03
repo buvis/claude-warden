@@ -1,8 +1,24 @@
+import { homedir } from 'os';
 import type {
   ParseResult, WardenConfig, EvalResult, Decision,
   CommandEvalDetail, ParsedCommand, CommandRule, TrustedTarget,
 } from './types';
 import { parseCommand } from './parser';
+
+/**
+ * Match a config entry name against a parsed command.
+ * If the name contains '/' (full path), match against originalCommand (with ~ expansion).
+ * Otherwise, match against the basename (current behavior).
+ */
+function commandMatchesName(cmd: ParsedCommand, name: string): boolean {
+  if (name.startsWith('/')) {
+    return cmd.originalCommand === name;
+  }
+  if (name.startsWith('~/')) {
+    return cmd.originalCommand === homedir() + name.slice(1);
+  }
+  return cmd.command === name;
+}
 
 export function evaluate(parsed: ParseResult, config: WardenConfig): EvalResult {
   if (parsed.parseError) {
@@ -64,10 +80,10 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig): CommandEvalD
 
   // 1. Scoped alwaysDeny → alwaysAllow per layer (workspace > user > default)
   for (const layer of config.layers) {
-    if (layer.alwaysDeny.includes(command)) {
+    if (layer.alwaysDeny.some(name => commandMatchesName(cmd, name))) {
       return { command, args, decision: 'deny', reason: `"${command}" is blocked`, matchedRule: 'alwaysDeny' };
     }
-    if (layer.alwaysAllow.includes(command)) {
+    if (layer.alwaysAllow.some(name => commandMatchesName(cmd, name))) {
       return { command, args, decision: 'allow', reason: `"${command}" is safe`, matchedRule: 'alwaysAllow' };
     }
   }
@@ -92,7 +108,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig): CommandEvalD
 
   // 3. Scoped command rules (first layer with a matching rule wins)
   for (const layer of config.layers) {
-    const rule = layer.rules.find(r => r.command === command);
+    const rule = layer.rules.find(r => commandMatchesName(cmd, r.command));
     if (rule) {
       return evaluateRule(cmd, rule);
     }
@@ -374,7 +390,7 @@ function evaluateRemoteCommand(
 
   // Normal command — construct a ParsedCommand directly from structured args
   const parsed: ParseResult = {
-    commands: [{ command: remoteCmd, args: remoteArgs.slice(1), envPrefixes: [], raw: remoteArgs.join(' ') }],
+    commands: [{ command: remoteCmd, originalCommand: remoteCmd, args: remoteArgs.slice(1), envPrefixes: [], raw: remoteArgs.join(' ') }],
     hasSubshell: false,
     subshellCommands: [],
     parseError: false,
