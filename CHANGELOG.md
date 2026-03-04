@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0] - 2026-03-04
+
+### Features
+- Harden dangerous commands in alwaysAllow with conditional rules (1c01919)
+  - Move `xargs`, `tee`, `sed`, `awk`, `find`, `openssl` from `alwaysAllow` to conditional rules
+  - `find`: asks on `-exec`, `-execdir`, `-delete`, `-ok`, `-okdir`
+  - `sed`: asks on `-i` / `--in-place`
+  - `awk`: asks on `system()`, `|getline`, `print >`
+  - `xargs`: default ask, allows only bare `xargs` (no args)
+  - `tee`: asks when writing to system directories (`/etc`, `/usr`, `/var`, etc.)
+  - `openssl`: asks on `enc`, `rsautl`, `pkeyutl`, `smime`, `cms`
+  - Closes #6
+
 ## [1.6.0] - 2026-03-04
 
 ### Features

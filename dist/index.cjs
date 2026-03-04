@@ -19064,7 +19064,6 @@ var DEFAULT_CONFIG = {
       "wc",
       "sort",
       "uniq",
-      "tee",
       "diff",
       "comm",
       "cut",
@@ -19088,7 +19087,6 @@ var DEFAULT_CONFIG = {
       "rg",
       "ag",
       "ack",
-      "find",
       "fd",
       "fzf",
       "locate",
@@ -19135,11 +19133,8 @@ var DEFAULT_CONFIG = {
       "du",
       "lsof",
       // Text processing
-      "sed",
-      "awk",
       "jq",
       "yq",
-      "xargs",
       "seq",
       // Network diagnostics (read-only)
       "nslookup",
@@ -19253,7 +19248,6 @@ var DEFAULT_CONFIG = {
       "shasum",
       "cksum",
       "base64",
-      "openssl",
       "watch",
       "timeout",
       "nohup",
@@ -19435,6 +19429,49 @@ var DEFAULT_CONFIG = {
           { match: { anyArgMatches: ["^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$"] }, decision: "allow", description: "Read-only kubectl commands" },
           { match: { anyArgMatches: ["^(delete|drain|cordon|taint)$"] }, decision: "ask", reason: "Destructive kubectl operation" },
           VERSION_HELP_FLAGS
+        ]
+      },
+      // --- Potentially dangerous text/file tools ---
+      {
+        command: "find",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^-exec$", "^-execdir$", "^-delete$", "^-ok$", "^-okdir$"] }, decision: "ask", reason: "find can execute or delete files" }
+        ]
+      },
+      {
+        command: "sed",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^-i$", "^-i\\b", "^--in-place"] }, decision: "ask", reason: "In-place file modification" }
+        ]
+      },
+      {
+        command: "awk",
+        default: "allow",
+        argPatterns: [
+          { match: { argsMatch: ["system\\s*\\(", "\\|\\s*getline", "print\\s*>"] }, decision: "ask", reason: "awk can execute commands or write files" }
+        ]
+      },
+      {
+        command: "xargs",
+        default: "ask",
+        argPatterns: [
+          { match: { noArgs: true }, decision: "allow", description: "xargs with no args runs echo (safe)" }
+        ]
+      },
+      {
+        command: "tee",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^/(etc|usr|var|sys|proc|boot|root|lib)"] }, decision: "ask", reason: "Writing to system directory" }
+        ]
+      },
+      {
+        command: "openssl",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(enc|rsautl|pkeyutl|smime|cms)$"] }, decision: "ask", reason: "Encryption/signing operations" }
         ]
       },
       // --- File operations ---
