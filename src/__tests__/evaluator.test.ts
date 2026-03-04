@@ -755,6 +755,55 @@ describe('evaluator', () => {
     });
   });
 
+  describe('eval/source/. commands', () => {
+    // eval — always deny
+    it('denies eval', () => {
+      expect(eval_('eval "echo hello"').decision).toBe('deny');
+    });
+
+    it('denies eval in chain', () => {
+      expect(eval_('ls && eval "rm -rf /"').decision).toBe('deny');
+    });
+
+    // source — conditional
+    it('allows source ~/.bashrc', () => {
+      expect(eval_('source ~/.bashrc').decision).toBe('allow');
+    });
+
+    it('allows source ~/.nvm/nvm.sh', () => {
+      expect(eval_('source ~/.nvm/nvm.sh').decision).toBe('allow');
+    });
+
+    it('allows source .env', () => {
+      expect(eval_('source .env').decision).toBe('allow');
+    });
+
+    it('allows source .envrc', () => {
+      expect(eval_('source .envrc').decision).toBe('allow');
+    });
+
+    it('asks for source /tmp/random.sh', () => {
+      expect(eval_('source /tmp/random.sh').decision).toBe('ask');
+    });
+
+    it('denies source with no args', () => {
+      expect(eval_('source').decision).toBe('deny');
+    });
+
+    // . (dot command) — same as source
+    it('allows . ~/.bashrc', () => {
+      expect(eval_('. ~/.bashrc').decision).toBe('allow');
+    });
+
+    it('allows . ~/.nvm/nvm.sh', () => {
+      expect(eval_('. ~/.nvm/nvm.sh').decision).toBe('allow');
+    });
+
+    it('asks for . /tmp/unknown.sh', () => {
+      expect(eval_('. /tmp/unknown.sh').decision).toBe('ask');
+    });
+  });
+
   describe('full-path whitelist', () => {
     it('full-path in alwaysAllow matches only that exact path', () => {
       const layer: ConfigLayer = { alwaysAllow: ['/home/user/bin/my-script.sh'], alwaysDeny: [], rules: [] };

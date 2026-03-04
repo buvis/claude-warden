@@ -159,6 +159,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
 
     alwaysDeny: [
       'sudo', 'su', 'doas',
+      'eval',
       'mkfs', 'fdisk', 'dd',
       'shutdown', 'reboot', 'halt', 'poweroff',
       'iptables', 'ip6tables', 'nft',
@@ -177,6 +178,29 @@ export const DEFAULT_CONFIG: WardenConfig = {
           { match: { anyArgMatches: ['^--(version|help)$', '^-[vh]$'] }, decision: 'allow', description: 'Version/help flags' },
         ],
       },
+
+      // --- Shell sourcing ---
+      ...['source', '.'].map((cmd): CommandRule => ({
+        command: cmd,
+        default: 'ask',
+        argPatterns: [
+          {
+            match: { anyArgMatches: [
+              '(\\.bashrc|\\.zshrc|\\.profile|\\.bash_profile|\\.zprofile|\\.shrc)$',
+              'nvm\\.sh$',
+              '\\.envrc$',
+              '\\.env$',
+            ]},
+            decision: 'allow',
+            description: 'Common shell config and env files',
+          },
+          {
+            match: { noArgs: true },
+            decision: 'deny',
+            reason: 'source/. requires a file argument',
+          },
+        ],
+      })),
 
       // --- Shell interpreters ---
       ...['bash', 'sh', 'zsh'].map((cmd): CommandRule => ({
