@@ -5,6 +5,16 @@ import type {
 } from './types';
 import { parseCommand } from './parser';
 
+/** Safely test a regex pattern, returning false on invalid patterns. */
+function safeRegexTest(pattern: string, input: string): boolean {
+  try {
+    return new RegExp(pattern).test(input);
+  } catch {
+    process.stderr.write(`[warden] Warning: invalid regex pattern: ${pattern}\n`);
+    return false;
+  }
+}
+
 /**
  * Match a config entry name against a parsed command.
  * If the name contains '/' (full path), match against originalCommand (with ~ expansion).
@@ -20,7 +30,13 @@ function commandMatchesName(cmd: ParsedCommand, name: string): boolean {
   return cmd.command === name;
 }
 
-export function evaluate(parsed: ParseResult, config: WardenConfig): EvalResult {
+const MAX_RECURSION_DEPTH = 10;
+
+export function evaluate(parsed: ParseResult, config: WardenConfig, depth: number = 0): EvalResult {
+  if (depth > MAX_RECURSION_DEPTH) {
+    return { decision: 'ask', reason: 'Maximum recursion depth exceeded', details: [] };
+  }
+
   if (parsed.parseError) {
     return { decision: 'ask', reason: 'Could not parse command safely', details: [] };
   }
@@ -33,7 +49,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig): EvalResult 
   if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
     for (const subCmd of parsed.subshellCommands) {
       const subParsed = parseCommand(subCmd);
-      const subResult = evaluate(subParsed, config);
+      const subResult = evaluate(subParsed, config, depth + 1);
       if (subResult.decision === 'deny') {
         return { decision: 'deny', reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
       }
@@ -48,7 +64,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig): EvalResult 
 
   const details: CommandEvalDetail[] = [];
   for (const cmd of parsed.commands) {
-    details.push(evaluateCommand(cmd, config));
+    details.push(evaluateCommand(cmd, config, depth));
   }
 
   // Combine: deny > ask > allow
@@ -75,7 +91,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig): EvalResult 
   return { decision: 'allow', reason: 'All commands are safe', details };
 }
 
-function evaluateCommand(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail {
+function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail {
   const { command, args } = cmd;
 
   // 1. Scoped alwaysDeny → alwaysAllow per layer (workspace > user > default)
@@ -90,19 +106,19 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig): CommandEvalD
 
   // 2. Remote target whitelisting with recursive command evaluation
   if ((command === 'ssh' || command === 'scp' || command === 'rsync') && config.trustedSSHHosts?.length) {
-    const sshResult = evaluateSSHCommand(cmd, config);
+    const sshResult = evaluateSSHCommand(cmd, config, depth);
     if (sshResult) return sshResult;
   }
   if (command === 'docker' && config.trustedDockerContainers?.length) {
-    const dockerResult = evaluateDockerExec(cmd, config);
+    const dockerResult = evaluateDockerExec(cmd, config, depth);
     if (dockerResult) return dockerResult;
   }
   if (command === 'kubectl' && config.trustedKubectlContexts?.length) {
-    const kubectlResult = evaluateKubectlExec(cmd, config);
+    const kubectlResult = evaluateKubectlExec(cmd, config, depth);
     if (kubectlResult) return kubectlResult;
   }
   if (command === 'sprite' && config.trustedSprites?.length) {
-    const spriteResult = evaluateSpriteExec(cmd, config);
+    const spriteResult = evaluateSpriteExec(cmd, config, depth);
     if (spriteResult) return spriteResult;
   }
 
@@ -131,11 +147,11 @@ function evaluateRule(cmd: ParsedCommand, rule: CommandRule): CommandEvalDetail 
     }
 
     if (m.argsMatch && matched) {
-      matched = m.argsMatch.some(re => new RegExp(re).test(argsJoined));
+      matched = m.argsMatch.some(re => safeRegexTest(re, argsJoined));
     }
 
     if (m.anyArgMatches && matched) {
-      matched = args.some(arg => m.anyArgMatches!.some(re => new RegExp(re).test(arg)));
+      matched = args.some(arg => m.anyArgMatches!.some(re => safeRegexTest(re, arg)));
     }
 
     if (m.argCount && matched) {
@@ -261,7 +277,7 @@ function parseSSHArgs(args: string[]): SSHParseResult {
 
   return {
     host,
-    remoteCommand: remoteArgs.length > 0 ? remoteArgs.join(' ') : null,
+    remoteCommand: remoteArgs.length > 0 ? remoteArgs.map(shellQuote).join(' ') : null,
   };
 }
 
@@ -274,7 +290,7 @@ function extractHostFromRemotePath(args: string[]): string | null {
   return null;
 }
 
-function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail | null {
+function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   const trustedHosts = config.trustedSSHHosts || [];
 
@@ -283,6 +299,22 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig): CommandEv
     if (!host) return null;
     const target = findMatchingTarget(host, trustedHosts);
     if (!target) return null;
+    if (target.allowAll || !target.overrides) {
+      return {
+        command, args,
+        decision: 'allow',
+        reason: `Trusted SSH host "${host}"${target.allowAll ? ' (allowAll)' : ''}`,
+        matchedRule: 'trustedSSHHosts',
+      };
+    }
+    if (target.overrides.alwaysDeny.some(name => name === command)) {
+      return {
+        command, args,
+        decision: 'deny',
+        reason: `Trusted SSH host "${host}": "${command}" blocked by overrides`,
+        matchedRule: 'trustedSSHHosts',
+      };
+    }
     return {
       command, args,
       decision: 'allow',
@@ -317,7 +349,7 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig): CommandEv
     };
   }
   const parsed = parseCommand(remoteCommand);
-  const result = evaluate(parsed, configWithContextOverrides(config, target));
+  const result = evaluate(parsed, configWithContextOverrides(config, target), depth + 1);
   return {
     command, args,
     decision: result.decision,
@@ -340,6 +372,14 @@ interface ExecParseResult {
 
 /** Shell interpreters that are safe as interactive sessions on trusted remotes. */
 const INTERACTIVE_SHELLS = new Set(['bash', 'sh', 'zsh']);
+
+/** Re-quote an arg if it contains spaces or shell metacharacters. */
+function shellQuote(arg: string): string {
+  if (/[\s"'\\$`!#&|;()<>]/.test(arg)) {
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+  return arg;
+}
 
 /** Build a config with trustedContextOverrides applied as the highest-priority layer. */
 function configWithContextOverrides(config: WardenConfig, target?: TrustedTarget | null): WardenConfig {
@@ -364,6 +404,7 @@ function evaluateRemoteCommand(
   remoteArgs: string[],
   config: WardenConfig,
   target?: TrustedTarget | null,
+  depth: number = 0,
 ): EvalResult {
   if (target?.allowAll) {
     return { decision: 'allow', reason: 'allowAll target', details: [] };
@@ -385,7 +426,7 @@ function evaluateRemoteCommand(
   if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs[1] === '-c' && remoteArgs.length >= 3) {
     const innerCommand = remoteArgs.slice(2).join(' ');
     const parsed = parseCommand(innerCommand);
-    return evaluate(parsed, overriddenConfig);
+    return evaluate(parsed, overriddenConfig, depth + 1);
   }
 
   // Normal command — construct a ParsedCommand directly from structured args
@@ -395,7 +436,7 @@ function evaluateRemoteCommand(
     subshellCommands: [],
     parseError: false,
   };
-  return evaluate(parsed, overriddenConfig);
+  return evaluate(parsed, overriddenConfig, depth + 1);
 }
 
 function parseDockerExecArgs(args: string[]): ExecParseResult {
@@ -428,7 +469,7 @@ function parseDockerExecArgs(args: string[]): ExecParseResult {
   return { target, remoteArgs };
 }
 
-function evaluateDockerExec(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail | null {
+function evaluateDockerExec(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   if (args[0] !== 'exec') return null;
 
@@ -437,7 +478,7 @@ function evaluateDockerExec(cmd: ParsedCommand, config: WardenConfig): CommandEv
   const matched = findMatchingTarget(containerName, config.trustedDockerContainers || []);
   if (!matched) return null;
 
-  const result = evaluateRemoteCommand(remoteArgs, config, matched);
+  const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
     command, args,
     decision: result.decision,
@@ -503,7 +544,7 @@ function parseKubectlExecArgs(args: string[]): { context: string | null; pod: st
   return { context, pod, remoteArgs };
 }
 
-function evaluateKubectlExec(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail | null {
+function evaluateKubectlExec(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   if (args[0] !== 'exec') return null;
 
@@ -512,7 +553,7 @@ function evaluateKubectlExec(cmd: ParsedCommand, config: WardenConfig): CommandE
   const matched = findMatchingTarget(context, config.trustedKubectlContexts || []);
   if (!matched) return null;
 
-  const result = evaluateRemoteCommand(remoteArgs, config, matched);
+  const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
     command, args,
     decision: result.decision,
@@ -586,14 +627,14 @@ function parseSpriteExecArgs(args: string[]): { spriteName: string | null; remot
   return { spriteName, remoteArgs };
 }
 
-function evaluateSpriteExec(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail | null {
+function evaluateSpriteExec(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   const { spriteName, remoteArgs } = parseSpriteExecArgs(args);
   if (!spriteName) return null;
   const matched = findMatchingTarget(spriteName, config.trustedSprites || []);
   if (!matched) return null;
 
-  const result = evaluateRemoteCommand(remoteArgs, config, matched);
+  const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
     command, args,
     decision: result.decision,
