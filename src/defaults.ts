@@ -100,11 +100,11 @@ export const DEFAULT_CONFIG: WardenConfig = {
   layers: [{
     alwaysAllow: [
       // Read-only file operations
-      'cat', 'head', 'tail', 'less', 'more', 'wc', 'sort', 'uniq', 'tee',
+      'cat', 'head', 'tail', 'less', 'more', 'wc', 'sort', 'uniq',
       'diff', 'comm', 'cut', 'paste', 'tr', 'fold', 'expand', 'unexpand',
       'column', 'rev', 'tac', 'nl', 'od', 'xxd', 'file', 'stat',
       // Search/find
-      'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'find', 'fd', 'fzf',
+      'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'fd', 'fzf',
       'locate', 'which', 'whereis', 'type', 'command',
       // Directory listing
       'ls', 'dir', 'tree', 'exa', 'eza', 'lsd',
@@ -118,7 +118,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
       // Process viewing (read-only)
       'ps', 'top', 'htop', 'uptime', 'free', 'df', 'du', 'lsof',
       // Text processing
-      'sed', 'awk', 'jq', 'yq', 'xargs', 'seq',
+      'jq', 'yq', 'seq',
       // Network diagnostics (read-only)
       'nslookup', 'dig', 'host', 'ping', 'traceroute', 'mtr',
       'netstat', 'ss', 'ifconfig', 'ip', 'nmap', 'arp',
@@ -151,7 +151,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
       'cd', 'pushd', 'popd', 'dirs', 'hash', 'alias', 'set',
       'sleep', 'wait', 'time',
       'md5', 'md5sum', 'sha256sum', 'shasum', 'cksum',
-      'base64', 'openssl',
+      'base64',
       'watch', 'timeout', 'nohup', 'nice',
       'iconv', 'locale', 'localedef',
       'numfmt', 'factor', 'bc', 'dc',
@@ -318,6 +318,50 @@ export const DEFAULT_CONFIG: WardenConfig = {
           { match: { anyArgMatches: ['^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$'] }, decision: 'allow', description: 'Read-only kubectl commands' },
           { match: { anyArgMatches: ['^(delete|drain|cordon|taint)$'] }, decision: 'ask', reason: 'Destructive kubectl operation' },
           VERSION_HELP_FLAGS,
+        ],
+      },
+
+      // --- Potentially dangerous text/file tools ---
+      {
+        command: 'find',
+        default: 'allow',
+        argPatterns: [
+          { match: { anyArgMatches: ['^-exec$', '^-execdir$', '^-delete$', '^-ok$', '^-okdir$'] }, decision: 'ask', reason: 'find can execute or delete files' },
+        ],
+      },
+      {
+        command: 'sed',
+        default: 'allow',
+        argPatterns: [
+          { match: { anyArgMatches: ['^-i$', '^-i\\b', '^--in-place'] }, decision: 'ask', reason: 'In-place file modification' },
+        ],
+      },
+      {
+        command: 'awk',
+        default: 'allow',
+        argPatterns: [
+          { match: { argsMatch: ['system\\s*\\(', '\\|\\s*getline', 'print\\s*>'] }, decision: 'ask', reason: 'awk can execute commands or write files' },
+        ],
+      },
+      {
+        command: 'xargs',
+        default: 'ask',
+        argPatterns: [
+          { match: { noArgs: true }, decision: 'allow', description: 'xargs with no args runs echo (safe)' },
+        ],
+      },
+      {
+        command: 'tee',
+        default: 'allow',
+        argPatterns: [
+          { match: { anyArgMatches: ['^/(etc|usr|var|sys|proc|boot|root|lib)'] }, decision: 'ask', reason: 'Writing to system directory' },
+        ],
+      },
+      {
+        command: 'openssl',
+        default: 'allow',
+        argPatterns: [
+          { match: { anyArgMatches: ['^(enc|rsautl|pkeyutl|smime|cms)$'] }, decision: 'ask', reason: 'Encryption/signing operations' },
         ],
       },
 

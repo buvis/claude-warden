@@ -755,6 +755,33 @@ describe('evaluator', () => {
     });
   });
 
+  describe('dangerous alwaysAllow hardening', () => {
+    // find
+    it('allows find basic search', () => expect(eval_('find . -name "*.ts"').decision).toBe('allow'));
+    it('asks for find -exec', () => expect(eval_('find . -exec rm {} \\;').decision).toBe('ask'));
+    it('asks for find -delete', () => expect(eval_('find . -name "*.tmp" -delete').decision).toBe('ask'));
+
+    // sed
+    it('allows sed without -i', () => expect(eval_("sed 's/foo/bar/' file.txt").decision).toBe('allow'));
+    it('asks for sed -i', () => expect(eval_("sed -i 's/foo/bar/' file.txt").decision).toBe('ask'));
+
+    // awk
+    it('allows simple awk', () => expect(eval_("awk '{print $1}' file.txt").decision).toBe('allow'));
+    it('asks for awk with system()', () => expect(eval_('awk \'BEGIN{system("rm -rf /")}\' file').decision).toBe('ask'));
+
+    // xargs
+    it('asks for xargs with command', () => expect(eval_('xargs rm').decision).toBe('ask'));
+    it('allows xargs with no args', () => expect(eval_('xargs').decision).toBe('allow'));
+
+    // tee
+    it('allows tee to normal path', () => expect(eval_('tee output.txt').decision).toBe('allow'));
+    it('asks for tee to /etc/', () => expect(eval_('tee /etc/shadow').decision).toBe('ask'));
+
+    // openssl
+    it('allows openssl x509', () => expect(eval_('openssl x509 -in cert.pem -text').decision).toBe('allow'));
+    it('asks for openssl enc', () => expect(eval_('openssl enc -aes-256-cbc -in secret').decision).toBe('ask'));
+  });
+
   describe('eval/source/. commands', () => {
     // eval — always deny
     it('denies eval', () => {
