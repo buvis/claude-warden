@@ -74,8 +74,8 @@ function tryLoadFile(filePath: string): Record<string, unknown> | null {
     if (parsed && typeof parsed === 'object') {
       return parsed as Record<string, unknown>;
     }
-  } catch {
-    // Skip invalid config files silently
+  } catch (err) {
+    process.stderr.write(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}\n`);
   }
   return null;
 }
