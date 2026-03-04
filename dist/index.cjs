@@ -19270,6 +19270,7 @@ var DEFAULT_CONFIG = {
       "sudo",
       "su",
       "doas",
+      "eval",
       "mkfs",
       "fdisk",
       "dd",
@@ -19301,6 +19302,28 @@ var DEFAULT_CONFIG = {
           { match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] }, decision: "allow", description: "Version/help flags" }
         ]
       },
+      // --- Shell sourcing ---
+      ...["source", "."].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          {
+            match: { anyArgMatches: [
+              "(\\.bashrc|\\.zshrc|\\.profile|\\.bash_profile|\\.zprofile|\\.shrc)$",
+              "nvm\\.sh$",
+              "\\.envrc$",
+              "\\.env$"
+            ] },
+            decision: "allow",
+            description: "Common shell config and env files"
+          },
+          {
+            match: { noArgs: true },
+            decision: "deny",
+            reason: "source/. requires a file argument"
+          }
+        ]
+      })),
       // --- Shell interpreters ---
       ...["bash", "sh", "zsh"].map((cmd) => ({
         command: cmd,

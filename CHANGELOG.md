@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0] - 2026-03-04
+
+### Features
+- Add eval/source/. rules for shell command safety (6285de6)
+  - Deny `eval` (arbitrary string execution can't be statically analyzed)
+  - Allow `source`/`.` for common safe files (.bashrc, .zshrc, .profile, nvm.sh, .env, .envrc)
+  - Deny `source`/`.` with no arguments
+  - Ask for all other source/. targets
+  - Closes #5
+
+### Bug Fixes
+- Correct issue reference in changelog (#4, not #1) (1134351)
+
 ## [1.5.3] - 2026-03-03
 
 ### Bug Fixes
