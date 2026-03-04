@@ -924,4 +924,87 @@ describe('evaluator', () => {
       expect(evaluate(parseCommand(`${home}/bin/my-tool arg1`), config).decision).toBe('allow');
     });
   });
+
+  describe('recursion depth limit', () => {
+    it('returns ask when recursion depth exceeded', () => {
+      const parsed = parseCommand('echo hello');
+      const result = evaluate(parsed, DEFAULT_CONFIG, 11);
+      expect(result.decision).toBe('ask');
+      expect(result.reason).toContain('recursion depth');
+    });
+
+    it('allows normal depth', () => {
+      const parsed = parseCommand('echo hello');
+      const result = evaluate(parsed, DEFAULT_CONFIG, 5);
+      expect(result.decision).toBe('allow');
+    });
+  });
+
+  describe('invalid regex patterns', () => {
+    it('treats invalid regex as no-match', () => {
+      const layer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{
+          command: 'test-cmd',
+          default: 'allow',
+          argPatterns: [
+            { match: { argsMatch: ['[invalid'] }, decision: 'deny', reason: 'bad regex' },
+          ],
+        }],
+      };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      const result = evaluate(parseCommand('test-cmd foo'), config);
+      expect(result.decision).toBe('allow');
+    });
+
+    it('treats invalid anyArgMatches regex as no-match', () => {
+      const layer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{
+          command: 'test-cmd',
+          default: 'allow',
+          argPatterns: [
+            { match: { anyArgMatches: ['(unterminated'] }, decision: 'deny', reason: 'bad regex' },
+          ],
+        }],
+      };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      const result = evaluate(parseCommand('test-cmd foo'), config);
+      expect(result.decision).toBe('allow');
+    });
+  });
+
+  describe('rsync/scp trusted host overrides', () => {
+    it('allows scp to trusted host with allowAll', () => {
+      const result = evalWith('scp file.txt user@myhost:/tmp/', {
+        trustedSSHHosts: toTargets([{ name: 'myhost', allowAll: true }]),
+      });
+      expect(result.decision).toBe('allow');
+    });
+
+    it('allows rsync to trusted host without overrides', () => {
+      const result = evalWith('rsync -av dir/ user@myhost:/tmp/', {
+        trustedSSHHosts: toTargets(['myhost']),
+      });
+      expect(result.decision).toBe('allow');
+    });
+
+    it('denies scp when overrides block it', () => {
+      const result = evalWith('scp file.txt user@myhost:/tmp/', {
+        trustedSSHHosts: toTargets([{
+          name: 'myhost',
+          overrides: { alwaysAllow: [], alwaysDeny: ['scp'], rules: [] },
+        }]),
+      });
+      expect(result.decision).toBe('deny');
+    });
+  });
 });
