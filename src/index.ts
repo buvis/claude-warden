@@ -5,10 +5,23 @@ import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
 import type { HookInput, HookOutput } from './types';
 
+const MAX_STDIN_SIZE = 1024 * 1024; // 1MB
+
 async function main() {
   let raw = '';
   for await (const chunk of process.stdin) {
     raw += chunk;
+    if (raw.length > MAX_STDIN_SIZE) {
+      const output = {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'ask',
+          permissionDecisionReason: '[warden] Input exceeds size limit',
+        },
+      };
+      process.stdout.write(JSON.stringify(output));
+      process.exit(0);
+    }
   }
 
   let input: HookInput;
