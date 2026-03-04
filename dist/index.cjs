@@ -19397,6 +19397,7 @@ var DEFAULT_CONFIG = {
       // npx / bunx — package runners
       pkgRunnerRule("npx"),
       pkgRunnerRule("bunx"),
+      pkgRunnerRule("pnpx"),
       // npm / pnpm / yarn — package managers
       pkgManagerRule("npm", ["ci", "search", "explain", "prefix", "root", "fund", "doctor", "diff", "pkg", "query", "shrinkwrap"]),
       pkgManagerRule("pnpm", ["store", "fetch", "doctor", "patch"]),
