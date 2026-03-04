@@ -277,7 +277,7 @@ function parseSSHArgs(args: string[]): SSHParseResult {
 
   return {
     host,
-    remoteCommand: remoteArgs.length > 0 ? remoteArgs.join(' ') : null,
+    remoteCommand: remoteArgs.length > 0 ? remoteArgs.map(shellQuote).join(' ') : null,
   };
 }
 
@@ -372,6 +372,14 @@ interface ExecParseResult {
 
 /** Shell interpreters that are safe as interactive sessions on trusted remotes. */
 const INTERACTIVE_SHELLS = new Set(['bash', 'sh', 'zsh']);
+
+/** Re-quote an arg if it contains spaces or shell metacharacters. */
+function shellQuote(arg: string): string {
+  if (/[\s"'\\$`!#&|;()<>]/.test(arg)) {
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+  return arg;
+}
 
 /** Build a config with trustedContextOverrides applied as the highest-priority layer. */
 function configWithContextOverrides(config: WardenConfig, target?: TrustedTarget | null): WardenConfig {
