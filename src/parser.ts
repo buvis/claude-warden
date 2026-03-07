@@ -382,6 +382,81 @@ export function parseCommand(input: string): ParseResult {
         return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
       }
     }
+    // General parse failure — try regex fallback to extract at least the command name
+    // so the evaluator can still apply rules (e.g. gh is default allow).
+    // This handles cases where bash-parser chokes on special characters in arguments
+    // (like $ in double-quoted strings that aren't actual expansions).
+    const fallback = regexFallbackParse(input);
+    if (fallback) {
+      return { commands: [fallback], hasSubshell: false, subshellCommands: [], parseError: false };
+    }
     return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true };
   }
+}
+
+/**
+ * Regex-based fallback parser for when bash-parser fails.
+ * Extracts the command name and arguments from simple single commands.
+ * Only handles straightforward cases — returns null for pipes, chains, etc.
+ */
+function regexFallbackParse(input: string): ParsedCommand | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Don't attempt fallback for pipes, chains, or semicolons (too complex)
+  // Check outside of quotes
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === '\\' && inDouble) { i++; continue; }
+    if (ch === "'" && !inDouble) { inSingle = !inSingle; continue; }
+    if (ch === '"' && !inSingle) { inDouble = !inDouble; continue; }
+    if (!inSingle && !inDouble && (ch === '|' || ch === ';' || (ch === '&' && trimmed[i + 1] === '&'))) {
+      return null; // Too complex for fallback
+    }
+  }
+
+  // Skip env prefixes (VAR=value)
+  const envPrefixes: string[] = [];
+  let rest = trimmed;
+  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(rest)) {
+    const match = rest.match(/^([A-Za-z_][A-Za-z0-9_]*=\S*)\s*/);
+    if (!match) break;
+    envPrefixes.push(match[1]);
+    rest = rest.slice(match[0].length);
+  }
+
+  if (!rest) return null;
+
+  // Extract command (first token)
+  const cmdMatch = rest.match(/^(\S+)/);
+  if (!cmdMatch) return null;
+
+  const originalCommand = cmdMatch[1];
+  const command = originalCommand.includes('/') ? basename(originalCommand) : originalCommand;
+  const argsStr = rest.slice(cmdMatch[0].length).trim();
+
+  // Tokenize args respecting quotes
+  const args: string[] = [];
+  let current = '';
+  let qSingle = false;
+  let qDouble = false;
+  for (let i = 0; i < argsStr.length; i++) {
+    const ch = argsStr[i];
+    if (ch === '\\' && qDouble && i + 1 < argsStr.length) {
+      current += argsStr[++i];
+      continue;
+    }
+    if (ch === "'" && !qDouble) { qSingle = !qSingle; continue; }
+    if (ch === '"' && !qSingle) { qDouble = !qDouble; continue; }
+    if (!qSingle && !qDouble && /\s/.test(ch)) {
+      if (current) { args.push(current); current = ''; }
+      continue;
+    }
+    current += ch;
+  }
+  if (current) args.push(current);
+
+  return { command, originalCommand, args, envPrefixes, raw: trimmed };
 }

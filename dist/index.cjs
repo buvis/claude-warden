@@ -18379,8 +18379,79 @@ function parseCommand(input) {
         return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
       }
     }
+    const fallback = regexFallbackParse(input);
+    if (fallback) {
+      return { commands: [fallback], hasSubshell: false, subshellCommands: [], parseError: false };
+    }
     return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true };
   }
+}
+function regexFallbackParse(input) {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === "\\" && inDouble) {
+      i++;
+      continue;
+    }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (!inSingle && !inDouble && (ch === "|" || ch === ";" || ch === "&" && trimmed[i + 1] === "&")) {
+      return null;
+    }
+  }
+  const envPrefixes = [];
+  let rest = trimmed;
+  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(rest)) {
+    const match = rest.match(/^([A-Za-z_][A-Za-z0-9_]*=\S*)\s*/);
+    if (!match) break;
+    envPrefixes.push(match[1]);
+    rest = rest.slice(match[0].length);
+  }
+  if (!rest) return null;
+  const cmdMatch = rest.match(/^(\S+)/);
+  if (!cmdMatch) return null;
+  const originalCommand = cmdMatch[1];
+  const command = originalCommand.includes("/") ? (0, import_path.basename)(originalCommand) : originalCommand;
+  const argsStr = rest.slice(cmdMatch[0].length).trim();
+  const args2 = [];
+  let current = "";
+  let qSingle = false;
+  let qDouble = false;
+  for (let i = 0; i < argsStr.length; i++) {
+    const ch = argsStr[i];
+    if (ch === "\\" && qDouble && i + 1 < argsStr.length) {
+      current += argsStr[++i];
+      continue;
+    }
+    if (ch === "'" && !qDouble) {
+      qSingle = !qSingle;
+      continue;
+    }
+    if (ch === '"' && !qSingle) {
+      qDouble = !qDouble;
+      continue;
+    }
+    if (!qSingle && !qDouble && /\s/.test(ch)) {
+      if (current) {
+        args2.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += ch;
+  }
+  if (current) args2.push(current);
+  return { command, originalCommand, args: args2, envPrefixes, raw: trimmed };
 }
 
 // src/evaluator.ts

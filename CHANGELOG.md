@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.1] - 2026-03-07
+
+### Bug Fixes
+- Add regex fallback parser when bash-parser fails on special characters in arguments (e.g. `$` in double-quoted strings that aren't actual expansions). Previously these commands would trigger `ask` due to parse errors; now the command name and args are extracted via fallback so rules can still apply.
+
 ## [1.8.0] - 2026-03-07
 
 ### Features

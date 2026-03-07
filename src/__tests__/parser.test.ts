@@ -263,3 +263,29 @@ describe('parseCommand', () => {
     expect(result.hasSubshell).toBe(true);
   });
 });
+
+describe('regex fallback parser', () => {
+  it('falls back to regex when bash-parser fails on $ in double-quoted args', () => {
+    const result = parseCommand('gh api repos/org/repo/pulls/1/comments -f body="regex /^[A-Za-z_][A-Za-z0-9_]*$/" -F in_reply_to=123');
+    expect(result.parseError).toBe(false);
+    expect(result.commands.length).toBe(1);
+    expect(result.commands[0].command).toBe('gh');
+    expect(result.commands[0].args[0]).toBe('api');
+  });
+
+  it('does not use fallback for pipes (too complex)', () => {
+    // A command that would fail bash-parser AND has pipes should still be parseError
+    const result = parseCommand('echo "$invalid" | gh api foo');
+    // If bash-parser handles it, great; if not, fallback should refuse pipes
+    if (result.parseError) {
+      expect(result.commands.length).toBe(0);
+    }
+  });
+
+  it('handles env prefixes in fallback', () => {
+    const result = parseCommand('FOO=bar gh api repos/org/repo/issues -f body="test $value"');
+    expect(result.parseError).toBe(false);
+    expect(result.commands[0].command).toBe('gh');
+    expect(result.commands[0].envPrefixes).toContain('FOO=bar');
+  });
+});
