@@ -18551,6 +18551,9 @@ function evaluateCommand(cmd, config, depth = 0) {
   if (command === "xargs") {
     return evaluateXargsCommand(cmd, config, depth);
   }
+  if (command === "find") {
+    return evaluateFindCommand(cmd, config, depth);
+  }
   const mergedRule = collectMergedRule(cmd, config);
   if (mergedRule) {
     return evaluateRule(cmd, mergedRule);
@@ -18737,6 +18740,64 @@ function evaluateXargsCommand(cmd, config, depth = 0) {
     reason: `xargs subcommand "${subcommand.command}": ${result.reason}`,
     matchedRule: "xargs:subcommand"
   };
+}
+function parseFindExecCommands(args2) {
+  const commands = [];
+  let i = 0;
+  while (i < args2.length) {
+    if (args2[i] === "-exec" || args2[i] === "-execdir") {
+      i++;
+      const cmdArgs = [];
+      while (i < args2.length && args2[i] !== ";" && args2[i] !== "+") {
+        if (args2[i] !== "{}") {
+          cmdArgs.push(args2[i]);
+        }
+        i++;
+      }
+      i++;
+      if (cmdArgs.length > 0) {
+        commands.push({
+          command: cmdArgs[0],
+          originalCommand: cmdArgs[0],
+          args: cmdArgs.slice(1),
+          envPrefixes: [],
+          raw: cmdArgs.join(" ")
+        });
+      }
+    } else {
+      i++;
+    }
+  }
+  return commands;
+}
+function evaluateFindCommand(cmd, config, depth = 0) {
+  const { command, args: args2 } = cmd;
+  if (args2.some((a) => a === "-delete")) {
+    return { command, args: args2, decision: "ask", reason: "find -delete can remove files", matchedRule: "find:delete" };
+  }
+  if (args2.some((a) => a === "-ok" || a === "-okdir")) {
+    return { command, args: args2, decision: "ask", reason: "find -ok/-okdir can execute commands interactively", matchedRule: "find:ok" };
+  }
+  const execCommands = parseFindExecCommands(args2);
+  if (execCommands.length === 0) {
+    return { command, args: args2, decision: "allow", reason: "find without dangerous flags", matchedRule: "find:safe" };
+  }
+  for (const execCmd of execCommands) {
+    const parsed = {
+      commands: [execCmd],
+      hasSubshell: false,
+      subshellCommands: [],
+      parseError: false
+    };
+    const result = evaluate(parsed, config, depth + 1);
+    if (result.decision === "deny") {
+      return { command, args: args2, decision: "deny", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
+    }
+    if (result.decision === "ask") {
+      return { command, args: args2, decision: "ask", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
+    }
+  }
+  return { command, args: args2, decision: "allow", reason: "find -exec commands are safe", matchedRule: "find:exec" };
 }
 var SSH_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
   "-b",
@@ -19687,13 +19748,7 @@ var DEFAULT_CONFIG = {
         ]
       },
       // --- Potentially dangerous text/file tools ---
-      {
-        command: "find",
-        default: "allow",
-        argPatterns: [
-          { match: { anyArgMatches: ["^-exec$", "^-execdir$", "^-delete$", "^-ok$", "^-okdir$"] }, decision: "ask", reason: "find can execute or delete files" }
-        ]
-      },
+      // `find` is handled specially in the evaluator (recursive -exec evaluation)
       {
         command: "sed",
         default: "allow",
