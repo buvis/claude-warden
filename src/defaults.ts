@@ -10,7 +10,7 @@ const SAFE_DEV_TOOLS = [
   'tailwindcss', 'postcss', 'autoprefixer', 'lint-staged', 'husky',
   'changeset', 'semantic-release', 'lerna', 'nx',
   'create-react-app', 'create-next-app', 'create-vite', 'degit',
-  'storybook', 'wrangler', 'netlify', 'vercel', 'json',
+  'storybook', 'wrangler', 'netlify', 'vercel', 'json', 'biome',
 ];
 
 const SCRIPT_RUNNERS = ['tsx', 'ts-node', 'nodemon'];
