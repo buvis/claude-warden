@@ -19202,7 +19202,8 @@ var SAFE_DEV_TOOLS = [
   "wrangler",
   "netlify",
   "vercel",
-  "json"
+  "json",
+  "biome"
 ];
 var SCRIPT_RUNNERS = ["tsx", "ts-node", "nodemon"];
 var REGISTRY_OPS = ["publish", "unpublish", "deprecate", "owner", "access", "token", "adduser", "login", "logout"];
