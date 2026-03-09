@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.0] - 2026-03-09
+
+### Features
+- Add session-scoped YOLO mode for temporary auto-allow with configurable duration (b7c8d11)
+- New `/claude-warden:yolo` slash command to activate/deactivate YOLO mode
+- YOLO hint shown on ask decisions for discoverability
+- Always-deny commands remain blocked even in YOLO mode for safety
+
 ## [1.9.0] - 2026-03-08
 
 ### Features
