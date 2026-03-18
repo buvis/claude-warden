@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, statSync } from 'fs';
 import { resolve, isAbsolute } from 'path';
 
 export type ScanLevel = 'dangerous' | 'cautious';
@@ -120,13 +120,15 @@ export function scanScriptCode(code: string, language: Language): ScanResult | n
 export function readScriptFile(filePath: string, cwd: string): { content: string } | { error: string } {
   const fullPath = isAbsolute(filePath) ? filePath : resolve(cwd, filePath);
   try {
-    const stat = require('fs').statSync(fullPath);
+    const stat = statSync(fullPath);
     if (stat.size > MAX_SCRIPT_SIZE) {
       return { error: 'script too large to scan' };
     }
     const content = readFileSync(fullPath, 'utf-8');
     return { content };
-  } catch {
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EACCES') return { error: 'script not readable (permission denied)' };
     return { error: 'script not found' };
   }
 }
