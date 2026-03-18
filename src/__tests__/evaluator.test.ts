@@ -1437,4 +1437,58 @@ describe('script safety scanning', () => {
       expect(r.decision).toBe('ask');
     });
   });
+
+  describe('user deny rule override', () => {
+    function evalWithDenyRule(cmd: string, command: string, cwd: string) {
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [
+          { alwaysAllow: [], alwaysDeny: [], rules: [{ command, default: 'deny' as const }] },
+          ...DEFAULT_CONFIG.layers,
+        ],
+      };
+      return evaluate(parseCommand(cmd), config, 0, cwd);
+    }
+
+    it('respects user deny rule for python with safe script', () => {
+      const r = evalWithDenyRule('python safe.py', 'python', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('respects user deny rule for python -c with safe code', () => {
+      const r = evalWithDenyRule('python -c "print(1)"', 'python', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('respects user deny rule for python -m safe module', () => {
+      const r = evalWithDenyRule('python -m pytest', 'python', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('respects user deny rule for node with safe script', () => {
+      const r = evalWithDenyRule('node safe.js', 'node', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('respects user deny rule for node -e with safe code', () => {
+      const r = evalWithDenyRule('node -e "console.log(1)"', 'node', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('respects user deny rule for perl with safe script', () => {
+      const r = evalWithDenyRule('perl safe.pl', 'perl', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('respects user deny rule for tsx with safe script', () => {
+      const r = evalWithDenyRule('tsx safe.ts', 'tsx', scriptDir);
+      expect(r.decision).toBe('deny');
+    });
+
+    it('still asks for dangerous code even with default deny', () => {
+      const r = evalWithDenyRule('python -c "import subprocess"', 'python', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+  });
 });
