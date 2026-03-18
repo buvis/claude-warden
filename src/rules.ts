@@ -198,6 +198,15 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
   if (typeof raw.notifyOnDeny === 'boolean') {
     config.notifyOnDeny = raw.notifyOnDeny;
   }
+  if (typeof raw.audit === 'boolean') {
+    config.audit = raw.audit;
+  }
+  if (typeof raw.auditPath === 'string') {
+    config.auditPath = raw.auditPath;
+  }
+  if (typeof raw.auditAllowDecisions === 'boolean') {
+    config.auditAllowDecisions = raw.auditAllowDecisions;
+  }
   if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === 'object') {
     const overrides = raw.trustedContextOverrides as Record<string, unknown>;
     const layer = extractLayer(overrides);
