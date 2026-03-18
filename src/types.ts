@@ -74,6 +74,9 @@ export interface WardenConfig {
   askOnSubshell: boolean;
   notifyOnAsk: boolean;
   notifyOnDeny: boolean;
+  audit: boolean;
+  auditPath: string;
+  auditAllowDecisions: boolean;
 }
 
 export interface EvalResult {

@@ -9,6 +9,9 @@ function baseConfig(layers: WardenConfig['layers']): WardenConfig {
     askOnSubshell: true,
     notifyOnAsk: false,
     notifyOnDeny: true,
+    audit: false,
+    auditPath: '',
+    auditAllowDecisions: false,
   };
 }
 

@@ -1,3 +1,5 @@
+import { homedir } from 'os';
+import { join } from 'path';
 import type { WardenConfig, CommandRule, ArgPattern } from './types';
 
 // --- Shared patterns for Node.js ecosystem ---
@@ -92,6 +94,9 @@ export const DEFAULT_CONFIG: WardenConfig = {
   askOnSubshell: true,
   notifyOnAsk: true,
   notifyOnDeny: true,
+  audit: true,
+  auditPath: join(homedir(), '.claude', 'warden-audit.jsonl'),
+  auditAllowDecisions: false,
   trustedSSHHosts: [],
   trustedDockerContainers: [],
   trustedKubectlContexts: [],
