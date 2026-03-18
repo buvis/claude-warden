@@ -59,21 +59,21 @@ async function main() {
     if (yoloCmd.action === 'activate') {
       const state = activateYolo(input.session_id, yoloCmd.durationMinutes);
       const expiryInfo = state.expiresAt
-        ? `expires at ${new Date(state.expiresAt).toLocaleTimeString()}`
-        : 'full session, no expiry';
-      msg = `[warden] YOLO mode activated (${expiryInfo}). Always-deny commands are still blocked. Use \`echo __WARDEN_YOLO_DEACTIVATE__\` to turn off.`;
+        ? `until ${new Date(state.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+        : 'full session';
+      msg = `[warden] yolo on (${expiryInfo}). Blocked commands still denied.`;
     } else if (yoloCmd.action === 'deactivate') {
       deactivateYolo(input.session_id);
-      msg = '[warden] YOLO mode deactivated. Normal rule evaluation resumed.';
+      msg = '[warden] yolo off';
     } else {
       const state = getYoloState(input.session_id);
       if (state) {
         const expiryInfo = state.expiresAt
-          ? `expires at ${new Date(state.expiresAt).toLocaleTimeString()}`
+          ? `until ${new Date(state.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
           : 'full session';
-        msg = `[warden] YOLO mode is active (${expiryInfo})`;
+        msg = `[warden] yolo on (${expiryInfo})`;
       } else {
-        msg = '[warden] YOLO mode is not active';
+        msg = '[warden] yolo off';
       }
     }
     const output: HookOutput = {
@@ -100,13 +100,13 @@ async function main() {
       // Fall through to normal deny handling below
     } else {
       const expiryInfo = yoloState.expiresAt
-        ? `expires ${new Date(yoloState.expiresAt).toLocaleTimeString()}`
+        ? `until ${new Date(yoloState.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
         : 'full session';
       const output: HookOutput = {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'allow',
-          permissionDecisionReason: `[warden] YOLO mode active (${expiryInfo})`,
+          permissionDecisionReason: `[warden] yolo (${expiryInfo})`,
         },
       };
       process.stdout.write(JSON.stringify(output));
@@ -122,7 +122,7 @@ async function main() {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'allow',
-        permissionDecisionReason: `[warden] ${result.reason}`,
+        permissionDecisionReason: '[warden] ok',
       },
     };
     process.stdout.write(JSON.stringify(output));
@@ -134,16 +134,17 @@ async function main() {
       const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
       sendNotification('Claude Warden', `Blocked: ${truncated}`, config);
     }
-    const msg = formatSystemMessage('deny', command, result.details);
+    const { reason, systemMessage } = formatSystemMessage('deny', command, result.details);
     const output: HookOutput = {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
-        permissionDecisionReason: msg,
+        permissionDecisionReason: reason,
       },
+      systemMessage,
     };
     process.stdout.write(JSON.stringify(output));
-    process.stderr.write(`[warden] Blocked: ${result.reason}\n`);
+    process.stderr.write(`${reason}\n`);
     process.exit(2);
   }
 
@@ -152,13 +153,14 @@ async function main() {
     const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
     sendNotification('Claude Warden', `Permission needed: ${truncated}`, config);
   }
-  const msg = formatSystemMessage('ask', command, result.details);
+  const { reason, systemMessage } = formatSystemMessage('ask', command, result.details);
   const output: HookOutput = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'ask',
-      permissionDecisionReason: msg,
+      permissionDecisionReason: reason,
     },
+    systemMessage,
   };
   process.stdout.write(JSON.stringify(output));
   process.exit(0);

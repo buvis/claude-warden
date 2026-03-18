@@ -1,4 +1,4 @@
-import type { Decision, CommandEvalDetail } from './types';
+import type { CommandEvalDetail } from './types';
 
 export function generateAllowSnippet(details: CommandEvalDetail[]): string {
   const lines: string[] = [];
@@ -64,59 +64,52 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+export interface FormattedMessage {
+  reason: string;
+  systemMessage?: string;
+}
+
 export function formatSystemMessage(
   decision: 'deny' | 'ask',
   rawCommand: string,
   details: CommandEvalDetail[],
-): string {
+): FormattedMessage {
   const relevant = details.filter(d => d.decision !== 'allow');
 
-  // Compact format for ask decisions
   if (decision === 'ask') {
-    const parts = relevant.map(d => `\`${d.command}\`: ${d.reason}`);
-    const header = `[warden] ${parts.join(' | ')}`;
+    // Compact 1-line reason
+    const parts = relevant.map(d => `${d.command}: ${d.reason}`);
+    const cmds = [...new Set(relevant.map(d => d.command))];
+    const allowHint = cmds.length === 1 ? `/warden:allow ${cmds[0]}` : '/warden:allow';
+    const reason = `[warden] ${parts.join('; ')} (${allowHint})`;
 
-    // Check if any flagged command has args that could be a sub-command
-    const subcommandHints = relevant
-      .filter(d => d.args.length > 0)
-      .map(d => {
-        const sub = d.args[0];
-        return `  Option A: Allow all \`${d.command}\` → \`/warden:allow ${d.command}\`\n  Option B: Allow only \`${d.command} ${sub}\` → \`/warden:allow ${d.command} ${sub}\``;
-      });
-
-    const yoloHint = 'Tip: `/warden:yolo` to temporarily allow all commands';
-
-    if (subcommandHints.length > 0) {
-      return `${header}\n${subcommandHints.join('\n')}\nSee /warden:allow\n${yoloHint}`;
-    }
-
-    return `${header} — To auto-allow, see /warden:allow\n${yoloHint}`;
-  }
-
-  // Verbose format for deny decisions
-  const lines: string[] = ['[warden] Command blocked', ''];
-
-  if (relevant.length > 0) {
+    // Verbose help in systemMessage
+    const helpLines: string[] = ['To auto-allow, add to ~/.claude/warden.yaml or .claude/warden.yaml:'];
     for (const d of relevant) {
-      lines.push(`- \`${d.command}\`: ${d.reason}`);
+      helpLines.push(`- Allow all \`${d.command}\` → \`/warden:allow ${d.command}\``);
+      if (d.args.length > 0) {
+        const sub = d.args[0];
+        helpLines.push(`- Allow only \`${d.command} ${sub}\` → \`/warden:allow ${d.command} ${sub}\``);
+      }
     }
-    lines.push('');
+    helpLines.push('- Temporarily allow all → `/warden:yolo`');
+
+    return { reason, systemMessage: helpLines.join('\n') };
   }
+
+  // Deny
+  const parts = relevant.map(d => `${d.command}: ${d.reason}`);
+  const reason = `[warden] blocked ${parts.join('; ')}`;
 
   const snippet = generateAllowSnippet(details);
+  let systemMessage: string | undefined;
   if (snippet) {
-    lines.push('To allow this in the future, add to your warden config:');
-    lines.push('');
-    lines.push('```yaml');
-    lines.push(snippet);
-    lines.push('```');
-    lines.push('');
-    lines.push('Config locations:');
-    lines.push('- User-level (all projects): `~/.claude/warden.yaml`');
-    lines.push('- Project-level (this project): `.claude/warden.yaml`');
-    lines.push('');
-    lines.push('Project config takes priority over user config.');
+    const helpLines: string[] = [];
+    const cmds = relevant.map(d => `"${d.command}"`).join(', ');
+    helpLines.push(`To allow ${cmds}, add to ~/.claude/warden.yaml or .claude/warden.yaml:`);
+    helpLines.push(snippet);
+    systemMessage = helpLines.join('\n');
   }
 
-  return lines.join('\n');
+  return { reason, systemMessage };
 }

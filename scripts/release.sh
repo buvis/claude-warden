@@ -16,9 +16,7 @@ pnpm run build
 pnpm run test
 
 git add -A
-git commit -m "$VERSION"
-git tag "v$VERSION"
+git commit -m "chore: release v$VERSION"
 git push
-git push --tags
 
 echo "Released v$VERSION"

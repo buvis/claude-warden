@@ -5,7 +5,7 @@ import type { CommandEvalDetail } from '../types';
 describe('generateAllowSnippet', () => {
   it('generates alwaysAllow for alwaysDeny match', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'sudo', args: ['apt', 'install'], decision: 'deny', reason: '"sudo" is blocked', matchedRule: 'alwaysDeny' },
+      { command: 'sudo', args: ['apt', 'install'], decision: 'deny', reason: 'blocked by policy', matchedRule: 'alwaysDeny' },
     ];
     const snippet = generateAllowSnippet(details);
     expect(snippet).toContain('alwaysAllow:');
@@ -14,7 +14,7 @@ describe('generateAllowSnippet', () => {
 
   it('generates alwaysAllow for default match', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'my-tool', args: [], decision: 'ask', reason: 'No rule for "my-tool"', matchedRule: 'default' },
+      { command: 'my-tool', args: [], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
     ];
     const snippet = generateAllowSnippet(details);
     expect(snippet).toContain('alwaysAllow:');
@@ -23,7 +23,7 @@ describe('generateAllowSnippet', () => {
 
   it('generates rules for argPattern match', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'npm', args: ['publish'], decision: 'ask', reason: 'Registry modification', matchedRule: 'npm:argPattern' },
+      { command: 'npm', args: ['publish'], decision: 'ask', reason: 'modifies package registry', matchedRule: 'npm:argPattern' },
     ];
     const snippet = generateAllowSnippet(details);
     expect(snippet).toContain('rules:');
@@ -33,7 +33,7 @@ describe('generateAllowSnippet', () => {
 
   it('generates rules for command default match', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'docker', args: ['run', 'ubuntu'], decision: 'ask', reason: 'Docker state-changing operation', matchedRule: 'docker:default' },
+      { command: 'docker', args: ['run', 'ubuntu'], decision: 'ask', reason: 'modifies Docker state', matchedRule: 'docker:default' },
     ];
     const snippet = generateAllowSnippet(details);
     expect(snippet).toContain('rules:');
@@ -42,7 +42,7 @@ describe('generateAllowSnippet', () => {
 
   it('skips allow decisions', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'cat', args: ['file'], decision: 'allow', reason: '"cat" is safe', matchedRule: 'alwaysAllow' },
+      { command: 'cat', args: ['file'], decision: 'allow', reason: 'safe', matchedRule: 'alwaysAllow' },
     ];
     const snippet = generateAllowSnippet(details);
     expect(snippet).toBe('');
@@ -50,9 +50,9 @@ describe('generateAllowSnippet', () => {
 
   it('handles mixed decisions', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'cat', args: ['file'], decision: 'allow', reason: '"cat" is safe', matchedRule: 'alwaysAllow' },
-      { command: 'my-tool', args: [], decision: 'ask', reason: 'No rule', matchedRule: 'default' },
-      { command: 'npm', args: ['publish'], decision: 'ask', reason: 'Registry modification', matchedRule: 'npm:argPattern' },
+      { command: 'cat', args: ['file'], decision: 'allow', reason: 'safe', matchedRule: 'alwaysAllow' },
+      { command: 'my-tool', args: [], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
+      { command: 'npm', args: ['publish'], decision: 'ask', reason: 'modifies package registry', matchedRule: 'npm:argPattern' },
     ];
     const snippet = generateAllowSnippet(details);
     expect(snippet).toContain('alwaysAllow:');
@@ -64,8 +64,8 @@ describe('generateAllowSnippet', () => {
 
   it('deduplicates commands', () => {
     const details: CommandEvalDetail[] = [
-      { command: 'my-tool', args: ['a'], decision: 'ask', reason: 'No rule', matchedRule: 'default' },
-      { command: 'my-tool', args: ['b'], decision: 'ask', reason: 'No rule', matchedRule: 'default' },
+      { command: 'my-tool', args: ['a'], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
+      { command: 'my-tool', args: ['b'], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
     ];
     const snippet = generateAllowSnippet(details);
     const matches = snippet.match(/"my-tool"/g);
@@ -99,77 +99,71 @@ describe('generateSubcommandSnippet', () => {
 });
 
 describe('formatSystemMessage', () => {
-  it('includes header for deny', () => {
-    const msg = formatSystemMessage('deny', 'sudo apt install', [
-      { command: 'sudo', args: ['apt', 'install'], decision: 'deny', reason: '"sudo" is blocked', matchedRule: 'alwaysDeny' },
+  it('returns compact reason for deny', () => {
+    const { reason } = formatSystemMessage('deny', 'sudo apt install', [
+      { command: 'sudo', args: ['apt', 'install'], decision: 'deny', reason: 'blocked by policy', matchedRule: 'alwaysDeny' },
     ]);
-    expect(msg).toContain('[warden] Command blocked');
+    expect(reason).toBe('[warden] blocked sudo: blocked by policy');
   });
 
-  it('uses compact format for ask with sub-command hints when args present', () => {
-    const msg = formatSystemMessage('ask', 'node script.js', [
-      { command: 'node', args: ['script.js'], decision: 'ask', reason: 'Default for "node"', matchedRule: 'node:default' },
+  it('returns systemMessage with YAML snippet for deny', () => {
+    const { systemMessage } = formatSystemMessage('deny', 'sudo rm', [
+      { command: 'sudo', args: ['rm'], decision: 'deny', reason: 'blocked by policy', matchedRule: 'alwaysDeny' },
     ]);
-    expect(msg).toContain('[warden]');
-    expect(msg).toContain('`node`: Default for "node"');
-    expect(msg).toContain('Option A: Allow all `node`');
-    expect(msg).toContain('Option B: Allow only `node script.js`');
-    expect(msg).toContain('/warden:allow');
-    expect(msg).not.toContain('```yaml');
+    expect(systemMessage).toContain('alwaysAllow:');
+    expect(systemMessage).toContain('"sudo"');
+    expect(systemMessage).toContain('~/.claude/warden.yaml');
+    expect(systemMessage).toContain('.claude/warden.yaml');
   });
 
-  it('uses simple compact format for ask without args', () => {
-    const msg = formatSystemMessage('ask', 'my-tool', [
-      { command: 'my-tool', args: [], decision: 'ask', reason: 'No rule', matchedRule: 'default' },
+  it('returns compact reason for ask with single command', () => {
+    const { reason } = formatSystemMessage('ask', 'node script.js', [
+      { command: 'node', args: ['script.js'], decision: 'ask', reason: 'needs review', matchedRule: 'node:default' },
     ]);
-    expect(msg).toContain('[warden]');
-    expect(msg).toContain('— To auto-allow, see /warden:allow');
-    expect(msg).not.toContain('Option A');
+    expect(reason).toBe('[warden] node: needs review (/warden:allow node)');
   });
 
-  it('includes per-command reasons', () => {
-    const msg = formatSystemMessage('deny', 'sudo rm -rf /', [
-      { command: 'sudo', args: ['rm', '-rf', '/'], decision: 'deny', reason: '"sudo" is blocked', matchedRule: 'alwaysDeny' },
+  it('returns systemMessage with allow hints for ask', () => {
+    const { systemMessage } = formatSystemMessage('ask', 'node script.js', [
+      { command: 'node', args: ['script.js'], decision: 'ask', reason: 'needs review', matchedRule: 'node:default' },
     ]);
-    expect(msg).toContain('`sudo`');
-    expect(msg).toContain('"sudo" is blocked');
+    expect(systemMessage).toContain('/warden:allow node');
+    expect(systemMessage).toContain('/warden:allow node script.js');
+    expect(systemMessage).toContain('/warden:yolo');
   });
 
-  it('includes YAML snippet for deny', () => {
-    const msg = formatSystemMessage('deny', 'sudo rm', [
-      { command: 'sudo', args: ['rm'], decision: 'deny', reason: '"sudo" is blocked', matchedRule: 'alwaysDeny' },
+  it('uses simple format for ask without args', () => {
+    const { reason } = formatSystemMessage('ask', 'my-tool', [
+      { command: 'my-tool', args: [], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
     ]);
-    expect(msg).toContain('```yaml');
-    expect(msg).toContain('alwaysAllow:');
-    expect(msg).toContain('"sudo"');
+    expect(reason).toBe('[warden] my-tool: unknown command (/warden:allow my-tool)');
   });
 
-  it('mentions both config locations for deny', () => {
-    const msg = formatSystemMessage('deny', 'sudo rm', [
-      { command: 'sudo', args: ['rm'], decision: 'deny', reason: '"sudo" is blocked', matchedRule: 'alwaysDeny' },
+  it('does not include subcommand hint when no args', () => {
+    const { systemMessage } = formatSystemMessage('ask', 'my-tool', [
+      { command: 'my-tool', args: [], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
     ]);
-    expect(msg).toContain('~/.claude/warden.yaml');
-    expect(msg).toContain('.claude/warden.yaml');
+    // Only one line for my-tool (no subcommand variant)
+    const allowLines = systemMessage!.split('\n').filter(l => l.startsWith('- Allow'));
+    expect(allowLines).toHaveLength(1);
+    expect(allowLines[0]).toContain('/warden:allow my-tool');
   });
 
-  it('ask format with args shows sub-command options', () => {
-    const msg = formatSystemMessage('ask', 'npx clawhub inspect', [
-      { command: 'npx', args: ['clawhub', 'inspect'], decision: 'ask', reason: 'Default for "npx"', matchedRule: 'npx:default' },
+  it('joins multiple flagged commands with semicolon', () => {
+    const { reason } = formatSystemMessage('ask', 'node script.js | unknown-tool', [
+      { command: 'node', args: ['script.js'], decision: 'ask', reason: 'needs review', matchedRule: 'node:default' },
+      { command: 'unknown-tool', args: [], decision: 'ask', reason: 'unknown command', matchedRule: 'default' },
     ]);
-    expect(msg).toContain('Option A: Allow all `npx` → `/warden:allow npx`');
-    expect(msg).toContain('Option B: Allow only `npx clawhub` → `/warden:allow npx clawhub`');
-    expect(msg).not.toContain('```yaml');
+    expect(reason).toContain('node: needs review');
+    expect(reason).toContain('unknown-tool: unknown command');
+    expect(reason).toContain('/warden:allow)');
   });
 
-  it('ask format joins multiple flagged commands with sub-command hints', () => {
-    const msg = formatSystemMessage('ask', 'node script.js | unknown-tool', [
-      { command: 'node', args: ['script.js'], decision: 'ask', reason: 'Default for "node"', matchedRule: 'node:default' },
-      { command: 'unknown-tool', args: [], decision: 'ask', reason: 'No rule for "unknown-tool"', matchedRule: 'default' },
+  it('ask format with args shows sub-command option in systemMessage', () => {
+    const { systemMessage } = formatSystemMessage('ask', 'npx clawhub inspect', [
+      { command: 'npx', args: ['clawhub', 'inspect'], decision: 'ask', reason: 'needs review', matchedRule: 'npx:default' },
     ]);
-    expect(msg).toContain('`node`: Default for "node"');
-    expect(msg).toContain('`unknown-tool`: No rule for "unknown-tool"');
-    expect(msg).toContain('Option A: Allow all `node`');
-    expect(msg).toContain('Option B: Allow only `node script.js`');
-    expect(msg).toContain('/warden:allow');
+    expect(systemMessage).toContain('/warden:allow npx');
+    expect(systemMessage).toContain('/warden:allow npx clawhub');
   });
 });

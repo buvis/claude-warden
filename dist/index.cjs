@@ -18477,10 +18477,10 @@ function commandMatchesName(cmd, name) {
 var MAX_RECURSION_DEPTH = 10;
 function evaluate(parsed, config, depth = 0) {
   if (depth > MAX_RECURSION_DEPTH) {
-    return { decision: "ask", reason: "Maximum recursion depth exceeded", details: [] };
+    return { decision: "ask", reason: "too many nested commands", details: [] };
   }
   if (parsed.parseError) {
-    return { decision: "ask", reason: "Could not parse command safely", details: [] };
+    return { decision: "ask", reason: "unparseable command", details: [] };
   }
   if (parsed.commands.length === 0) {
     return { decision: "allow", reason: "Empty command", details: [] };
@@ -18497,7 +18497,7 @@ function evaluate(parsed, config, depth = 0) {
       }
     }
   } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
-    return { decision: "ask", reason: "Command contains subshell/command substitution", details: [] };
+    return { decision: "ask", reason: "contains subshell", details: [] };
   }
   const details = [];
   for (const cmd of parsed.commands) {
@@ -18520,16 +18520,16 @@ function evaluate(parsed, config, depth = 0) {
       details
     };
   }
-  return { decision: "allow", reason: "All commands are safe", details };
+  return { decision: "allow", reason: "ok", details };
 }
 function evaluateCommand(cmd, config, depth = 0) {
   const { command, args: args2 } = cmd;
   for (const layer of config.layers) {
     if (layer.alwaysDeny.some((name) => commandMatchesName(cmd, name))) {
-      return { command, args: args2, decision: "deny", reason: `"${command}" is blocked`, matchedRule: "alwaysDeny" };
+      return { command, args: args2, decision: "deny", reason: "blocked by policy", matchedRule: "alwaysDeny" };
     }
     if (layer.alwaysAllow.some((name) => commandMatchesName(cmd, name))) {
-      return { command, args: args2, decision: "allow", reason: `"${command}" is safe`, matchedRule: "alwaysAllow" };
+      return { command, args: args2, decision: "allow", reason: "safe", matchedRule: "alwaysAllow" };
     }
   }
   if ((command === "ssh" || command === "scp" || command === "rsync") && config.trustedSSHHosts?.length) {
@@ -18562,7 +18562,7 @@ function evaluateCommand(cmd, config, depth = 0) {
   if (mergedRule) {
     return evaluateRule(cmd, mergedRule);
   }
-  return { command, args: args2, decision: config.defaultDecision, reason: `No rule for "${command}"`, matchedRule: "default" };
+  return { command, args: args2, decision: config.defaultDecision, reason: "unknown command", matchedRule: "default" };
 }
 function collectMergedRule(cmd, config) {
   const matchingRules = [];
@@ -18621,7 +18621,7 @@ function evaluateRule(cmd, rule) {
     command,
     args: args2,
     decision: rule.default,
-    reason: `Default for "${command}"`,
+    reason: "needs review",
     matchedRule: `${command}:default`
   };
 }
@@ -19418,14 +19418,14 @@ function scriptRunnersPattern() {
   return {
     match: { anyArgMatches: [anyArgMatchesPattern(SCRIPT_RUNNERS)] },
     decision: "ask",
-    reason: "Script runners can execute arbitrary code"
+    reason: "runs arbitrary code"
   };
 }
 function registryOpsPattern() {
   return {
     match: { anyArgMatches: [anyArgMatchesPattern(REGISTRY_OPS)] },
     decision: "ask",
-    reason: "Registry modification"
+    reason: "modifies package registry"
   };
 }
 function pkgManagerRule(command, extraSafeCmds = []) {
@@ -19738,7 +19738,7 @@ var DEFAULT_CONFIG = {
           {
             match: { noArgs: true },
             decision: "deny",
-            reason: "source/. requires a file argument"
+            reason: "missing file argument"
           }
         ]
       })),
@@ -19755,9 +19755,9 @@ var DEFAULT_CONFIG = {
         command: "node",
         default: "ask",
         argPatterns: [
-          { match: { anyArgMatches: ["^-e$", "^--eval", "^-p$", "^--print"] }, decision: "ask", reason: "Evaluating inline code" },
+          { match: { anyArgMatches: ["^-e$", "^--eval", "^-p$", "^--print"] }, decision: "ask", reason: "evaluates inline code" },
           { match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] }, decision: "allow", description: "Version/help flags" },
-          { match: { noArgs: true }, decision: "ask", reason: "Interactive REPL" }
+          { match: { noArgs: true }, decision: "ask", reason: "opens interactive REPL" }
         ]
       },
       // npx / bunx — package runners
@@ -19793,7 +19793,7 @@ var DEFAULT_CONFIG = {
         command: "uv",
         default: "allow",
         argPatterns: [
-          { match: { anyArgMatches: ["^publish$"] }, decision: "ask", reason: "Publishing to PyPI" }
+          { match: { anyArgMatches: ["^publish$"] }, decision: "ask", reason: "publishes to PyPI" }
         ]
       },
       { command: "pipx", default: "ask" },
@@ -19802,16 +19802,16 @@ var DEFAULT_CONFIG = {
         command: "git",
         default: "allow",
         argPatterns: [
-          { match: { argsMatch: ["push\\s+--force", "push\\s+-f\\b"] }, decision: "ask", reason: "Force push can overwrite remote history" },
-          { match: { argsMatch: ["reset\\s+--hard"] }, decision: "ask", reason: "Hard reset discards changes" },
-          { match: { anyArgMatches: ["^clean$"] }, decision: "ask", reason: "git clean removes untracked files" }
+          { match: { argsMatch: ["push\\s+--force", "push\\s+-f\\b"] }, decision: "ask", reason: "force push overwrites remote history" },
+          { match: { argsMatch: ["reset\\s+--hard"] }, decision: "ask", reason: "hard reset discards uncommitted changes" },
+          { match: { anyArgMatches: ["^clean$"] }, decision: "ask", reason: "removes untracked files" }
         ]
       },
       {
         command: "gh",
         default: "allow",
         argPatterns: [
-          { match: { argsMatch: ["repo\\s+delete", "repo\\s+archive"] }, decision: "ask", reason: "Destructive repo operation" }
+          { match: { argsMatch: ["repo\\s+delete", "repo\\s+archive"] }, decision: "ask", reason: "destructive repo operation" }
         ]
       },
       // --- Build tools ---
@@ -19828,7 +19828,7 @@ var DEFAULT_CONFIG = {
         command: "go",
         default: "allow",
         argPatterns: [
-          { match: { anyArgMatches: ["^generate$"] }, decision: "ask", reason: "go generate runs arbitrary commands" }
+          { match: { anyArgMatches: ["^generate$"] }, decision: "ask", reason: "runs arbitrary commands" }
         ]
       },
       { command: "rustup", default: "allow" },
@@ -19842,8 +19842,8 @@ var DEFAULT_CONFIG = {
         default: "ask",
         argPatterns: [
           { match: { anyArgMatches: ["^(ps|images|logs|inspect|stats|top|version|info)$"] }, decision: "allow", description: "Read-only docker commands" },
-          { match: { anyArgMatches: ["^(build|run|compose|exec|pull|stop|start|restart|create)$"] }, decision: "ask", reason: "Docker state-changing operation" },
-          { match: { anyArgMatches: ["^(system\\s+prune|container\\s+prune|image\\s+prune)$"] }, decision: "ask", reason: "Docker prune operations" }
+          { match: { anyArgMatches: ["^(build|run|compose|exec|pull|stop|start|restart|create)$"] }, decision: "ask", reason: "modifies Docker state" },
+          { match: { anyArgMatches: ["^(system\\s+prune|container\\s+prune|image\\s+prune)$"] }, decision: "ask", reason: "prunes Docker resources" }
         ]
       },
       { command: "docker-compose", default: "ask" },
@@ -19852,7 +19852,7 @@ var DEFAULT_CONFIG = {
         default: "ask",
         argPatterns: [
           { match: { anyArgMatches: ["^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$"] }, decision: "allow", description: "Read-only kubectl commands" },
-          { match: { anyArgMatches: ["^(delete|drain|cordon|taint)$"] }, decision: "ask", reason: "Destructive kubectl operation" },
+          { match: { anyArgMatches: ["^(delete|drain|cordon|taint)$"] }, decision: "ask", reason: "destructive cluster operation" },
           VERSION_HELP_FLAGS
         ]
       },
@@ -19862,14 +19862,14 @@ var DEFAULT_CONFIG = {
         command: "sed",
         default: "allow",
         argPatterns: [
-          { match: { anyArgMatches: ["^-i$", "^-i\\b", "^--in-place"] }, decision: "ask", reason: "In-place file modification" }
+          { match: { anyArgMatches: ["^-i$", "^-i\\b", "^--in-place"] }, decision: "ask", reason: "modifies files in place" }
         ]
       },
       {
         command: "awk",
         default: "allow",
         argPatterns: [
-          { match: { argsMatch: ["system\\s*\\(", "\\|\\s*getline", "print\\s*>"] }, decision: "ask", reason: "awk can execute commands or write files" }
+          { match: { argsMatch: ["system\\s*\\(", "\\|\\s*getline", "print\\s*>"] }, decision: "ask", reason: "awk system() or file output" }
         ]
       },
       {
@@ -19883,14 +19883,14 @@ var DEFAULT_CONFIG = {
         command: "tee",
         default: "allow",
         argPatterns: [
-          { match: { anyArgMatches: ["^/(etc|usr|var|sys|proc|boot|root|lib)"] }, decision: "ask", reason: "Writing to system directory" }
+          { match: { anyArgMatches: ["^/(etc|usr|var|sys|proc|boot|root|lib)"] }, decision: "ask", reason: "writes to system directory" }
         ]
       },
       {
         command: "openssl",
         default: "allow",
         argPatterns: [
-          { match: { anyArgMatches: ["^(enc|rsautl|pkeyutl|smime|cms)$"] }, decision: "ask", reason: "Encryption/signing operations" }
+          { match: { anyArgMatches: ["^(enc|rsautl|pkeyutl|smime|cms)$"] }, decision: "ask", reason: "encryption/signing" }
         ]
       },
       // --- File operations ---
@@ -19898,7 +19898,7 @@ var DEFAULT_CONFIG = {
         command: "rm",
         default: "ask",
         argPatterns: [
-          { match: { anyArgMatches: ["^-[^\\s]*r[^\\s]*f$|^-[^\\s]*f[^\\s]*r$"] }, decision: "ask", reason: "Recursive force delete (rm -rf)" },
+          { match: { anyArgMatches: ["^-[^\\s]*r[^\\s]*f$|^-[^\\s]*f[^\\s]*r$"] }, decision: "ask", reason: "recursive force delete" },
           { match: { anyArgMatches: ["^-[^\\s]*r"] }, decision: "ask", reason: "Recursive delete" },
           { match: { argCount: { max: 3 }, not: false }, decision: "allow", description: "Deleting a small number of non-recursive files" }
         ]
@@ -19912,7 +19912,7 @@ var DEFAULT_CONFIG = {
         command: "chmod",
         default: "ask",
         argPatterns: [
-          { match: { argsMatch: ["-R\\s+777"] }, decision: "deny", reason: "Recursively setting world-writable permissions" }
+          { match: { argsMatch: ["-R\\s+777"] }, decision: "deny", reason: "recursive world-writable permissions" }
         ]
       },
       { command: "chown", default: "ask" },
@@ -19946,7 +19946,7 @@ var DEFAULT_CONFIG = {
         command: cmd,
         default: "ask",
         argPatterns: [
-          { match: { anyArgMatches: ["^-e$", "^--eval"] }, decision: "ask", reason: "Inline code execution" },
+          { match: { anyArgMatches: ["^-e$", "^--eval"] }, decision: "ask", reason: "evaluates inline code" },
           VERSION_HELP_FLAGS
         ]
       })),
@@ -19960,7 +19960,7 @@ var DEFAULT_CONFIG = {
       { command: "swiftc", default: "allow" },
       { command: "zig", default: "allow" },
       { command: "dotnet", default: "allow", argPatterns: [
-        { match: { anyArgMatches: ["^(publish|nuget)$"] }, decision: "ask", reason: "Publishing" }
+        { match: { anyArgMatches: ["^(publish|nuget)$"] }, decision: "ask", reason: "publishes package" }
       ] },
       // --- Database CLIs ---
       ...["psql", "mysql", "mariadb", "sqlite3", "redis-cli", "mongosh"].map((cmd) => ({
@@ -20254,45 +20254,33 @@ function generateAllowSnippet(details) {
 function formatSystemMessage(decision, rawCommand, details) {
   const relevant = details.filter((d) => d.decision !== "allow");
   if (decision === "ask") {
-    const parts = relevant.map((d) => `\`${d.command}\`: ${d.reason}`);
-    const header = `[warden] ${parts.join(" | ")}`;
-    const subcommandHints = relevant.filter((d) => d.args.length > 0).map((d) => {
-      const sub = d.args[0];
-      return `  Option A: Allow all \`${d.command}\` \u2192 \`/warden:allow ${d.command}\`
-  Option B: Allow only \`${d.command} ${sub}\` \u2192 \`/warden:allow ${d.command} ${sub}\``;
-    });
-    const yoloHint = "Tip: `/warden:yolo` to temporarily allow all commands";
-    if (subcommandHints.length > 0) {
-      return `${header}
-${subcommandHints.join("\n")}
-See /warden:allow
-${yoloHint}`;
-    }
-    return `${header} \u2014 To auto-allow, see /warden:allow
-${yoloHint}`;
-  }
-  const lines = ["[warden] Command blocked", ""];
-  if (relevant.length > 0) {
+    const parts2 = relevant.map((d) => `${d.command}: ${d.reason}`);
+    const cmds = [...new Set(relevant.map((d) => d.command))];
+    const allowHint = cmds.length === 1 ? `/warden:allow ${cmds[0]}` : "/warden:allow";
+    const reason2 = `[warden] ${parts2.join("; ")} (${allowHint})`;
+    const helpLines = ["To auto-allow, add to ~/.claude/warden.yaml or .claude/warden.yaml:"];
     for (const d of relevant) {
-      lines.push(`- \`${d.command}\`: ${d.reason}`);
+      helpLines.push(`- Allow all \`${d.command}\` \u2192 \`/warden:allow ${d.command}\``);
+      if (d.args.length > 0) {
+        const sub = d.args[0];
+        helpLines.push(`- Allow only \`${d.command} ${sub}\` \u2192 \`/warden:allow ${d.command} ${sub}\``);
+      }
     }
-    lines.push("");
+    helpLines.push("- Temporarily allow all \u2192 `/warden:yolo`");
+    return { reason: reason2, systemMessage: helpLines.join("\n") };
   }
+  const parts = relevant.map((d) => `${d.command}: ${d.reason}`);
+  const reason = `[warden] blocked ${parts.join("; ")}`;
   const snippet = generateAllowSnippet(details);
+  let systemMessage;
   if (snippet) {
-    lines.push("To allow this in the future, add to your warden config:");
-    lines.push("");
-    lines.push("```yaml");
-    lines.push(snippet);
-    lines.push("```");
-    lines.push("");
-    lines.push("Config locations:");
-    lines.push("- User-level (all projects): `~/.claude/warden.yaml`");
-    lines.push("- Project-level (this project): `.claude/warden.yaml`");
-    lines.push("");
-    lines.push("Project config takes priority over user config.");
+    const helpLines = [];
+    const cmds = relevant.map((d) => `"${d.command}"`).join(", ");
+    helpLines.push(`To allow ${cmds}, add to ~/.claude/warden.yaml or .claude/warden.yaml:`);
+    helpLines.push(snippet);
+    systemMessage = helpLines.join("\n");
   }
-  return lines.join("\n");
+  return { reason, systemMessage };
 }
 
 // src/notify.ts
@@ -20456,28 +20444,28 @@ async function main() {
   }
   const yoloCmd = parseYoloCommand(command);
   if (yoloCmd) {
-    let msg2;
+    let msg;
     if (yoloCmd.action === "activate") {
       const state = activateYolo(input.session_id, yoloCmd.durationMinutes);
-      const expiryInfo = state.expiresAt ? `expires at ${new Date(state.expiresAt).toLocaleTimeString()}` : "full session, no expiry";
-      msg2 = `[warden] YOLO mode activated (${expiryInfo}). Always-deny commands are still blocked. Use \`echo __WARDEN_YOLO_DEACTIVATE__\` to turn off.`;
+      const expiryInfo = state.expiresAt ? `until ${new Date(state.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "full session";
+      msg = `[warden] yolo on (${expiryInfo}). Blocked commands still denied.`;
     } else if (yoloCmd.action === "deactivate") {
       deactivateYolo(input.session_id);
-      msg2 = "[warden] YOLO mode deactivated. Normal rule evaluation resumed.";
+      msg = "[warden] yolo off";
     } else {
       const state = getYoloState(input.session_id);
       if (state) {
-        const expiryInfo = state.expiresAt ? `expires at ${new Date(state.expiresAt).toLocaleTimeString()}` : "full session";
-        msg2 = `[warden] YOLO mode is active (${expiryInfo})`;
+        const expiryInfo = state.expiresAt ? `until ${new Date(state.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "full session";
+        msg = `[warden] yolo on (${expiryInfo})`;
       } else {
-        msg2 = "[warden] YOLO mode is not active";
+        msg = "[warden] yolo off";
       }
     }
     const output2 = {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "allow",
-        permissionDecisionReason: msg2
+        permissionDecisionReason: msg
       }
     };
     process.stdout.write(JSON.stringify(output2));
@@ -20490,12 +20478,12 @@ async function main() {
     const result2 = evaluate(parsed2, config);
     if (result2.decision === "deny" && !yoloState.bypassDeny) {
     } else {
-      const expiryInfo = yoloState.expiresAt ? `expires ${new Date(yoloState.expiresAt).toLocaleTimeString()}` : "full session";
+      const expiryInfo = yoloState.expiresAt ? `until ${new Date(yoloState.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "full session";
       const output2 = {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "allow",
-          permissionDecisionReason: `[warden] YOLO mode active (${expiryInfo})`
+          permissionDecisionReason: `[warden] yolo (${expiryInfo})`
         }
       };
       process.stdout.write(JSON.stringify(output2));
@@ -20509,7 +20497,7 @@ async function main() {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "allow",
-        permissionDecisionReason: `[warden] ${result.reason}`
+        permissionDecisionReason: "[warden] ok"
       }
     };
     process.stdout.write(JSON.stringify(output2));
@@ -20520,16 +20508,17 @@ async function main() {
       const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
       sendNotification("Claude Warden", `Blocked: ${truncated}`, config);
     }
-    const msg2 = formatSystemMessage("deny", command, result.details);
+    const { reason: reason2, systemMessage: systemMessage2 } = formatSystemMessage("deny", command, result.details);
     const output2 = {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: msg2
-      }
+        permissionDecisionReason: reason2
+      },
+      systemMessage: systemMessage2
     };
     process.stdout.write(JSON.stringify(output2));
-    process.stderr.write(`[warden] Blocked: ${result.reason}
+    process.stderr.write(`${reason2}
 `);
     process.exit(2);
   }
@@ -20537,13 +20526,14 @@ async function main() {
     const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
     sendNotification("Claude Warden", `Permission needed: ${truncated}`, config);
   }
-  const msg = formatSystemMessage("ask", command, result.details);
+  const { reason, systemMessage } = formatSystemMessage("ask", command, result.details);
   const output = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "ask",
-      permissionDecisionReason: msg
-    }
+      permissionDecisionReason: reason
+    },
+    systemMessage
   };
   process.stdout.write(JSON.stringify(output));
   process.exit(0);

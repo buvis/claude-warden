@@ -34,11 +34,11 @@ const MAX_RECURSION_DEPTH = 10;
 
 export function evaluate(parsed: ParseResult, config: WardenConfig, depth: number = 0): EvalResult {
   if (depth > MAX_RECURSION_DEPTH) {
-    return { decision: 'ask', reason: 'Maximum recursion depth exceeded', details: [] };
+    return { decision: 'ask', reason: 'too many nested commands', details: [] };
   }
 
   if (parsed.parseError) {
-    return { decision: 'ask', reason: 'Could not parse command safely', details: [] };
+    return { decision: 'ask', reason: 'unparseable command', details: [] };
   }
 
   if (parsed.commands.length === 0) {
@@ -59,7 +59,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
     }
   } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
     // Unparseable subshell (heredocs, complex constructs) — fall back to ask
-    return { decision: 'ask', reason: 'Command contains subshell/command substitution', details: [] };
+    return { decision: 'ask', reason: 'contains subshell', details: [] };
   }
 
   const details: CommandEvalDetail[] = [];
@@ -88,7 +88,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
     };
   }
 
-  return { decision: 'allow', reason: 'All commands are safe', details };
+  return { decision: 'allow', reason: 'ok', details };
 }
 
 function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail {
@@ -97,10 +97,10 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   // 1. Scoped alwaysDeny → alwaysAllow per layer (workspace > user > default)
   for (const layer of config.layers) {
     if (layer.alwaysDeny.some(name => commandMatchesName(cmd, name))) {
-      return { command, args, decision: 'deny', reason: `"${command}" is blocked`, matchedRule: 'alwaysDeny' };
+      return { command, args, decision: 'deny', reason: 'blocked by policy', matchedRule: 'alwaysDeny' };
     }
     if (layer.alwaysAllow.some(name => commandMatchesName(cmd, name))) {
-      return { command, args, decision: 'allow', reason: `"${command}" is safe`, matchedRule: 'alwaysAllow' };
+      return { command, args, decision: 'allow', reason: 'safe', matchedRule: 'alwaysAllow' };
     }
   }
 
@@ -139,7 +139,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   }
 
   // 4. Default
-  return { command, args, decision: config.defaultDecision, reason: `No rule for "${command}"`, matchedRule: 'default' };
+  return { command, args, decision: config.defaultDecision, reason: 'unknown command', matchedRule: 'default' };
 }
 
 /**
@@ -217,7 +217,7 @@ function evaluateRule(cmd: ParsedCommand, rule: CommandRule): CommandEvalDetail 
   return {
     command, args,
     decision: rule.default,
-    reason: `Default for "${command}"`,
+    reason: 'needs review',
     matchedRule: `${command}:default`,
   };
 }

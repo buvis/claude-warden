@@ -944,7 +944,7 @@ describe('evaluator', () => {
       const parsed = parseCommand('echo hello');
       const result = evaluate(parsed, DEFAULT_CONFIG, 11);
       expect(result.decision).toBe('ask');
-      expect(result.reason).toContain('recursion depth');
+      expect(result.reason).toContain('too many nested commands');
     });
 
     it('allows normal depth', () => {

@@ -46,7 +46,7 @@ function scriptRunnersPattern(): ArgPattern {
   return {
     match: { anyArgMatches: [anyArgMatchesPattern(SCRIPT_RUNNERS)] },
     decision: 'ask',
-    reason: 'Script runners can execute arbitrary code',
+    reason: 'runs arbitrary code',
   };
 }
 
@@ -54,7 +54,7 @@ function registryOpsPattern(): ArgPattern {
   return {
     match: { anyArgMatches: [anyArgMatchesPattern(REGISTRY_OPS)] },
     decision: 'ask',
-    reason: 'Registry modification',
+    reason: 'modifies package registry',
   };
 }
 
@@ -203,7 +203,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
           {
             match: { noArgs: true },
             decision: 'deny',
-            reason: 'source/. requires a file argument',
+            reason: 'missing file argument',
           },
         ],
       })),
@@ -222,9 +222,9 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'node',
         default: 'ask',
         argPatterns: [
-          { match: { anyArgMatches: ['^-e$', '^--eval', '^-p$', '^--print'] }, decision: 'ask', reason: 'Evaluating inline code' },
+          { match: { anyArgMatches: ['^-e$', '^--eval', '^-p$', '^--print'] }, decision: 'ask', reason: 'evaluates inline code' },
           { match: { anyArgMatches: ['^--(version|help)$', '^-[vh]$'] }, decision: 'allow', description: 'Version/help flags' },
-          { match: { noArgs: true }, decision: 'ask', reason: 'Interactive REPL' },
+          { match: { noArgs: true }, decision: 'ask', reason: 'opens interactive REPL' },
         ],
       },
       // npx / bunx — package runners
@@ -261,7 +261,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'uv',
         default: 'allow',
         argPatterns: [
-          { match: { anyArgMatches: ['^publish$'] }, decision: 'ask', reason: 'Publishing to PyPI' },
+          { match: { anyArgMatches: ['^publish$'] }, decision: 'ask', reason: 'publishes to PyPI' },
         ],
       },
       { command: 'pipx', default: 'ask' },
@@ -271,16 +271,16 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'git',
         default: 'allow',
         argPatterns: [
-          { match: { argsMatch: ['push\\s+--force', 'push\\s+-f\\b'] }, decision: 'ask', reason: 'Force push can overwrite remote history' },
-          { match: { argsMatch: ['reset\\s+--hard'] }, decision: 'ask', reason: 'Hard reset discards changes' },
-          { match: { anyArgMatches: ['^clean$'] }, decision: 'ask', reason: 'git clean removes untracked files' },
+          { match: { argsMatch: ['push\\s+--force', 'push\\s+-f\\b'] }, decision: 'ask', reason: 'force push overwrites remote history' },
+          { match: { argsMatch: ['reset\\s+--hard'] }, decision: 'ask', reason: 'hard reset discards uncommitted changes' },
+          { match: { anyArgMatches: ['^clean$'] }, decision: 'ask', reason: 'removes untracked files' },
         ],
       },
       {
         command: 'gh',
         default: 'allow',
         argPatterns: [
-          { match: { argsMatch: ['repo\\s+delete', 'repo\\s+archive'] }, decision: 'ask', reason: 'Destructive repo operation' },
+          { match: { argsMatch: ['repo\\s+delete', 'repo\\s+archive'] }, decision: 'ask', reason: 'destructive repo operation' },
         ],
       },
 
@@ -298,7 +298,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'go',
         default: 'allow',
         argPatterns: [
-          { match: { anyArgMatches: ['^generate$'] }, decision: 'ask', reason: 'go generate runs arbitrary commands' },
+          { match: { anyArgMatches: ['^generate$'] }, decision: 'ask', reason: 'runs arbitrary commands' },
         ],
       },
       { command: 'rustup', default: 'allow' },
@@ -313,8 +313,8 @@ export const DEFAULT_CONFIG: WardenConfig = {
         default: 'ask',
         argPatterns: [
           { match: { anyArgMatches: ['^(ps|images|logs|inspect|stats|top|version|info)$'] }, decision: 'allow', description: 'Read-only docker commands' },
-          { match: { anyArgMatches: ['^(build|run|compose|exec|pull|stop|start|restart|create)$'] }, decision: 'ask', reason: 'Docker state-changing operation' },
-          { match: { anyArgMatches: ['^(system\\s+prune|container\\s+prune|image\\s+prune)$'] }, decision: 'ask', reason: 'Docker prune operations' },
+          { match: { anyArgMatches: ['^(build|run|compose|exec|pull|stop|start|restart|create)$'] }, decision: 'ask', reason: 'modifies Docker state' },
+          { match: { anyArgMatches: ['^(system\\s+prune|container\\s+prune|image\\s+prune)$'] }, decision: 'ask', reason: 'prunes Docker resources' },
         ],
       },
       { command: 'docker-compose', default: 'ask' },
@@ -323,7 +323,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
         default: 'ask',
         argPatterns: [
           { match: { anyArgMatches: ['^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$'] }, decision: 'allow', description: 'Read-only kubectl commands' },
-          { match: { anyArgMatches: ['^(delete|drain|cordon|taint)$'] }, decision: 'ask', reason: 'Destructive kubectl operation' },
+          { match: { anyArgMatches: ['^(delete|drain|cordon|taint)$'] }, decision: 'ask', reason: 'destructive cluster operation' },
           VERSION_HELP_FLAGS,
         ],
       },
@@ -334,14 +334,14 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'sed',
         default: 'allow',
         argPatterns: [
-          { match: { anyArgMatches: ['^-i$', '^-i\\b', '^--in-place'] }, decision: 'ask', reason: 'In-place file modification' },
+          { match: { anyArgMatches: ['^-i$', '^-i\\b', '^--in-place'] }, decision: 'ask', reason: 'modifies files in place' },
         ],
       },
       {
         command: 'awk',
         default: 'allow',
         argPatterns: [
-          { match: { argsMatch: ['system\\s*\\(', '\\|\\s*getline', 'print\\s*>'] }, decision: 'ask', reason: 'awk can execute commands or write files' },
+          { match: { argsMatch: ['system\\s*\\(', '\\|\\s*getline', 'print\\s*>'] }, decision: 'ask', reason: 'awk system() or file output' },
         ],
       },
       {
@@ -355,14 +355,14 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'tee',
         default: 'allow',
         argPatterns: [
-          { match: { anyArgMatches: ['^/(etc|usr|var|sys|proc|boot|root|lib)'] }, decision: 'ask', reason: 'Writing to system directory' },
+          { match: { anyArgMatches: ['^/(etc|usr|var|sys|proc|boot|root|lib)'] }, decision: 'ask', reason: 'writes to system directory' },
         ],
       },
       {
         command: 'openssl',
         default: 'allow',
         argPatterns: [
-          { match: { anyArgMatches: ['^(enc|rsautl|pkeyutl|smime|cms)$'] }, decision: 'ask', reason: 'Encryption/signing operations' },
+          { match: { anyArgMatches: ['^(enc|rsautl|pkeyutl|smime|cms)$'] }, decision: 'ask', reason: 'encryption/signing' },
         ],
       },
 
@@ -371,7 +371,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'rm',
         default: 'ask',
         argPatterns: [
-          { match: { anyArgMatches: ['^-[^\\s]*r[^\\s]*f$|^-[^\\s]*f[^\\s]*r$'] }, decision: 'ask', reason: 'Recursive force delete (rm -rf)' },
+          { match: { anyArgMatches: ['^-[^\\s]*r[^\\s]*f$|^-[^\\s]*f[^\\s]*r$'] }, decision: 'ask', reason: 'recursive force delete' },
           { match: { anyArgMatches: ['^-[^\\s]*r'] }, decision: 'ask', reason: 'Recursive delete' },
           { match: { argCount: { max: 3 }, not: false }, decision: 'allow', description: 'Deleting a small number of non-recursive files' },
         ],
@@ -385,7 +385,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: 'chmod',
         default: 'ask',
         argPatterns: [
-          { match: { argsMatch: ['-R\\s+777'] }, decision: 'deny', reason: 'Recursively setting world-writable permissions' },
+          { match: { argsMatch: ['-R\\s+777'] }, decision: 'deny', reason: 'recursive world-writable permissions' },
         ],
       },
       { command: 'chown', default: 'ask' },
@@ -425,7 +425,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
         command: cmd,
         default: 'ask',
         argPatterns: [
-          { match: { anyArgMatches: ['^-e$', '^--eval'] }, decision: 'ask', reason: 'Inline code execution' },
+          { match: { anyArgMatches: ['^-e$', '^--eval'] }, decision: 'ask', reason: 'evaluates inline code' },
           VERSION_HELP_FLAGS,
         ],
       })),
@@ -441,7 +441,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
       { command: 'swiftc', default: 'allow' },
       { command: 'zig', default: 'allow' },
       { command: 'dotnet', default: 'allow', argPatterns: [
-        { match: { anyArgMatches: ['^(publish|nuget)$'] }, decision: 'ask', reason: 'Publishing' },
+        { match: { anyArgMatches: ['^(publish|nuget)$'] }, decision: 'ask', reason: 'publishes package' },
       ]},
 
       // --- Database CLIs ---
