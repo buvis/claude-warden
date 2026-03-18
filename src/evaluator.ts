@@ -5,6 +5,7 @@ import type {
   ChainAssignment,
 } from './types';
 import { parseCommand } from './parser';
+import { scanScriptCode, readScriptFile } from './script-scanner';
 
 /** Safely test a regex pattern, returning false on invalid patterns. */
 function safeRegexTest(pattern: string, input: string): boolean {
@@ -33,7 +34,7 @@ function commandMatchesName(cmd: ParsedCommand, name: string): boolean {
 
 const MAX_RECURSION_DEPTH = 10;
 
-export function evaluate(parsed: ParseResult, config: WardenConfig, depth: number = 0): EvalResult {
+export function evaluate(parsed: ParseResult, config: WardenConfig, depth: number = 0, cwd?: string): EvalResult {
   if (depth > MAX_RECURSION_DEPTH) {
     return { decision: 'ask', reason: 'too many nested commands', details: [] };
   }
@@ -50,7 +51,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
   if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
     for (const subCmd of parsed.subshellCommands) {
       const subParsed = parseCommand(subCmd);
-      const subResult = evaluate(subParsed, config, depth + 1);
+      const subResult = evaluate(subParsed, config, depth + 1, cwd);
       if (subResult.decision === 'deny') {
         return { decision: 'deny', reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
       }
@@ -65,7 +66,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
 
   const details: CommandEvalDetail[] = [];
   for (const cmd of parsed.commands) {
-    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments));
+    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments, cwd));
   }
 
   // Combine: deny > ask > allow
@@ -92,7 +93,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
   return { decision: 'allow', reason: 'ok', details };
 }
 
-function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, chainAssignments?: Map<string, ChainAssignment>): CommandEvalDetail {
+function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, chainAssignments?: Map<string, ChainAssignment>, cwd?: string): CommandEvalDetail {
   const { command, args } = cmd;
   const detail = (d: CommandEvalDetail): CommandEvalDetail => {
     if (cmd.resolvedFrom) d.resolvedFrom = cmd.resolvedFrom;
@@ -162,6 +163,20 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   }
   if (command === 'find') {
     return evaluateFindCommand(cmd, config, depth);
+  }
+
+  // 2b. Script safety scanning — language-specific evaluators
+  if (command === 'python' || command === 'python3') {
+    const pyResult = evaluatePythonCommand(cmd, config, depth, cwd);
+    if (pyResult) return pyResult;
+  }
+  if (command === 'node' || command === 'tsx' || command === 'ts-node') {
+    const nodeResult = evaluateNodeCommand(cmd, config, depth, cwd);
+    if (nodeResult) return nodeResult;
+  }
+  if (command === 'perl') {
+    const perlResult = evaluatePerlCommand(cmd, config, depth, cwd);
+    if (perlResult) return perlResult;
   }
 
   // 3. Scoped command rules — collect and merge across layers
@@ -1194,4 +1209,163 @@ function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
     reason: `Trusted Fly app "${app}" (${result.reason})`,
     matchedRule: 'trustedFlyApps',
   };
+}
+
+// ─── Script safety scanning ───
+
+/** Map scanScriptCode result to a CommandEvalDetail. */
+function mapScanResult(
+  command: string,
+  args: string[],
+  scanResult: ReturnType<typeof scanScriptCode>,
+  matchedRule: string,
+): CommandEvalDetail {
+  if (!scanResult) {
+    return { command, args, decision: 'allow', reason: 'script content is safe', matchedRule };
+  }
+  const reason = scanResult.level === 'dangerous'
+    ? `dangerous: ${scanResult.reason}`
+    : scanResult.reason;
+  return { command, args, decision: 'ask', reason, matchedRule };
+}
+
+/** Try to read and scan a script file, returning a CommandEvalDetail. */
+function scanScriptFile(
+  command: string,
+  args: string[],
+  filePath: string,
+  language: 'python' | 'typescript' | 'perl',
+  matchedRule: string,
+  cwd?: string,
+): CommandEvalDetail {
+  const fileResult = readScriptFile(filePath, cwd || process.cwd());
+  if ('error' in fileResult) {
+    return { command, args, decision: 'ask', reason: fileResult.error, matchedRule };
+  }
+  return mapScanResult(command, args, scanScriptCode(fileResult.content, language), matchedRule);
+}
+
+const SAFE_PYTHON_MODULES = new Set([
+  'pytest', 'unittest', 'venv', 'pip', 'json.tool', 'compileall',
+  'pydoc', 'doctest', 'timeit', 'py_compile', 'black', 'ruff',
+  'mypy', 'isort', 'ensurepip', 'zipfile', 'site', 'cProfile',
+  'pdb', 'dis', 'ast', 'tokenize', 'sysconfig',
+]);
+
+function evaluatePythonCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, cwd?: string): CommandEvalDetail | null {
+  const { command, args } = cmd;
+  const rule = 'python:script';
+
+  // 1. --version / --help / -V
+  if (args.some(a => a === '--version' || a === '--help' || a === '-V')) {
+    return { command, args, decision: 'allow', reason: 'version/help flag', matchedRule: rule };
+  }
+
+  // 2. -c <code>
+  const cIdx = args.indexOf('-c');
+  if (cIdx !== -1) {
+    const code = args[cIdx + 1];
+    if (!code) {
+      return { command, args, decision: 'ask', reason: 'missing code after -c', matchedRule: rule };
+    }
+    return mapScanResult(command, args, scanScriptCode(code, 'python'), rule);
+  }
+
+  // 3. -m <module>
+  const mIdx = args.indexOf('-m');
+  if (mIdx !== -1) {
+    const mod = args[mIdx + 1];
+    if (!mod) {
+      return { command, args, decision: 'ask', reason: 'missing module after -m', matchedRule: rule };
+    }
+    if (SAFE_PYTHON_MODULES.has(mod)) {
+      return { command, args, decision: 'allow', reason: `safe module: ${mod}`, matchedRule: rule };
+    }
+    return { command, args, decision: 'ask', reason: `unknown module: ${mod}`, matchedRule: rule };
+  }
+
+  // 4. First arg ending in .py → read and scan
+  const scriptArg = args.find(a => !a.startsWith('-') && a.endsWith('.py'));
+  if (scriptArg) {
+    return scanScriptFile(command, args, scriptArg, 'python', rule, cwd);
+  }
+
+  // 5. No args → interactive REPL
+  const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+  if (nonFlagArgs.length === 0 && args.length === 0) {
+    return { command, args, decision: 'ask', reason: 'opens interactive REPL', matchedRule: rule };
+  }
+
+  // 6. Fall through to rules
+  return null;
+}
+
+const NODE_SCRIPT_EXTENSIONS = /\.(js|mjs|cjs|ts|mts|cts|tsx|jsx)$/;
+
+function evaluateNodeCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, cwd?: string): CommandEvalDetail | null {
+  const { command, args } = cmd;
+  const rule = 'node:script';
+
+  // 1. --version / --help / -v / -h
+  if (args.some(a => a === '--version' || a === '--help' || a === '-v' || a === '-h')) {
+    return { command, args, decision: 'allow', reason: 'version/help flag', matchedRule: rule };
+  }
+
+  // 2. -e / --eval / -p / --print → inline code
+  const evalIdx = args.findIndex(a => a === '-e' || a === '--eval' || a === '-p' || a === '--print');
+  if (evalIdx !== -1) {
+    const code = args[evalIdx + 1];
+    if (!code) {
+      return { command, args, decision: 'ask', reason: 'missing code after eval flag', matchedRule: rule };
+    }
+    return mapScanResult(command, args, scanScriptCode(code, 'typescript'), rule);
+  }
+
+  // 3. First arg ending in script extension → read and scan
+  const scriptArg = args.find(a => !a.startsWith('-') && NODE_SCRIPT_EXTENSIONS.test(a));
+  if (scriptArg) {
+    return scanScriptFile(command, args, scriptArg, 'typescript', rule, cwd);
+  }
+
+  // 4. No args → interactive REPL
+  if (args.length === 0) {
+    return { command, args, decision: 'ask', reason: 'opens interactive REPL', matchedRule: rule };
+  }
+
+  // 5. Fall through to rules
+  return null;
+}
+
+function evaluatePerlCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, cwd?: string): CommandEvalDetail | null {
+  const { command, args } = cmd;
+  const rule = 'perl:script';
+
+  // 1. --version / --help / -v
+  if (args.some(a => a === '--version' || a === '--help' || a === '-v')) {
+    return { command, args, decision: 'allow', reason: 'version/help flag', matchedRule: rule };
+  }
+
+  // 2. -e / -E → inline code
+  const eIdx = args.findIndex(a => a === '-e' || a === '-E');
+  if (eIdx !== -1) {
+    const code = args[eIdx + 1];
+    if (!code) {
+      return { command, args, decision: 'ask', reason: 'missing code after -e', matchedRule: rule };
+    }
+    return mapScanResult(command, args, scanScriptCode(code, 'perl'), rule);
+  }
+
+  // 3. First arg ending in .pl / .pm → read and scan
+  const scriptArg = args.find(a => !a.startsWith('-') && (a.endsWith('.pl') || a.endsWith('.pm')));
+  if (scriptArg) {
+    return scanScriptFile(command, args, scriptArg, 'perl', rule, cwd);
+  }
+
+  // 4. No args → ask
+  if (args.length === 0) {
+    return { command, args, decision: 'ask', reason: 'opens interactive REPL', matchedRule: rule };
+  }
+
+  // 5. Fall through to rules
+  return null;
 }
