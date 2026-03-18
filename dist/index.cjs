@@ -18190,9 +18190,28 @@ function preprocessPathParentheses(input) {
   }
   return result.join("");
 }
-function convertCommand(node) {
+var VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
+function resolveVarRef(text, chainAssignments) {
+  const m = text.match(VAR_REF_REGEX);
+  if (!m) return null;
+  const assignment = chainAssignments.get(m[1]);
+  if (!assignment || assignment.isDynamic || assignment.value === null) return null;
+  return assignment.value;
+}
+function convertCommand(node, chainAssignments) {
   if (!node.name) return null;
-  const originalCommand = node.name.text;
+  let originalCommand = node.name.text;
+  let resolvedFrom;
+  const varMatch = originalCommand.match(VAR_REF_REGEX);
+  if (varMatch) {
+    const resolved = resolveVarRef(originalCommand, chainAssignments);
+    if (resolved !== null) {
+      resolvedFrom = originalCommand;
+      originalCommand = resolved;
+    } else if (chainAssignments.has(varMatch[1])) {
+      resolvedFrom = originalCommand;
+    }
+  }
   const command = originalCommand.includes("/") ? (0, import_path.basename)(originalCommand) : originalCommand;
   const envPrefixes = [];
   if (node.prefix) {
@@ -18216,7 +18235,9 @@ function convertCommand(node) {
     ...args2
   ];
   const raw = rawParts.join(" ");
-  return { command, originalCommand, args: args2, envPrefixes, raw };
+  const result = { command, originalCommand, args: args2, envPrefixes, raw };
+  if (resolvedFrom) result.resolvedFrom = resolvedFrom;
+  return result;
 }
 function collectCommandExpansions(node) {
   const commands = [];
@@ -18243,6 +18264,22 @@ function collectCommandExpansions(node) {
   }
   return commands;
 }
+function extractAssignments(node) {
+  const assignments = [];
+  if (!node.prefix) return assignments;
+  for (const p of node.prefix) {
+    if (p.type !== "AssignmentWord") continue;
+    const text = p.text;
+    const eqIdx = text.indexOf("=");
+    if (eqIdx === -1) continue;
+    const name = text.slice(0, eqIdx);
+    const value = text.slice(eqIdx + 1);
+    const stripped = value.replace(/^['"]|['"]$/g, "");
+    const isDynamic = /\$\(|`/.test(value);
+    assignments.push({ name, value: isDynamic ? null : stripped, isDynamic });
+  }
+  return assignments;
+}
 function walkNode(node, result) {
   switch (node.type) {
     case "Command": {
@@ -18252,8 +18289,13 @@ function walkNode(node, result) {
         result.hasSubshell = true;
         result.subshellCommands.push(...expansions);
       }
-      const parsed = convertCommand(cmd);
-      if (!parsed) break;
+      const parsed = convertCommand(cmd, result.chainAssignments);
+      if (!parsed) {
+        for (const a of extractAssignments(cmd)) {
+          result.chainAssignments.set(a.name, { value: a.value, isDynamic: a.isDynamic });
+        }
+        break;
+      }
       if ((parsed.command === "sh" || parsed.command === "bash" || parsed.command === "zsh") && parsed.args.length >= 2 && parsed.args[0] === "-c") {
         const innerResult = parseCommand(parsed.args[1]);
         if (innerResult.parseError) {
@@ -18334,57 +18376,190 @@ function astHasHeredoc(ast) {
 }
 function parseCommand(input) {
   if (!input || !input.trim()) {
-    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: false };
+    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: /* @__PURE__ */ new Map() };
   }
   input = preprocessCatHeredocs(input);
   input = preprocessPathParentheses(input);
   try {
     const ast = (0, import_bash_parser.default)(input);
-    const result = { commands: [], hasSubshell: false, subshellCommands: [] };
+    const result = { commands: [], hasSubshell: false, subshellCommands: [], chainAssignments: /* @__PURE__ */ new Map() };
     if (astHasHeredoc(ast)) {
       const firstLine = input.split("\n")[0];
       const cmdPart = firstLine.replace(/<<-?\s*['"]?\w+['"]?.*$/, "").trim();
       if (!cmdPart) {
-        return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true, chainAssignments: /* @__PURE__ */ new Map() };
       }
       try {
         const cmdAst = (0, import_bash_parser.default)(cmdPart);
         for (const cmd of cmdAst.commands) {
           walkNode(cmd, result);
         }
-        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false };
+        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
       } catch {
-        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: /* @__PURE__ */ new Map() };
       }
     }
     for (const cmd of ast.commands) {
       walkNode(cmd, result);
     }
-    return { commands: result.commands, hasSubshell: result.hasSubshell, subshellCommands: result.subshellCommands, parseError: false };
+    return { commands: result.commands, hasSubshell: result.hasSubshell, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
   } catch {
     if (HEREDOC_REGEX.test(input)) {
       const firstLine = input.split("\n")[0];
       const cmdPart = firstLine.replace(/<<-?\s*['"]?\w+['"]?.*$/, "").trim();
       if (!cmdPart) {
-        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: /* @__PURE__ */ new Map() };
       }
       try {
         const ast = (0, import_bash_parser.default)(cmdPart);
-        const result = { commands: [], hasSubshell: false, subshellCommands: [] };
+        const result = { commands: [], hasSubshell: false, subshellCommands: [], chainAssignments: /* @__PURE__ */ new Map() };
         for (const cmd of ast.commands) {
           walkNode(cmd, result);
         }
-        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false };
+        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
       } catch {
-        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: /* @__PURE__ */ new Map() };
       }
     }
+    const pipelineResult = pipelineFallbackParse(input);
+    if (pipelineResult) return pipelineResult;
     const fallback = regexFallbackParse(input);
     if (fallback) {
-      return { commands: [fallback], hasSubshell: false, subshellCommands: [], parseError: false };
+      return { commands: [fallback], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: /* @__PURE__ */ new Map() };
     }
-    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true };
+    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true, chainAssignments: /* @__PURE__ */ new Map() };
   }
+}
+function splitOnUnquotedOperators(input) {
+  const segments = [];
+  const operators = [];
+  let current = "";
+  let inSingle = false;
+  let inDouble = false;
+  let parenDepth = 0;
+  let inBacktick = false;
+  let i = 0;
+  while (i < input.length) {
+    const ch = input[i];
+    if (ch === "\\" && !inSingle) {
+      current += ch;
+      if (i + 1 < input.length) {
+        current += input[i + 1];
+        i += 2;
+      } else {
+        i++;
+      }
+      continue;
+    }
+    if (ch === "'" && !inDouble && !inBacktick && parenDepth === 0) {
+      inSingle = !inSingle;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"' && !inSingle && !inBacktick) {
+      inDouble = !inDouble;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === "`" && !inSingle) {
+      inBacktick = !inBacktick;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === "$" && i + 1 < input.length && input[i + 1] === "(" && !inSingle && !inBacktick) {
+      parenDepth++;
+      current += ch + input[i + 1];
+      i += 2;
+      continue;
+    }
+    if (ch === ")" && parenDepth > 0 && !inSingle && !inBacktick) {
+      parenDepth--;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (!inSingle && !inDouble && parenDepth === 0 && !inBacktick) {
+      if (ch === "|" && i + 1 < input.length && input[i + 1] === "|") {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push("||");
+        current = "";
+        i += 2;
+        continue;
+      }
+      if (ch === "|") {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push("|");
+        current = "";
+        i++;
+        continue;
+      }
+      if (ch === "&" && i + 1 < input.length && input[i + 1] === "&") {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push("&&");
+        current = "";
+        i += 2;
+        continue;
+      }
+      if (ch === "&" && (current.length === 0 || current[current.length - 1] !== ">")) return null;
+      if (ch === ";") {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push(";");
+        current = "";
+        i++;
+        continue;
+      }
+    }
+    current += ch;
+    i++;
+  }
+  const lastSeg = current.trim();
+  if (!lastSeg) return null;
+  segments.push(lastSeg);
+  if (operators.length === 0) return null;
+  return { segments, operators };
+}
+function pipelineFallbackParse(input) {
+  const split2 = splitOnUnquotedOperators(input);
+  if (!split2) return null;
+  const allCommands = [];
+  let hasSubshell = false;
+  const allSubshellCommands = [];
+  const chainAssignments = /* @__PURE__ */ new Map();
+  for (const segment of split2.segments) {
+    const segResult = parseCommand(segment);
+    if (segResult.parseError) return null;
+    for (const cmd of segResult.commands) {
+      const varMatch = cmd.command.match(VAR_REF_REGEX);
+      if (varMatch && !cmd.resolvedFrom) {
+        const assignment = chainAssignments.get(varMatch[1]);
+        if (assignment && !assignment.isDynamic && assignment.value !== null) {
+          cmd.resolvedFrom = cmd.command;
+          cmd.originalCommand = assignment.value;
+          cmd.command = assignment.value.includes("/") ? (0, import_path.basename)(assignment.value) : assignment.value;
+        } else if (assignment) {
+          cmd.resolvedFrom = cmd.command;
+        }
+      }
+    }
+    allCommands.push(...segResult.commands);
+    if (segResult.hasSubshell) hasSubshell = true;
+    allSubshellCommands.push(...segResult.subshellCommands);
+    for (const [k, v] of segResult.chainAssignments) {
+      chainAssignments.set(k, v);
+    }
+  }
+  return { commands: allCommands, hasSubshell, subshellCommands: allSubshellCommands, parseError: false, chainAssignments };
 }
 function regexFallbackParse(input) {
   const trimmed = input.trim();
@@ -18501,7 +18676,7 @@ function evaluate(parsed, config, depth = 0) {
   }
   const details = [];
   for (const cmd of parsed.commands) {
-    details.push(evaluateCommand(cmd, config, depth));
+    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments));
   }
   const decisions = details.map((d) => d.decision);
   if (decisions.includes("deny")) {
@@ -18522,15 +18697,34 @@ function evaluate(parsed, config, depth = 0) {
   }
   return { decision: "allow", reason: "ok", details };
 }
-function evaluateCommand(cmd, config, depth = 0) {
+function evaluateCommand(cmd, config, depth = 0, chainAssignments) {
   const { command, args: args2 } = cmd;
+  const detail = (d) => {
+    if (cmd.resolvedFrom) d.resolvedFrom = cmd.resolvedFrom;
+    return d;
+  };
   for (const layer of config.layers) {
     if (layer.alwaysDeny.some((name) => commandMatchesName(cmd, name))) {
-      return { command, args: args2, decision: "deny", reason: "blocked by policy", matchedRule: "alwaysDeny" };
+      return detail({ command, args: args2, decision: "deny", reason: "blocked by policy", matchedRule: "alwaysDeny" });
     }
     if (layer.alwaysAllow.some((name) => commandMatchesName(cmd, name))) {
-      return { command, args: args2, decision: "allow", reason: "safe", matchedRule: "alwaysAllow" };
+      return detail({ command, args: args2, decision: "allow", reason: "safe", matchedRule: "alwaysAllow" });
     }
+  }
+  if (cmd.resolvedFrom && chainAssignments) {
+    const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
+    if (varMatch) {
+      const assignment = chainAssignments.get(varMatch[1]);
+      if (assignment && !assignment.isDynamic && assignment.value !== null) {
+        if (!collectMergedRule(cmd, config)) {
+          return detail({ command, args: args2, decision: "allow", reason: `chain-local binary (${assignment.value})`, matchedRule: "chainResolved" });
+        }
+      }
+    }
+  }
+  if (command === "rm" && chainAssignments?.size) {
+    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
+    if (rmResult) return detail(rmResult);
   }
   if ((command === "ssh" || command === "scp" || command === "rsync") && config.trustedSSHHosts?.length) {
     const sshResult = evaluateSSHCommand(cmd, config, depth);
@@ -18552,6 +18746,10 @@ function evaluateCommand(cmd, config, depth = 0) {
     const flyResult = evaluateFlyCommand(cmd, config, depth);
     if (flyResult) return flyResult;
   }
+  if (command === "uv") {
+    const uvResult = evaluateUvCommand(cmd, config, depth);
+    if (uvResult) return uvResult;
+  }
   if (command === "xargs") {
     return evaluateXargsCommand(cmd, config, depth);
   }
@@ -18563,6 +18761,33 @@ function evaluateCommand(cmd, config, depth = 0) {
     return evaluateRule(cmd, mergedRule);
   }
   return { command, args: args2, decision: config.defaultDecision, reason: "unknown command", matchedRule: "default" };
+}
+var VAR_REF_REGEX2 = /^"?\$\{?(\w+)\}?"?$/;
+function extractVarName(text) {
+  const m = text.match(VAR_REF_REGEX2);
+  return m ? m[1] : null;
+}
+function evaluateRmChainLocal(cmd, chainAssignments, config) {
+  const { command, args: args2 } = cmd;
+  const hasRecursive = args2.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
+  if (!hasRecursive) return null;
+  const targets = args2.filter((a) => !a.startsWith("-"));
+  if (targets.length === 0) return null;
+  for (const target of targets) {
+    const varName = extractVarName(target);
+    if (!varName) return null;
+    if (!chainAssignments.has(varName)) return null;
+  }
+  for (const layer of config.layers) {
+    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
+    if (rule) {
+      if (rule.default === "deny") return null;
+      const ruleResult = evaluateRule(cmd, rule);
+      if (ruleResult.decision === "deny") return null;
+      break;
+    }
+  }
+  return { command, args: args2, decision: "allow", reason: "chain-local cleanup", matchedRule: "chainLocalRm" };
 }
 function collectMergedRule(cmd, config) {
   const matchingRules = [];
@@ -18623,6 +18848,104 @@ function evaluateRule(cmd, rule) {
     decision: rule.default,
     reason: "needs review",
     matchedRule: `${command}:default`
+  };
+}
+var UV_RUN_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
+  "--with",
+  "--from",
+  "--python",
+  "--package",
+  "--index",
+  "--extra-index-url",
+  "--cache-dir",
+  "--index-strategy",
+  "--keyring-provider"
+]);
+var UV_RUN_FLAGS_NO_VALUE = /* @__PURE__ */ new Set([
+  "--no-cache",
+  "--locked",
+  "--frozen",
+  "--isolated",
+  "--verbose",
+  "--quiet",
+  "--no-project"
+]);
+function parseUvRunSubcommand(args2) {
+  let i = 1;
+  while (i < args2.length) {
+    const arg = args2[i];
+    if (arg === "--") {
+      i++;
+      break;
+    }
+    if (!arg.startsWith("-")) {
+      break;
+    }
+    if (arg.startsWith("--") && arg.includes("=")) {
+      const flagName = arg.slice(0, arg.indexOf("="));
+      if (UV_RUN_FLAGS_WITH_VALUE.has(flagName) || UV_RUN_FLAGS_NO_VALUE.has(flagName)) {
+        i++;
+        continue;
+      }
+      return { subcommand: null, unresolved: true };
+    }
+    if (UV_RUN_FLAGS_WITH_VALUE.has(arg)) {
+      if (i + 1 >= args2.length) return { subcommand: null, unresolved: true };
+      i += 2;
+      continue;
+    }
+    if (UV_RUN_FLAGS_NO_VALUE.has(arg)) {
+      i++;
+      continue;
+    }
+    return { subcommand: null, unresolved: true };
+  }
+  if (i >= args2.length) {
+    return { subcommand: null, unresolved: false };
+  }
+  const subcmd = args2[i];
+  const subArgs = args2.slice(i + 1);
+  return {
+    unresolved: false,
+    subcommand: {
+      command: subcmd.includes("/") ? subcmd.split("/").pop() : subcmd,
+      originalCommand: subcmd,
+      args: subArgs,
+      envPrefixes: [],
+      raw: [subcmd, ...subArgs].join(" ")
+    }
+  };
+}
+function evaluateUvCommand(cmd, config, depth = 0) {
+  const { command, args: args2 } = cmd;
+  if (args2[0] !== "run") return null;
+  const { subcommand, unresolved } = parseUvRunSubcommand(args2);
+  if (unresolved || !subcommand) {
+    if (unresolved) {
+      return {
+        command,
+        args: args2,
+        decision: "ask",
+        reason: "uv run: inner command could not be resolved safely",
+        matchedRule: "uv:run"
+      };
+    }
+    return null;
+  }
+  const parsed = {
+    commands: [subcommand],
+    hasSubshell: false,
+    subshellCommands: [],
+    parseError: false,
+    chainAssignments: /* @__PURE__ */ new Map()
+  };
+  const result = evaluate(parsed, config, depth + 1);
+  return {
+    command,
+    args: args2,
+    decision: result.decision,
+    reason: `uv run: ${result.reason}`,
+    matchedRule: "uv:run"
   };
 }
 var XARGS_SHORT_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set(["E", "I", "L", "n", "P", "s", "S", "d", "a"]);
@@ -18735,12 +19058,12 @@ function evaluateXargsCommand(cmd, config, depth = 0) {
   if (isShellExec) {
     const innerResult = parseCommand(subcommand.args[1]);
     if (innerResult.parseError) {
-      parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false };
+      parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: /* @__PURE__ */ new Map() };
     } else {
       parsed = innerResult;
     }
   } else {
-    parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false };
+    parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: /* @__PURE__ */ new Map() };
   }
   const result = evaluate(parsed, config, depth + 1);
   return {
@@ -18797,7 +19120,8 @@ function evaluateFindCommand(cmd, config, depth = 0) {
       commands: [execCmd],
       hasSubshell: false,
       subshellCommands: [],
-      parseError: false
+      parseError: false,
+      chainAssignments: /* @__PURE__ */ new Map()
     };
     const result = evaluate(parsed, config, depth + 1);
     if (result.decision === "deny") {
@@ -19027,7 +19351,8 @@ function evaluateRemoteCommand(remoteArgs, config, target, depth = 0) {
     commands: [{ command: remoteCmd, originalCommand: remoteCmd, args: remoteArgs.slice(1), envPrefixes: [], raw: remoteArgs.join(" ") }],
     hasSubshell: false,
     subshellCommands: [],
-    parseError: false
+    parseError: false,
+    chainAssignments: /* @__PURE__ */ new Map()
   };
   return evaluate(parsed, overriddenConfig, depth + 1);
 }
@@ -19791,9 +20116,26 @@ var DEFAULT_CONFIG = {
       { command: "pip3", default: "allow" },
       {
         command: "uv",
-        default: "allow",
+        default: "ask",
         argPatterns: [
-          { match: { anyArgMatches: ["^publish$"] }, decision: "ask", reason: "publishes to PyPI" }
+          { match: { anyArgMatches: ["^publish$"] }, decision: "ask", reason: "publishes to PyPI" },
+          { match: { anyArgMatches: [anyArgMatchesPattern([
+            "pip",
+            "venv",
+            "init",
+            "add",
+            "remove",
+            "lock",
+            "sync",
+            "tree",
+            "cache",
+            "self",
+            "version",
+            "help",
+            "python",
+            "export"
+          ])] }, decision: "allow", description: "Safe uv subcommands" },
+          VERSION_HELP_FLAGS
         ]
       },
       { command: "pipx", default: "ask" },
@@ -20254,7 +20596,10 @@ function generateAllowSnippet(details) {
 function formatSystemMessage(decision, rawCommand, details) {
   const relevant = details.filter((d) => d.decision !== "allow");
   if (decision === "ask") {
-    const parts2 = relevant.map((d) => `${d.command}: ${d.reason}`);
+    const parts2 = relevant.map((d) => {
+      const displayName = d.resolvedFrom ? `${d.command} (via ${d.resolvedFrom})` : d.command;
+      return `${displayName}: ${d.reason}`;
+    });
     const cmds = [...new Set(relevant.map((d) => d.command))];
     const allowHint = cmds.length === 1 ? `/warden:allow ${cmds[0]}` : "/warden:allow";
     const reason2 = `[warden] ${parts2.join("; ")} (${allowHint})`;

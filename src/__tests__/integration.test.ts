@@ -446,7 +446,6 @@ describe('integration: realistic commands', () => {
     });
   });
 
-  // TODO(#30): Commands with $ in args that fail bash-parser should still resolve via fallback
   describe('fallback parser integration (#30)', () => {
     it('gh api with $ in body → allow (gh is default allow)', () => {
       expect(warden('gh api repos/org/repo/pulls/1/comments -f body="regex /^[A-Za-z_][A-Za-z0-9_]*$/" -F in_reply_to=123').decision).toBe('allow');
@@ -463,6 +462,16 @@ describe('integration: realistic commands', () => {
 
     it('sudo with $ in arg → deny (sudo is alwaysDeny)', () => {
       expect(warden('sudo echo "$test"').decision).toBe('deny');
+    });
+  });
+
+  describe('pipeline fallback integration', () => {
+    it('gh pipe to grep and head with $ in args → allow', () => {
+      expect(warden('gh run view 123 2>&1 | grep -v "^$" | head -20').decision).toBe('allow');
+    });
+
+    it('pipe to sudo via pipeline fallback → deny', () => {
+      expect(warden('echo "$" | sudo tee /etc/config').decision).toBe('deny');
     });
   });
 });

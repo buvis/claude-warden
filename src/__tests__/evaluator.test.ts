@@ -787,6 +787,31 @@ describe('evaluator', () => {
     it('allows xargs with bash -c when inner commands are safe', () => expect(eval_("xargs -I {} bash -c 'echo hello && ls'").decision).toBe('allow'));
     it('denies xargs with sh -c when inner command is denied', () => expect(eval_("xargs sh -c 'sudo rm -rf /'").decision).toBe('deny'));
 
+    // uv run — recursive evaluation
+    it('asks for uv run python (arbitrary code)', () => expect(eval_('uv run python script.py').decision).toBe('ask'));
+    it('denies uv run sudo (alwaysDeny)', () => expect(eval_('uv run sudo rm -rf /').decision).toBe('deny'));
+    it('asks for uv run --with pandas python', () => expect(eval_('uv run --with pandas python script.py').decision).toBe('ask'));
+    it('asks for uv run --with repeated flags python', () => expect(eval_('uv run --with pandas --with numpy python script.py').decision).toBe('ask'));
+    it('allows uv run cat (alwaysAllow)', () => expect(eval_('uv run cat file.txt').decision).toBe('allow'));
+    it('allows uv run ls (alwaysAllow)', () => expect(eval_('uv run ls -la').decision).toBe('allow'));
+    it('asks for uv run node --eval', () => expect(eval_('uv run node --eval "process.exit(1)"').decision).toBe('ask'));
+    it('asks for uv run with boolean flags then python', () => expect(eval_('uv run --no-cache --locked python script.py').decision).toBe('ask'));
+    it('asks for uv run -- python (-- terminates flags)', () => expect(eval_('uv run -- python script.py').decision).toBe('ask'));
+    it('allows uv run --python=3.11 cat', () => expect(eval_('uv run --python=3.11 cat foo').decision).toBe('allow'));
+    it('asks for uv publish (existing behavior)', () => expect(eval_('uv publish').decision).toBe('ask'));
+    it('allows uv pip install (safe subcommand)', () => expect(eval_('uv pip install pandas').decision).toBe('allow'));
+    it('allows uv sync (safe subcommand)', () => expect(eval_('uv sync').decision).toBe('allow'));
+    it('allows uv lock (safe subcommand)', () => expect(eval_('uv lock').decision).toBe('allow'));
+    it('asks for uv run with unknown flag', () => expect(eval_('uv run --unknown-future-flag python').decision).toBe('ask'));
+    it('asks for bare uv run (no inner command)', () => expect(eval_('uv run').decision).toBe('ask'));
+    it('asks for uv run --with missing value', () => expect(eval_('uv run --with').decision).toBe('ask'));
+    it('allows uv run --from package cat', () => expect(eval_('uv run --from mypackage cat file.txt').decision).toBe('allow'));
+    it('asks for uv tool (not auto-allowed)', () => expect(eval_('uv tool run something').decision).toBe('ask'));
+    it('prefixes reason with uv run:', () => {
+      const result = eval_('uv run python script.py');
+      expect(result.reason).toContain('uv run:');
+    });
+
     // tee
     it('allows tee to normal path', () => expect(eval_('tee output.txt').decision).toBe('allow'));
     it('asks for tee to /etc/', () => expect(eval_('tee /etc/shadow').decision).toBe('ask'));
@@ -1085,6 +1110,92 @@ describe('evaluator', () => {
 
     it('allows bare bash on trusted app (interactive shell)', () => {
       expect(evalWith('fly ssh console -a my-app -C "bash"', { trustedFlyApps: toTargets(apps) }).decision).toBe('allow');
+    });
+  });
+
+  describe('chain-local variable resolution', () => {
+    it('auto-allows chain-resolved command from static path', () => {
+      const r = eval_('ZDB=/path/to/zdb && $ZDB init');
+      expect(r.decision).toBe('allow');
+      expect(r.details[0].reason).toContain('chain-local binary');
+    });
+
+    it('still denies chain-resolved command if resolved to alwaysDeny', () => {
+      const r = eval_('X=/usr/bin/sudo && $X foo');
+      expect(r.decision).toBe('deny');
+    });
+
+    it('does not auto-allow chain-resolved command that has rules with dangerous patterns', () => {
+      // rm has argPatterns for -rf — chain resolution must not bypass them
+      const r = eval_('X=/usr/bin/rm && $X -rf /');
+      expect(r.decision).not.toBe('allow');
+    });
+
+    it('does not auto-allow chain-resolved git with dangerous args', () => {
+      const r = eval_('G=/usr/bin/git && $G push --force');
+      expect(r.decision).not.toBe('allow');
+    });
+
+    it('allows rm -rf with chain-local variable target', () => {
+      const r = eval_('TMPDIR=/tmp/build && rm -rf $TMPDIR');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.reason === 'chain-local cleanup')).toBe(true);
+    });
+
+    it('asks for rm -rf with non-chain-local variable', () => {
+      const r = eval_('rm -rf $HOME');
+      expect(r.decision).not.toBe('allow');
+    });
+
+    it('asks for rm -rf with mixed chain-local and literal targets', () => {
+      const r = eval_('TMPDIR=/tmp/build && rm -rf $TMPDIR /etc');
+      // /etc is a literal, not a chain-local variable — should fall through
+      expect(r.decision).not.toBe('allow');
+    });
+
+    it('allows rm -rf with dynamic chain-local variable', () => {
+      const r = eval_('TMPDIR=$(mktemp -d) && rm -rf $TMPDIR');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.reason === 'chain-local cleanup')).toBe(true);
+    });
+
+    it('respects user deny rule for rm even with chain-local cleanup', () => {
+      const denyRmLayer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{ command: 'rm', default: 'deny' }],
+      };
+      const r = evalWith('TMPDIR=/tmp/build && rm -rf $TMPDIR', {
+        layers: [denyRmLayer, ...DEFAULT_CONFIG.layers],
+      });
+      // Not auto-allowed — defers to normal rule evaluation (merged argPatterns → ask)
+      expect(r.decision).not.toBe('allow');
+    });
+
+    it('denies rm with override:true deny rule even with chain-local cleanup', () => {
+      const denyRmLayer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{ command: 'rm', default: 'deny', override: true }],
+      };
+      const r = evalWith('TMPDIR=/tmp/build && rm -rf $TMPDIR', {
+        layers: [denyRmLayer, ...DEFAULT_CONFIG.layers],
+      });
+      expect(r.decision).toBe('deny');
+    });
+
+    it('copies resolvedFrom to CommandEvalDetail', () => {
+      const r = eval_('ZDB=/path/to/zdb && $ZDB init');
+      expect(r.details[0].resolvedFrom).toBe('$ZDB');
+    });
+
+    it('full chain integration: 0 prompts for assign+resolve+cleanup', () => {
+      const r = eval_('TMPDIR=$(mktemp -d) && ZDB=/path/to/zdb && $ZDB init && rm -rf $TMPDIR');
+      expect(r.decision).toBe('allow');
+      // All commands should be allowed
+      for (const d of r.details) {
+        expect(d.decision).toBe('allow');
+      }
     });
   });
 });

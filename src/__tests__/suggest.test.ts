@@ -166,4 +166,19 @@ describe('formatSystemMessage', () => {
     expect(systemMessage).toContain('/warden:allow npx');
     expect(systemMessage).toContain('/warden:allow npx clawhub');
   });
+
+  it('shows resolved name in ask reason when resolvedFrom is set', () => {
+    const { reason } = formatSystemMessage('ask', '$ZDB init', [
+      { command: 'zdb', args: ['init'], decision: 'ask', reason: 'unknown command', matchedRule: 'default', resolvedFrom: '$ZDB' },
+    ]);
+    expect(reason).toContain('zdb (via $ZDB)');
+    expect(reason).toContain('/warden:allow zdb');
+  });
+
+  it('uses resolved command name in allow hints', () => {
+    const { systemMessage } = formatSystemMessage('ask', '$ZDB init', [
+      { command: 'zdb', args: ['init'], decision: 'ask', reason: 'unknown command', matchedRule: 'default', resolvedFrom: '$ZDB' },
+    ]);
+    expect(systemMessage).toContain('/warden:allow zdb');
+  });
 });

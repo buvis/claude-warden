@@ -264,6 +264,72 @@ describe('parseCommand', () => {
   });
 });
 
+describe('chain-local variable tracking', () => {
+  it('tracks static chain assignments', () => {
+    const result = parseCommand('ZDB=/path/to/zdb && echo ok');
+    expect(result.chainAssignments.has('ZDB')).toBe(true);
+    const a = result.chainAssignments.get('ZDB')!;
+    expect(a.isDynamic).toBe(false);
+    expect(a.value).toBe('/path/to/zdb');
+  });
+
+  it('tracks dynamic chain assignments', () => {
+    const result = parseCommand('TMPDIR=$(mktemp -d) && echo ok');
+    expect(result.chainAssignments.has('TMPDIR')).toBe(true);
+    const a = result.chainAssignments.get('TMPDIR')!;
+    expect(a.isDynamic).toBe(true);
+    expect(a.value).toBeNull();
+  });
+
+  it('resolves variable in command position', () => {
+    const result = parseCommand('ZDB=/usr/bin/zdb && $ZDB init');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('zdb');
+    expect(result.commands[0].originalCommand).toBe('/usr/bin/zdb');
+  });
+
+  it('preserves resolvedFrom on resolved command', () => {
+    const result = parseCommand('ZDB=/usr/bin/zdb && $ZDB init');
+    expect(result.commands[0].resolvedFrom).toBe('$ZDB');
+  });
+
+  it('does not resolve untracked variables', () => {
+    const result = parseCommand('$UNKNOWN init');
+    expect(result.commands[0].command).toBe('$UNKNOWN');
+    expect(result.commands[0].resolvedFrom).toBeUndefined();
+  });
+
+  it('does not resolve dynamic variables in command position', () => {
+    const result = parseCommand('CMD=$(which zdb) && $CMD init');
+    expect(result.commands[0].command).toBe('$CMD');
+    expect(result.commands[0].resolvedFrom).toBe('$CMD');
+  });
+
+  it('does not track env prefixes as chain assignments', () => {
+    const result = parseCommand('FOO=bar npm test');
+    expect(result.chainAssignments.has('FOO')).toBe(false);
+  });
+
+  it('tracks multiple standalone assignments in a chain', () => {
+    const result = parseCommand('A=1 && B=2 && echo ok');
+    expect(result.chainAssignments.has('A')).toBe(true);
+    expect(result.chainAssignments.has('B')).toBe(true);
+    expect(result.chainAssignments.get('A')!.value).toBe('1');
+    expect(result.chainAssignments.get('B')!.value).toBe('2');
+  });
+
+  it('preserves $VAR in args (not resolved)', () => {
+    const result = parseCommand('DIR=/tmp/build && rm -rf $DIR');
+    expect(result.commands[0].args).toContain('$DIR');
+  });
+
+  it('handles ${VAR} brace syntax in command position', () => {
+    const result = parseCommand('ZDB=/usr/bin/zdb && ${ZDB} init');
+    expect(result.commands[0].command).toBe('zdb');
+    expect(result.commands[0].resolvedFrom).toBe('${ZDB}');
+  });
+});
+
 // Tests for regex fallback parser (see #30)
 describe('regex fallback parser', () => {
   it('falls back to regex when bash-parser fails on $ in double-quoted args', () => {
@@ -274,13 +340,12 @@ describe('regex fallback parser', () => {
     expect(result.commands[0].args[0]).toBe('api');
   });
 
-  it('does not use fallback for pipes (too complex)', () => {
-    // A command that would fail bash-parser AND has pipes should still be parseError
+  it('handles pipes via pipeline fallback when bash-parser fails', () => {
     const result = parseCommand('echo "$invalid" | gh api foo');
-    // If bash-parser handles it, great; if not, fallback should refuse pipes
-    if (result.parseError) {
-      expect(result.commands.length).toBe(0);
-    }
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('gh');
   });
 
   it('handles env prefixes in fallback', () => {
@@ -315,24 +380,23 @@ describe('regex fallback parser', () => {
     expect(result.commands[0].command).toBe('gh');
   });
 
-  // TODO(#30): These cases currently fall back to regex but ideally bash-parser should handle them
-  it('does not use fallback for && chains (too complex)', () => {
+  it('handles && chains via pipeline fallback when bash-parser fails', () => {
     const result = parseCommand('echo "$bad" && echo ok');
-    if (result.parseError) {
-      // Fallback correctly refuses chains
-      expect(result.commands.length).toBe(0);
-    }
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('echo');
   });
 
-  it('does not use fallback for semicolons (too complex)', () => {
+  it('handles semicolons via pipeline fallback when bash-parser fails', () => {
     const result = parseCommand('echo "$bad"; echo ok');
-    if (result.parseError) {
-      expect(result.commands.length).toBe(0);
-    }
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('echo');
   });
 });
 
-// TODO(#30): bash-parser misparses these — currently handled by regex fallback
 describe('bash-parser known limitations (#30)', () => {
   it('$ followed by / in double quotes (regex anchors)', () => {
     const result = parseCommand('curl -X POST -d "pattern: /^foo$/" http://example.com');
@@ -356,5 +420,109 @@ describe('bash-parser known limitations (#30)', () => {
     const result = parseCommand('gh api repos/org/repo/pulls/1/comments -f body="line1\nregex: /^[A-Z]$+/\nline3"');
     expect(result.parseError).toBe(false);
     expect(result.commands[0].command).toBe('gh');
+  });
+});
+
+describe('pipeline fallback parser', () => {
+  it('parses multi-segment pipe with $ in grep args', () => {
+    const result = parseCommand('gh run view 123 2>&1 | grep -v "^$" | grep -i "step\\|fail" | head -20');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(4);
+    expect(result.commands[0].command).toBe('gh');
+    expect(result.commands[1].command).toBe('grep');
+    expect(result.commands[2].command).toBe('grep');
+    expect(result.commands[3].command).toBe('head');
+  });
+
+  it('parses simple pipe with $ at end of double-quoted string', () => {
+    const result = parseCommand('echo "$" | head -1');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('head');
+  });
+
+  it('parses && chain with $ in args', () => {
+    const result = parseCommand('echo "foo$" && head file');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('head');
+  });
+
+  it('parses || operator with $ in args', () => {
+    const result = parseCommand('echo "$bad" || echo fallback');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('echo');
+  });
+
+  it('parses mixed pipe and && with $ in args', () => {
+    const result = parseCommand('echo "test$" | grep test && echo ok');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(3);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('grep');
+    expect(result.commands[2].command).toBe('echo');
+  });
+
+  it('does not split pipe inside quotes', () => {
+    const result = parseCommand('echo "hello | world$"');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('echo');
+  });
+
+  it('parses semicolons with $ in args', () => {
+    const result = parseCommand('echo "$bad"; echo ok');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('echo');
+    expect(result.commands[1].command).toBe('echo');
+  });
+
+  it('propagates chain assignments across segments for $VAR resolution', () => {
+    // bash-parser fails on "pattern $" but pipeline fallback should resolve $ZDB
+    const result = parseCommand('ZDB=/usr/bin/zdb && $ZDB query "pattern $"');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('zdb');
+    expect(result.commands[0].originalCommand).toBe('/usr/bin/zdb');
+    expect(result.commands[0].resolvedFrom).toBe('$ZDB');
+  });
+
+  it('propagates chain assignments with ${VAR} syntax', () => {
+    const result = parseCommand('ZDB=/usr/bin/zdb && ${ZDB} query "test $"');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('zdb');
+    expect(result.commands[0].resolvedFrom).toBe('${ZDB}');
+  });
+
+  it('marks dynamic chain assignments as resolvedFrom without resolving', () => {
+    const result = parseCommand('CMD=$(which zdb) && $CMD query "test $"');
+    expect(result.parseError).toBe(false);
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('$CMD');
+    expect(result.commands[0].resolvedFrom).toBe('$CMD');
+  });
+
+  it('does not split on pipe inside $() command substitution', () => {
+    const result = parseCommand('echo $(cat file | head -1) something$');
+    // bash-parser fails on trailing $, but splitter must not split the pipe inside $()
+    // falls through to regex fallback (single command) or parseError
+    if (!result.parseError) {
+      expect(result.commands).toHaveLength(1);
+      expect(result.commands[0].command).toBe('echo');
+    }
+  });
+
+  it('does not split on pipe inside backticks', () => {
+    const result = parseCommand('echo `cat file | head -1` something$');
+    if (!result.parseError) {
+      expect(result.commands).toHaveLength(1);
+      expect(result.commands[0].command).toBe('echo');
+    }
   });
 });

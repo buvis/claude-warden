@@ -2,6 +2,7 @@ import { homedir } from 'os';
 import type {
   ParseResult, WardenConfig, EvalResult, Decision,
   CommandEvalDetail, ParsedCommand, CommandRule, TrustedTarget,
+  ChainAssignment,
 } from './types';
 import { parseCommand } from './parser';
 
@@ -64,7 +65,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
 
   const details: CommandEvalDetail[] = [];
   for (const cmd of parsed.commands) {
-    details.push(evaluateCommand(cmd, config, depth));
+    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments));
   }
 
   // Combine: deny > ask > allow
@@ -91,17 +92,44 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
   return { decision: 'allow', reason: 'ok', details };
 }
 
-function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail {
+function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, chainAssignments?: Map<string, ChainAssignment>): CommandEvalDetail {
   const { command, args } = cmd;
+  const detail = (d: CommandEvalDetail): CommandEvalDetail => {
+    if (cmd.resolvedFrom) d.resolvedFrom = cmd.resolvedFrom;
+    return d;
+  };
 
   // 1. Scoped alwaysDeny → alwaysAllow per layer (workspace > user > default)
   for (const layer of config.layers) {
     if (layer.alwaysDeny.some(name => commandMatchesName(cmd, name))) {
-      return { command, args, decision: 'deny', reason: 'blocked by policy', matchedRule: 'alwaysDeny' };
+      return detail({ command, args, decision: 'deny', reason: 'blocked by policy', matchedRule: 'alwaysDeny' });
     }
     if (layer.alwaysAllow.some(name => commandMatchesName(cmd, name))) {
-      return { command, args, decision: 'allow', reason: 'safe', matchedRule: 'alwaysAllow' };
+      return detail({ command, args, decision: 'allow', reason: 'safe', matchedRule: 'alwaysAllow' });
     }
+  }
+
+  // 1b. Chain-resolved command auto-allow: if command was resolved from a static
+  // chain-local variable, didn't hit alwaysDeny, AND has no matching rules
+  // (which may contain deny/ask patterns for dangerous args), auto-allow it.
+  if (cmd.resolvedFrom && chainAssignments) {
+    const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
+    if (varMatch) {
+      const assignment = chainAssignments.get(varMatch[1]);
+      if (assignment && !assignment.isDynamic && assignment.value !== null) {
+        // Only auto-allow if no rules exist — rules may have dangerous-arg patterns
+        if (!collectMergedRule(cmd, config)) {
+          return detail({ command, args, decision: 'allow', reason: `chain-local binary (${assignment.value})`, matchedRule: 'chainResolved' });
+        }
+      }
+    }
+  }
+
+  // 1c. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
+  // Only upgrades ask→allow — if rules would deny, respect that.
+  if (command === 'rm' && chainAssignments?.size) {
+    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
+    if (rmResult) return detail(rmResult);
   }
 
   // 2. Remote target whitelisting with recursive command evaluation
@@ -125,6 +153,10 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     const flyResult = evaluateFlyCommand(cmd, config, depth);
     if (flyResult) return flyResult;
   }
+  if (command === 'uv') {
+    const uvResult = evaluateUvCommand(cmd, config, depth);
+    if (uvResult) return uvResult;
+  }
   if (command === 'xargs') {
     return evaluateXargsCommand(cmd, config, depth);
   }
@@ -140,6 +172,48 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
 
   // 4. Default
   return { command, args, decision: config.defaultDecision, reason: 'unknown command', matchedRule: 'default' };
+}
+
+/** Match $VAR, ${VAR}, "$VAR", "${VAR}" — with optional surrounding quotes. */
+const VAR_REF_REGEX = /^"?\$\{?(\w+)\}?"?$/;
+
+function extractVarName(text: string): string | null {
+  const m = text.match(VAR_REF_REGEX);
+  return m ? m[1] : null;
+}
+
+function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig): CommandEvalDetail | null {
+  const { command, args } = cmd;
+  // Only handle recursive rm (the dangerous pattern)
+  const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
+  if (!hasRecursive) return null;
+
+  // Extract non-flag args (targets)
+  const targets = args.filter(a => !a.startsWith('-'));
+  if (targets.length === 0) return null;
+
+  // Check if ALL targets are chain-local variables
+  for (const target of targets) {
+    const varName = extractVarName(target);
+    if (!varName) return null;
+    if (!chainAssignments.has(varName)) return null;
+  }
+
+  // Respect user rules: if any layer's rule default is deny, don't override.
+  // Check layer rules directly — merged argPatterns from lower layers shouldn't
+  // mask a higher-priority layer's intent to deny.
+  for (const layer of config.layers) {
+    const rule = layer.rules.find(r => commandMatchesName(cmd, r.command));
+    if (rule) {
+      if (rule.default === 'deny') return null;
+      // Also check if any argPattern explicitly denies this specific invocation
+      const ruleResult = evaluateRule(cmd, rule);
+      if (ruleResult.decision === 'deny') return null;
+      break; // highest-priority layer wins
+    }
+  }
+
+  return { command, args, decision: 'allow', reason: 'chain-local cleanup', matchedRule: 'chainLocalRm' };
 }
 
 /**
@@ -219,6 +293,116 @@ function evaluateRule(cmd: ParsedCommand, rule: CommandRule): CommandEvalDetail 
     decision: rule.default,
     reason: 'needs review',
     matchedRule: `${command}:default`,
+  };
+}
+
+// ─── uv run recursive evaluation ───
+
+/** uv run flags that consume the next argument. */
+const UV_RUN_FLAGS_WITH_VALUE = new Set([
+  '--with', '--from', '--python', '--package', '--index', '--extra-index-url',
+  '--cache-dir', '--index-strategy', '--keyring-provider',
+]);
+
+/** uv run boolean flags (no value). */
+const UV_RUN_FLAGS_NO_VALUE = new Set([
+  '--no-cache', '--locked', '--frozen', '--isolated',
+  '--verbose', '--quiet', '--no-project',
+]);
+
+function parseUvRunSubcommand(args: string[]): { subcommand: ParsedCommand | null; unresolved: boolean } {
+  // args[0] is 'run', skip it
+  let i = 1;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === '--') {
+      i++;
+      break;
+    }
+
+    if (!arg.startsWith('-')) {
+      break;
+    }
+
+    // Handle --flag=value syntax
+    if (arg.startsWith('--') && arg.includes('=')) {
+      const flagName = arg.slice(0, arg.indexOf('='));
+      if (UV_RUN_FLAGS_WITH_VALUE.has(flagName) || UV_RUN_FLAGS_NO_VALUE.has(flagName)) {
+        i++;
+        continue;
+      }
+      return { subcommand: null, unresolved: true };
+    }
+
+    if (UV_RUN_FLAGS_WITH_VALUE.has(arg)) {
+      if (i + 1 >= args.length) return { subcommand: null, unresolved: true };
+      i += 2;
+      continue;
+    }
+
+    if (UV_RUN_FLAGS_NO_VALUE.has(arg)) {
+      i++;
+      continue;
+    }
+
+    // Unknown flag — can't safely resolve
+    return { subcommand: null, unresolved: true };
+  }
+
+  if (i >= args.length) {
+    return { subcommand: null, unresolved: false };
+  }
+
+  const subcmd = args[i];
+  const subArgs = args.slice(i + 1);
+  return {
+    unresolved: false,
+    subcommand: {
+      command: subcmd.includes('/') ? subcmd.split('/').pop()! : subcmd,
+      originalCommand: subcmd,
+      args: subArgs,
+      envPrefixes: [],
+      raw: [subcmd, ...subArgs].join(' '),
+    },
+  };
+}
+
+function evaluateUvCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+  const { command, args } = cmd;
+  if (args[0] !== 'run') return null;
+
+  const { subcommand, unresolved } = parseUvRunSubcommand(args);
+
+  if (unresolved || !subcommand) {
+    if (unresolved) {
+      return {
+        command, args,
+        decision: 'ask',
+        reason: 'uv run: inner command could not be resolved safely',
+        matchedRule: 'uv:run',
+      };
+    }
+    // No inner command (bare `uv run`) — fall through to rules
+    return null;
+  }
+
+  const parsed: ParseResult = {
+    commands: [subcommand],
+    hasSubshell: false,
+    subshellCommands: [],
+    parseError: false,
+    chainAssignments: new Map(),
+  };
+
+  const result = evaluate(parsed, config, depth + 1);
+
+  return {
+    command, args,
+    decision: result.decision,
+    reason: `uv run: ${result.reason}`,
+    matchedRule: 'uv:run',
   };
 }
 
@@ -349,12 +533,12 @@ function evaluateXargsCommand(cmd: ParsedCommand, config: WardenConfig, depth: n
   if (isShellExec) {
     const innerResult = parseCommand(subcommand.args[1]);
     if (innerResult.parseError) {
-      parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false };
+      parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: new Map() };
     } else {
       parsed = innerResult;
     }
   } else {
-    parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false };
+    parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: new Map() };
   }
 
   const result = evaluate(parsed, config, depth + 1);
@@ -426,6 +610,7 @@ function evaluateFindCommand(cmd: ParsedCommand, config: WardenConfig, depth: nu
       hasSubshell: false,
       subshellCommands: [],
       parseError: false,
+      chainAssignments: new Map(),
     };
     const result = evaluate(parsed, config, depth + 1);
     if (result.decision === 'deny') {
@@ -694,6 +879,7 @@ function evaluateRemoteCommand(
     hasSubshell: false,
     subshellCommands: [],
     parseError: false,
+    chainAssignments: new Map(),
   };
   return evaluate(parsed, overriddenConfig, depth + 1);
 }

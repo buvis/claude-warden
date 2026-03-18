@@ -1,6 +1,6 @@
 import parse from 'bash-parser';
 import { basename } from 'path';
-import type { ParsedCommand, ParseResult } from './types';
+import type { ParsedCommand, ParseResult, ChainAssignment } from './types';
 
 interface AstNode {
   type: string;
@@ -56,6 +56,7 @@ interface WalkResult {
   commands: ParsedCommand[];
   hasSubshell: boolean;
   subshellCommands: string[];
+  chainAssignments: Map<string, ChainAssignment>;
 }
 
 const HEREDOC_REGEX = /<<-?\s*['"]?\w+['"]?/;
@@ -132,10 +133,35 @@ function preprocessPathParentheses(input: string): string {
   return result.join('');
 }
 
-function convertCommand(node: CommandNode): ParsedCommand | null {
+const VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
+
+function resolveVarRef(text: string, chainAssignments: Map<string, ChainAssignment>): string | null {
+  const m = text.match(VAR_REF_REGEX);
+  if (!m) return null;
+  const assignment = chainAssignments.get(m[1]);
+  if (!assignment || assignment.isDynamic || assignment.value === null) return null;
+  return assignment.value;
+}
+
+function convertCommand(node: CommandNode, chainAssignments: Map<string, ChainAssignment>): ParsedCommand | null {
   if (!node.name) return null;
 
-  const originalCommand = node.name.text;
+  let originalCommand = node.name.text;
+  let resolvedFrom: string | undefined;
+
+  // Resolve $VAR in command position
+  const varMatch = originalCommand.match(VAR_REF_REGEX);
+  if (varMatch) {
+    const resolved = resolveVarRef(originalCommand, chainAssignments);
+    if (resolved !== null) {
+      resolvedFrom = originalCommand;
+      originalCommand = resolved;
+    } else if (chainAssignments.has(varMatch[1])) {
+      // Dynamic or null value — still mark resolvedFrom so evaluator knows it's chain-local
+      resolvedFrom = originalCommand;
+    }
+  }
+
   const command = originalCommand.includes('/')
     ? basename(originalCommand)
     : originalCommand;
@@ -167,7 +193,9 @@ function convertCommand(node: CommandNode): ParsedCommand | null {
   ];
   const raw = rawParts.join(' ');
 
-  return { command, originalCommand, args, envPrefixes, raw };
+  const result: ParsedCommand = { command, originalCommand, args, envPrefixes, raw };
+  if (resolvedFrom) result.resolvedFrom = resolvedFrom;
+  return result;
 }
 
 function collectCommandExpansions(node: AstNode): string[] {
@@ -198,6 +226,26 @@ function collectCommandExpansions(node: AstNode): string[] {
   return commands;
 }
 
+/** Extract assignments from a Command node's prefix (VAR=value tokens). */
+function extractAssignments(node: CommandNode): Array<{ name: string; value: string | null; isDynamic: boolean }> {
+  const assignments: Array<{ name: string; value: string | null; isDynamic: boolean }> = [];
+  if (!node.prefix) return assignments;
+
+  for (const p of node.prefix) {
+    if (p.type !== 'AssignmentWord') continue;
+    const text = (p as AssignmentNode).text;
+    const eqIdx = text.indexOf('=');
+    if (eqIdx === -1) continue;
+    const name = text.slice(0, eqIdx);
+    const value = text.slice(eqIdx + 1);
+    // Strip surrounding quotes from value
+    const stripped = value.replace(/^['"]|['"]$/g, '');
+    const isDynamic = /\$\(|`/.test(value);
+    assignments.push({ name, value: isDynamic ? null : stripped, isDynamic });
+  }
+  return assignments;
+}
+
 function walkNode(node: AstNode, result: WalkResult): void {
   switch (node.type) {
     case 'Command': {
@@ -210,8 +258,14 @@ function walkNode(node: AstNode, result: WalkResult): void {
         result.subshellCommands.push(...expansions);
       }
 
-      const parsed = convertCommand(cmd);
-      if (!parsed) break;
+      const parsed = convertCommand(cmd, result.chainAssignments);
+      if (!parsed) {
+        // Standalone assignment (no command name) — track in chainAssignments
+        for (const a of extractAssignments(cmd)) {
+          result.chainAssignments.set(a.name, { value: a.value, isDynamic: a.isDynamic });
+        }
+        break;
+      }
 
       // Handle sh/bash/zsh -c "..." — recursively parse inner command
       if (
@@ -321,7 +375,7 @@ function astHasHeredoc(ast: ScriptNode): boolean {
 
 export function parseCommand(input: string): ParseResult {
   if (!input || !input.trim()) {
-    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: false };
+    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: new Map() };
   }
 
   // Preprocess $(cat <<MARKER...MARKER) patterns — these are just multi-line
@@ -334,7 +388,7 @@ export function parseCommand(input: string): ParseResult {
 
   try {
     const ast = parse(input) as ScriptNode;
-    const result: WalkResult = { commands: [], hasSubshell: false, subshellCommands: [] };
+    const result: WalkResult = { commands: [], hasSubshell: false, subshellCommands: [], chainAssignments: new Map() };
 
     // Check if the AST contains actual heredoc redirects (dless/dlessdash).
     // bash-parser misparses heredoc body lines as separate commands, so we
@@ -343,7 +397,7 @@ export function parseCommand(input: string): ParseResult {
       const firstLine = input.split('\n')[0];
       const cmdPart = firstLine.replace(/<<-?\s*['"]?\w+['"]?.*$/, '').trim();
       if (!cmdPart) {
-        return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true, chainAssignments: new Map() };
       }
       try {
         const cmdAst = parse(cmdPart) as ScriptNode;
@@ -351,9 +405,9 @@ export function parseCommand(input: string): ParseResult {
           walkNode(cmd, result);
         }
         // Heredocs are complex — flag as hasSubshell so evaluator can decide
-        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false };
+        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
       } catch {
-        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: new Map() };
       }
     }
 
@@ -362,48 +416,200 @@ export function parseCommand(input: string): ParseResult {
       walkNode(cmd, result);
     }
 
-    return { commands: result.commands, hasSubshell: result.hasSubshell, subshellCommands: result.subshellCommands, parseError: false };
+    return { commands: result.commands, hasSubshell: result.hasSubshell, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
   } catch {
     // Parse failure — use regex fallback for heredoc detection
     if (HEREDOC_REGEX.test(input)) {
       const firstLine = input.split('\n')[0];
       const cmdPart = firstLine.replace(/<<-?\s*['"]?\w+['"]?.*$/, '').trim();
       if (!cmdPart) {
-        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: new Map() };
       }
       try {
         const ast = parse(cmdPart) as ScriptNode;
-        const result: WalkResult = { commands: [], hasSubshell: false, subshellCommands: [] };
+        const result: WalkResult = { commands: [], hasSubshell: false, subshellCommands: [], chainAssignments: new Map() };
         for (const cmd of ast.commands) {
           walkNode(cmd, result);
         }
-        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false };
+        return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
       } catch {
-        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true };
+        return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: new Map() };
       }
     }
+    // Pipeline fallback: split on unquoted operators, parse each segment individually.
+    // This handles cases like `gh run view ... 2>&1 | grep -v "^$" | head -20` where
+    // bash-parser chokes on $ in double-quoted strings combined with pipe operators.
+    const pipelineResult = pipelineFallbackParse(input);
+    if (pipelineResult) return pipelineResult;
+
     // General parse failure — try regex fallback to extract at least the command name
     // so the evaluator can still apply rules (e.g. gh is default allow).
     // This handles cases where bash-parser chokes on special characters in arguments
     // (like $ in double-quoted strings that aren't actual expansions).
-    // TODO(#30): Improve fallback — consider pre-processing $ patterns or using a more robust parser.
     const fallback = regexFallbackParse(input);
     if (fallback) {
-      return { commands: [fallback], hasSubshell: false, subshellCommands: [], parseError: false };
+      return { commands: [fallback], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: new Map() };
     }
-    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true };
+    return { commands: [], hasSubshell: false, subshellCommands: [], parseError: true, chainAssignments: new Map() };
   }
+}
+
+/**
+ * Split a shell command string on unquoted operators (|, ||, &&, ;).
+ * Returns null if there are no operators, if a bare & (background) is found,
+ * or if any resulting segment is empty.
+ */
+function splitOnUnquotedOperators(input: string): { segments: string[]; operators: string[] } | null {
+  const segments: string[] = [];
+  const operators: string[] = [];
+  let current = '';
+  let inSingle = false;
+  let inDouble = false;
+  let parenDepth = 0;  // tracks $() nesting
+  let inBacktick = false;
+  let i = 0;
+
+  while (i < input.length) {
+    const ch = input[i];
+
+    // Handle escapes outside single quotes
+    if (ch === '\\' && !inSingle) {
+      current += ch;
+      if (i + 1 < input.length) {
+        current += input[i + 1];
+        i += 2;
+      } else {
+        i++;
+      }
+      continue;
+    }
+
+    if (ch === "'" && !inDouble && !inBacktick && parenDepth === 0) { inSingle = !inSingle; current += ch; i++; continue; }
+    if (ch === '"' && !inSingle && !inBacktick) { inDouble = !inDouble; current += ch; i++; continue; }
+    if (ch === '`' && !inSingle) { inBacktick = !inBacktick; current += ch; i++; continue; }
+
+    // Track $() depth (can appear inside or outside double quotes)
+    if (ch === '$' && i + 1 < input.length && input[i + 1] === '(' && !inSingle && !inBacktick) {
+      parenDepth++;
+      current += ch + input[i + 1];
+      i += 2;
+      continue;
+    }
+    if (ch === ')' && parenDepth > 0 && !inSingle && !inBacktick) {
+      parenDepth--;
+      current += ch;
+      i++;
+      continue;
+    }
+
+    if (!inSingle && !inDouble && parenDepth === 0 && !inBacktick) {
+      // Check || before |
+      if (ch === '|' && i + 1 < input.length && input[i + 1] === '|') {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push('||');
+        current = '';
+        i += 2;
+        continue;
+      }
+      if (ch === '|') {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push('|');
+        current = '';
+        i++;
+        continue;
+      }
+      // Check && before bare &
+      if (ch === '&' && i + 1 < input.length && input[i + 1] === '&') {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push('&&');
+        current = '';
+        i += 2;
+        continue;
+      }
+      // Bare & (background) — too complex. But skip >&N redirect syntax.
+      if (ch === '&' && (current.length === 0 || current[current.length - 1] !== '>')) return null;
+
+      if (ch === ';') {
+        const seg = current.trim();
+        if (!seg) return null;
+        segments.push(seg);
+        operators.push(';');
+        current = '';
+        i++;
+        continue;
+      }
+    }
+
+    current += ch;
+    i++;
+  }
+
+  // Last segment
+  const lastSeg = current.trim();
+  if (!lastSeg) return null;
+  segments.push(lastSeg);
+
+  // No operators found — nothing to split
+  if (operators.length === 0) return null;
+
+  return { segments, operators };
+}
+
+/**
+ * Pipeline fallback: when bash-parser fails on a multi-segment command,
+ * split on unquoted operators and parse each segment individually.
+ * Returns null if splitting fails or any segment fails to parse.
+ */
+function pipelineFallbackParse(input: string): ParseResult | null {
+  const split = splitOnUnquotedOperators(input);
+  if (!split) return null;
+
+  const allCommands: ParsedCommand[] = [];
+  let hasSubshell = false;
+  const allSubshellCommands: string[] = [];
+  const chainAssignments = new Map<string, ChainAssignment>();
+
+  for (const segment of split.segments) {
+    const segResult = parseCommand(segment);
+    if (segResult.parseError) return null;
+
+    // Resolve $VAR commands using chain assignments accumulated from prior segments
+    for (const cmd of segResult.commands) {
+      const varMatch = cmd.command.match(VAR_REF_REGEX);
+      if (varMatch && !cmd.resolvedFrom) {
+        const assignment = chainAssignments.get(varMatch[1]);
+        if (assignment && !assignment.isDynamic && assignment.value !== null) {
+          cmd.resolvedFrom = cmd.command;
+          cmd.originalCommand = assignment.value;
+          cmd.command = assignment.value.includes('/') ? basename(assignment.value) : assignment.value;
+        } else if (assignment) {
+          cmd.resolvedFrom = cmd.command;
+        }
+      }
+    }
+
+    allCommands.push(...segResult.commands);
+    if (segResult.hasSubshell) hasSubshell = true;
+    allSubshellCommands.push(...segResult.subshellCommands);
+    // Merge after resolving — current segment's assignments available to next segments only
+    for (const [k, v] of segResult.chainAssignments) {
+      chainAssignments.set(k, v);
+    }
+  }
+
+  return { commands: allCommands, hasSubshell, subshellCommands: allSubshellCommands, parseError: false, chainAssignments };
 }
 
 /**
  * Regex-based fallback parser for when bash-parser fails.
  * Extracts the command name and arguments from simple single commands.
  * Only handles straightforward cases — returns null for pipes, chains, etc.
- *
- * TODO(#30): This is a basic fallback with known limitations:
- * - Does not handle pipes, chains (&&, ||), or semicolons
- * - Naive argument tokenization — doesn't handle all shell quoting edge cases
- * - Does not detect subshells or command substitutions
  */
 function regexFallbackParse(input: string): ParsedCommand | null {
   const trimmed = input.trim();

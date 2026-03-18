@@ -22,8 +22,8 @@ Claude Warden is a Claude Code plugin that provides smart command safety filteri
 
 **Pipeline**: `index.ts` → `parser.ts` → `evaluator.ts` (with config from `rules.ts` + `defaults.ts`)
 
-- `src/parser.ts` — State-machine shell command splitter. Splits on `|`, `&&`, `||`, `;` while respecting quotes. Extracts env prefixes, normalizes command paths to basename. Recursively parses `sh -c`/`bash -c` arguments. Detects subshells and heredocs.
-- `src/evaluator.ts` — Decision engine. Hierarchy: global deny patterns → alwaysDeny → alwaysAllow → command-specific rules with argument pattern matching → default decision. For pipelines/chains, combines per-command results (any deny → deny, any ask → ask, all allow → allow).
+- `src/parser.ts` — State-machine shell command splitter. Splits on `|`, `&&`, `||`, `;` while respecting quotes. Extracts env prefixes, normalizes command paths to basename. Recursively parses `sh -c`/`bash -c` arguments. Detects subshells and heredocs. Tracks chain-scoped variable assignments (`VAR=value && ...`) and resolves `$VAR` in command position.
+- `src/evaluator.ts` — Decision engine. Hierarchy: global deny patterns → alwaysDeny → alwaysAllow → chain-local auto-allow → command-specific rules with argument pattern matching → default decision. For pipelines/chains, combines per-command results (any deny → deny, any ask → ask, all allow → allow).
 - `src/defaults.ts` — Built-in rules for ~100 common dev commands. Three tiers: always-allow (cat, ls, grep...), always-deny (sudo, shutdown...), conditional (node, npx, git, docker... with argument-aware patterns).
 - `src/rules.ts` — Loads and merges config from `~/.claude/warden.yaml` (user) and `.claude/warden.yaml` (project). User rules override defaults by command name. Config also supports `trustedSSHHosts`, `trustedDockerContainers`, `trustedKubectlContexts`, and `trustedSprites` for context-aware filtering.
 - `src/types.ts` — All TypeScript interfaces.
@@ -40,8 +40,18 @@ The hook communicates with Claude Code via the PreToolUse hook protocol:
 
 Releases are done remotely by creating a GitHub release (not by publishing locally). A CI workflow handles npm publishing via OIDC trusted publishing when a release is created.
 
-1. Merge PR to `main`
-2. `gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes "..."`
+1. Merge PR to `master`
+2. `gh release create vX.Y.Z --target master --title "vX.Y.Z" --notes "..."`
+
+## Safety invariant for auto-allow features
+
+The evaluator has features that auto-allow commands without user prompts (chain-local variable resolution, chain-local rm cleanup, trusted remote contexts). These must never override user-configured restrictions:
+
+1. `alwaysDeny` is always checked first — no auto-allow can bypass it
+2. Auto-allow for chain-resolved commands (`$VAR` → binary) only fires when the resolved command has **no matching rules**. If rules exist (which may contain deny/ask patterns for dangerous args), normal rule evaluation runs instead.
+3. Chain-local rm cleanup (`rm -rf $VAR` where VAR is chain-assigned) checks rules before allowing — if any layer's rule for `rm` has `default: deny` or an argPattern that denies the specific invocation, the handler defers to normal evaluation.
+
+When adding new auto-allow logic, always check both `alwaysDeny` AND user rules before returning allow. The principle: auto-allow only upgrades the default "ask" for unknown commands — it never downgrades a user's explicit deny or rule-based restriction.
 
 ## Plugin Structure
 

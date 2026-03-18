@@ -4,6 +4,12 @@ export interface ParsedCommand {
   args: string[];
   envPrefixes: string[];
   raw: string;
+  resolvedFrom?: string;
+}
+
+export interface ChainAssignment {
+  value: string | null;
+  isDynamic: boolean;
 }
 
 export interface ParseResult {
@@ -11,6 +17,7 @@ export interface ParseResult {
   hasSubshell: boolean;
   subshellCommands: string[];
   parseError: boolean;
+  chainAssignments: Map<string, ChainAssignment>;
 }
 
 export type Decision = 'allow' | 'deny' | 'ask';
@@ -81,6 +88,7 @@ export interface CommandEvalDetail {
   decision: Decision;
   reason: string;
   matchedRule?: string;
+  resolvedFrom?: string;
 }
 
 export interface HookInput {

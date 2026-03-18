@@ -259,9 +259,14 @@ export const DEFAULT_CONFIG: WardenConfig = {
       { command: 'pip3', default: 'allow' },
       {
         command: 'uv',
-        default: 'allow',
+        default: 'ask',
         argPatterns: [
           { match: { anyArgMatches: ['^publish$'] }, decision: 'ask', reason: 'publishes to PyPI' },
+          { match: { anyArgMatches: [anyArgMatchesPattern([
+            'pip', 'venv', 'init', 'add', 'remove', 'lock', 'sync', 'tree',
+            'cache', 'self', 'version', 'help', 'python', 'export',
+          ])] }, decision: 'allow', description: 'Safe uv subcommands' },
+          VERSION_HELP_FLAGS,
         ],
       },
       { command: 'pipx', default: 'ask' },
