@@ -13,7 +13,7 @@ const SAFE_DEV_TOOLS = [
   'storybook', 'wrangler', 'netlify', 'vercel', 'json', 'biome',
 ];
 
-const SCRIPT_RUNNERS = ['tsx', 'ts-node', 'nodemon'];
+const SCRIPT_RUNNERS = ['nodemon'];
 
 const REGISTRY_OPS = ['publish', 'unpublish', 'deprecate', 'owner', 'access', 'token', 'adduser', 'login', 'logout'];
 
@@ -218,15 +218,9 @@ export const DEFAULT_CONFIG: WardenConfig = {
       })),
 
       // --- Node.js ecosystem ---
-      {
-        command: 'node',
-        default: 'ask',
-        argPatterns: [
-          { match: { anyArgMatches: ['^-e$', '^--eval', '^-p$', '^--print'] }, decision: 'ask', reason: 'evaluates inline code' },
-          { match: { anyArgMatches: ['^--(version|help)$', '^-[vh]$'] }, decision: 'allow', description: 'Version/help flags' },
-          { match: { noArgs: true }, decision: 'ask', reason: 'opens interactive REPL' },
-        ],
-      },
+      { command: 'node', default: 'ask' },
+      { command: 'tsx', default: 'ask' },
+      { command: 'ts-node', default: 'ask' },
       // npx / bunx — package runners
       pkgRunnerRule('npx'),
       pkgRunnerRule('bunx'),
@@ -251,9 +245,6 @@ export const DEFAULT_CONFIG: WardenConfig = {
       ...['python', 'python3'].map((cmd): CommandRule => ({
         command: cmd,
         default: 'ask',
-        argPatterns: [
-          { match: { anyArgMatches: ['^--(version|help)$', '^-V$'] }, decision: 'allow' },
-        ],
       })),
       { command: 'pip', default: 'allow' },
       { command: 'pip3', default: 'allow' },
@@ -426,7 +417,8 @@ export const DEFAULT_CONFIG: WardenConfig = {
       })),
 
       // --- Scripting languages ---
-      ...['ruby', 'perl', 'php'].map((cmd): CommandRule => ({
+      { command: 'perl', default: 'ask' },
+      ...['ruby', 'php'].map((cmd): CommandRule => ({
         command: cmd,
         default: 'ask',
         argPatterns: [
