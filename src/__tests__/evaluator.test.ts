@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { evaluate } from '../evaluator';
 import { parseCommand } from '../parser';
 import { DEFAULT_CONFIG } from '../defaults';
 import type { WardenConfig, ConfigLayer, TrustedTarget } from '../types';
+import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 function toTargets(items: (string | TrustedTarget)[]): TrustedTarget[] {
   return items.map(i => typeof i === 'string' ? { name: i } : i);
@@ -1196,6 +1199,242 @@ describe('evaluator', () => {
       for (const d of r.details) {
         expect(d.decision).toBe('allow');
       }
+    });
+  });
+});
+
+// ─── Script safety scanning integration tests ───
+
+describe('script safety scanning', () => {
+  const scriptDir = join(tmpdir(), 'warden-eval-test-' + Date.now());
+
+  beforeAll(() => {
+    mkdirSync(scriptDir, { recursive: true });
+    writeFileSync(join(scriptDir, 'safe.py'), 'print("hello world")');
+    writeFileSync(join(scriptDir, 'dangerous.py'), 'import subprocess\nsubprocess.run(["ls"])');
+    writeFileSync(join(scriptDir, 'cautious.py'), 'open("out.txt", "w").write("data")');
+    writeFileSync(join(scriptDir, 'safe.js'), 'console.log("hello")');
+    writeFileSync(join(scriptDir, 'dangerous.js'), 'const { execSync } = require("child_process");\nexecSync("ls")');
+    writeFileSync(join(scriptDir, 'exit.js'), 'process.exit(1)');
+    writeFileSync(join(scriptDir, 'safe.ts'), 'const x: number = 1 + 2; console.log(x)');
+    writeFileSync(join(scriptDir, 'safe.pl'), 'print "hello\\n"');
+    writeFileSync(join(scriptDir, 'dangerous.pl'), 'system("ls -la")');
+  });
+
+  afterAll(() => {
+    rmSync(scriptDir, { recursive: true, force: true });
+  });
+
+  function evalWithCwd(cmd: string, cwd: string) {
+    return evaluate(parseCommand(cmd), DEFAULT_CONFIG, 0, cwd);
+  }
+
+  describe('evaluatePythonCommand', () => {
+    it('allows python --version', () => {
+      const r = eval_('python --version');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows python3 --version', () => {
+      const r = eval_('python3 --version');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows python -V', () => {
+      const r = eval_('python -V');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows python -c with safe code', () => {
+      const r = eval_('python -c "print(\'hello\')"');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for python -c with dangerous code', () => {
+      const r = eval_('python -c "import subprocess; subprocess.run([\'rm\', \'-rf\', \'/\'])"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+      expect(r.reason).toContain('subprocess');
+    });
+
+    it('asks for python3 -c with dangerous code', () => {
+      const r = eval_('python3 -c "os.system(\'ls\')"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+
+    it('allows python -m pytest', () => {
+      const r = eval_('python -m pytest');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows python -m black', () => {
+      const r = eval_('python -m black .');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for python -m http.server', () => {
+      const r = eval_('python -m http.server');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('unknown module');
+    });
+
+    it('allows python with safe script file', () => {
+      const r = evalWithCwd('python safe.py', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for python with dangerous script file', () => {
+      const r = evalWithCwd('python dangerous.py', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+
+    it('asks for python with cautious script file', () => {
+      const r = evalWithCwd('python cautious.py', scriptDir);
+      expect(r.decision).toBe('ask');
+    });
+
+    it('asks for bare python (REPL)', () => {
+      const r = eval_('python');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('REPL');
+    });
+
+    it('asks for script not found', () => {
+      const r = evalWithCwd('python nonexistent.py', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('script not found');
+    });
+  });
+
+  describe('evaluateNodeCommand', () => {
+    it('allows node --version', () => {
+      const r = eval_('node --version');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows node -v', () => {
+      const r = eval_('node -v');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows node -e with safe code', () => {
+      const r = eval_('node -e "console.log(1)"');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for node -e with dangerous code', () => {
+      const r = eval_('node -e "require(\'child_process\').execSync(\'rm -rf /\')"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+      expect(r.reason).toContain('child_process');
+    });
+
+    it('asks for node --eval with dangerous code', () => {
+      const r = eval_('node --eval "process.exit(1)"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+
+    it('allows node with safe .js file', () => {
+      const r = evalWithCwd('node safe.js', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for node with dangerous .js file', () => {
+      const r = evalWithCwd('node dangerous.js', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+
+    it('asks for node with process.exit in file', () => {
+      const r = evalWithCwd('node exit.js', scriptDir);
+      expect(r.decision).toBe('ask');
+    });
+
+    it('allows node with safe .ts file', () => {
+      const r = evalWithCwd('node safe.ts', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for bare node (REPL)', () => {
+      const r = eval_('node');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('REPL');
+    });
+
+    it('allows tsx --version', () => {
+      const r = eval_('tsx --version');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows tsx with safe .ts file', () => {
+      const r = evalWithCwd('tsx safe.ts', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for tsx with dangerous .js file', () => {
+      const r = evalWithCwd('tsx dangerous.js', scriptDir);
+      expect(r.decision).toBe('ask');
+    });
+
+    it('allows ts-node with safe .ts file', () => {
+      const r = evalWithCwd('ts-node safe.ts', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+  });
+
+  describe('evaluatePerlCommand', () => {
+    it('allows perl --version', () => {
+      const r = eval_('perl --version');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows perl -v', () => {
+      const r = eval_('perl -v');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('allows perl -e with safe code', () => {
+      const r = eval_('perl -e "print \\"hello\\\\n\\""');
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for perl -e with dangerous code', () => {
+      const r = eval_('perl -e "system(\\"rm -rf /\\")"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+      expect(r.reason).toContain('system');
+    });
+
+    it('allows perl with safe .pl file', () => {
+      const r = evalWithCwd('perl safe.pl', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for perl with dangerous .pl file', () => {
+      const r = evalWithCwd('perl dangerous.pl', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+
+    it('asks for bare perl', () => {
+      const r = eval_('perl');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('REPL');
+    });
+  });
+
+  describe('npx tsx integration', () => {
+    it('allows npx tsx with safe .ts file', () => {
+      const r = evalWithCwd('npx tsx safe.ts', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for npx tsx with dangerous .js file', () => {
+      const r = evalWithCwd('npx tsx dangerous.js', scriptDir);
+      expect(r.decision).toBe('ask');
     });
   });
 });

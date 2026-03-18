@@ -165,7 +165,13 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     return evaluateFindCommand(cmd, config, depth);
   }
 
-  // 2b. Script safety scanning — language-specific evaluators
+  // 2b. Package runner recursive evaluation (npx/bunx/pnpx → subcommand with evaluator)
+  if (command === 'npx' || command === 'bunx' || command === 'pnpx') {
+    const pkgResult = evaluatePkgRunnerSubcommand(cmd, config, depth, cwd);
+    if (pkgResult) return pkgResult;
+  }
+
+  // 2c. Script safety scanning — language-specific evaluators
   if (command === 'python' || command === 'python3') {
     const pyResult = evaluatePythonCommand(cmd, config, depth, cwd);
     if (pyResult) return pyResult;
@@ -1208,6 +1214,51 @@ function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
     decision: result.decision,
     reason: `Trusted Fly app "${app}" (${result.reason})`,
     matchedRule: 'trustedFlyApps',
+  };
+}
+
+// ─── Package runner recursive evaluation (npx/bunx/pnpx) ───
+
+/** Commands that have custom evaluators and should be recursively evaluated when run via npx/bunx. */
+const COMMANDS_WITH_SCRIPT_EVALUATORS = new Set(['node', 'tsx', 'ts-node', 'python', 'python3', 'perl']);
+
+function evaluatePkgRunnerSubcommand(cmd: ParsedCommand, config: WardenConfig, depth: number, cwd?: string): CommandEvalDetail | null {
+  const { command, args } = cmd;
+
+  // Skip npx flags to find the subcommand
+  let i = 0;
+  while (i < args.length) {
+    if (args[i] === '--package' || args[i] === '-p' || args[i] === '--call' || args[i] === '-c') {
+      i += 2;
+      continue;
+    }
+    if (args[i].startsWith('-')) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  if (i >= args.length) return null;
+
+  const subcmd = args[i];
+  if (!COMMANDS_WITH_SCRIPT_EVALUATORS.has(subcmd)) return null;
+
+  // Build a subcommand and recursively evaluate through evaluateCommand
+  const subArgs = args.slice(i + 1);
+  const subParsedCmd: ParsedCommand = {
+    command: subcmd,
+    originalCommand: subcmd,
+    args: subArgs,
+    envPrefixes: [],
+    raw: [subcmd, ...subArgs].join(' '),
+  };
+  const subResult = evaluateCommand(subParsedCmd, config, depth + 1, undefined, cwd);
+
+  return {
+    command, args,
+    decision: subResult.decision,
+    reason: `${command} ${subcmd}: ${subResult.reason}`,
+    matchedRule: `${command}:subcommand`,
   };
 }
 
