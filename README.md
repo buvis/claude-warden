@@ -258,6 +258,20 @@ Warden evaluated the command as safe, but the other hook forced a confirmation p
 
 Then inspect each plugin's `hooks/hooks.json` for PreToolUse entries targeting `Bash`.
 
+## Fork info
+
+This is a fork of [banyudu/claude-warden](https://github.com/banyudu/claude-warden). The original repo is tracked as the `banyudu` remote for selective cherry-picking.
+
+```bash
+# pull individual changes from the original repo
+git fetch banyudu
+git cherry-pick <commit>
+
+# or bulk sync (may conflict with local changes)
+git fetch banyudu
+git merge banyudu/main
+```
+
 ## Development
 
 ```bash
