@@ -3,12 +3,14 @@ import { evaluate } from './evaluator';
 import { loadConfig } from './rules';
 import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
+import { logDecision } from './audit';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
 import type { HookInput, HookOutput } from './types';
 
 const MAX_STDIN_SIZE = 1024 * 1024; // 1MB
 
 async function main() {
+  const startTime = Date.now();
   let raw = '';
   for await (const chunk of process.stdin) {
     raw += chunk;
@@ -97,8 +99,10 @@ async function main() {
 
     // In YOLO mode, only block alwaysDeny commands (unless bypassDeny is set)
     if (result.decision === 'deny' && !yoloState.bypassDeny) {
-      // Fall through to normal deny handling below
+      // Fall through to normal deny handling below — yolo is active but command is denied
+      logDecision(config, input, result, Date.now() - startTime, true);
     } else {
+      logDecision(config, input, result, Date.now() - startTime, true);
       const expiryInfo = yoloState.expiresAt
         ? `until ${new Date(yoloState.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
         : 'full session';
@@ -116,8 +120,10 @@ async function main() {
 
   const parsed = parseCommand(command);
   const result = evaluate(parsed, config, 0, input.cwd);
+  const elapsed = Date.now() - startTime;
 
   if (result.decision === 'allow') {
+    logDecision(config, input, result, elapsed, false);
     const output: HookOutput = {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
@@ -130,6 +136,7 @@ async function main() {
   }
 
   if (result.decision === 'deny') {
+    logDecision(config, input, result, elapsed, false);
     if (config.notifyOnDeny) {
       const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
       sendNotification('Claude Warden', `Blocked: ${truncated}`, config);
@@ -149,6 +156,7 @@ async function main() {
   }
 
   // decision === 'ask' — provide feedback via systemMessage
+  logDecision(config, input, result, elapsed, false);
   if (config.notifyOnAsk) {
     const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
     sendNotification('Claude Warden', `Permission needed: ${truncated}`, config);
