@@ -91,16 +91,35 @@ async function main() {
 
   const config = loadConfig(input.cwd);
 
-  // Check YOLO mode
+  // Check YOLO mode — evaluate once here, reuse result below if deny falls through
+  let yoloActive = false;
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
+    yoloActive = true;
     const parsed = parseCommand(command);
     const result = evaluate(parsed, config, 0, input.cwd);
 
     // In YOLO mode, only block alwaysDeny commands (unless bypassDeny is set)
     if (result.decision === 'deny' && !yoloState.bypassDeny) {
-      // Fall through to normal deny handling below — yolo is active but command is denied
-      logDecision(config, input, result, Date.now() - startTime, true);
+      // Fall through to deny handling below — reuse this result
+      const elapsed = Date.now() - startTime;
+      logDecision(config, input, result, elapsed, true);
+      if (config.notifyOnDeny) {
+        const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
+        sendNotification('Claude Warden', `Blocked: ${truncated}`, config);
+      }
+      const { reason, systemMessage } = formatSystemMessage('deny', command, result.details);
+      const output: HookOutput = {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: reason,
+        },
+        systemMessage,
+      };
+      process.stdout.write(JSON.stringify(output));
+      process.stderr.write(`${reason}\n`);
+      process.exit(2);
     } else {
       logDecision(config, input, result, Date.now() - startTime, true);
       const expiryInfo = yoloState.expiresAt
