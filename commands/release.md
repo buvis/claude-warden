@@ -1,5 +1,5 @@
 ---
-description: Commit, push, and release a new version (npm publish + GitHub release)
+description: Commit, push, and release a new version (GitHub release)
 user_invocable: true
 ---
 
@@ -25,6 +25,4 @@ Perform the full release workflow for claude-warden:
 
 7. **Create GitHub release**: Run `gh release create v<new-version> --title "v<new-version>" --notes "<changelog>"`. Generate the changelog from commits since the last release tag.
 
-8. **Publish to npm**: Run `pnpm publish --access public --no-git-checks`.
-
-9. **Report**: Show the user the new version, GitHub release URL, and npm package URL.
+8. **Report**: Show the user the new version and GitHub release URL.

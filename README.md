@@ -1,10 +1,6 @@
 # Claude Warden
 
-[![npm version](https://img.shields.io/npm/v/claude-warden)](https://www.npmjs.com/package/claude-warden)
-[![npm downloads](https://img.shields.io/npm/dm/claude-warden)](https://www.npmjs.com/package/claude-warden)
-[![GitHub license](https://img.shields.io/github/license/banyudu/claude-warden)](https://github.com/banyudu/claude-warden/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/banyudu/claude-warden)](https://github.com/banyudu/claude-warden/stargazers)
-[![CI](https://img.shields.io/github/actions/workflow/status/banyudu/claude-warden/ci.yml?label=CI)](https://github.com/banyudu/claude-warden/actions)
+[![GitHub license](https://img.shields.io/github/license/buvis/claude-warden)](https://github.com/buvis/claude-warden/blob/main/LICENSE)
 
 Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands, evaluates each against configurable safety rules, and returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
 
@@ -47,26 +43,11 @@ The result: **100+ common dev commands auto-approved**, dangerous commands auto-
 Two commands inside Claude Code:
 
 ```
-/plugin marketplace add banyudu/claude-warden
-/plugin install warden@claude-warden
+/plugin marketplace add buvis/claude-plugins
+/plugin install warden@buvis-plugins
 ```
 
-That's it. Restart Claude Code and Warden is active.
-
-### Alternative: install from npm
-
-```bash
-npm install -g claude-warden
-claude --plugin-dir $(npm root -g)/claude-warden
-```
-
-### Alternative: test locally from source
-
-```bash
-git clone https://github.com/banyudu/claude-warden.git
-cd claude-warden && npm install && npm run build
-claude --plugin-dir ./claude-warden
-```
+Restart Claude Code and Warden is active.
 
 ## Codex CLI (experimental)
 

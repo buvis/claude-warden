@@ -20,6 +20,5 @@ git commit -m "$VERSION"
 git tag "v$VERSION"
 git push
 git push --tags
-pnpm publish --no-git-checks
 
 echo "Released v$VERSION"
