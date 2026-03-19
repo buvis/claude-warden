@@ -18631,6 +18631,110 @@ function regexFallbackParse(input) {
 
 // src/evaluator.ts
 var import_os = require("os");
+
+// src/script-scanner.ts
+var import_fs = require("fs");
+var import_path2 = require("path");
+var PYTHON_PATTERNS = [
+  // Dangerous
+  { regex: /\bos\.system\s*\(/, level: "dangerous", reason: "os.system() executes shell commands" },
+  { regex: /\bos\.popen\s*\(/, level: "dangerous", reason: "os.popen() executes shell commands" },
+  { regex: /\bos\.exec[a-z]*\s*\(/, level: "dangerous", reason: "os.exec*() replaces the process" },
+  { regex: /\bsubprocess\b/, level: "dangerous", reason: "subprocess can execute shell commands" },
+  { regex: /\bshutil\.rmtree\s*\(/, level: "dangerous", reason: "shutil.rmtree() deletes directory trees" },
+  { regex: /\b__import__\s*\(/, level: "dangerous", reason: "__import__() loads arbitrary modules" },
+  { regex: /(?<!\.\s*)(?<!\w)\bexec\s*\(/, level: "dangerous", reason: "exec() executes arbitrary code" },
+  { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() evaluates arbitrary expressions" },
+  { regex: /(?<!re\.)(?<!\w)\bcompile\s*\(/, level: "dangerous", reason: "compile() compiles arbitrary code" },
+  { regex: /\bctypes\b/, level: "dangerous", reason: "ctypes allows calling C functions directly" },
+  { regex: /\bpickle\.loads?\s*\(/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
+  { regex: /\bpickle\.Unpickler\b/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
+  // Cautious
+  { regex: /\bopen\s*\([^)]*['"][wax]/, level: "cautious", reason: "opens file for writing" },
+  { regex: /\bPath\s*[\.(].*\.write_text\s*\(/, level: "cautious", reason: "writes to file via Path" },
+  { regex: /\bPath\s*[\.(].*\.write_bytes\s*\(/, level: "cautious", reason: "writes to file via Path" },
+  { regex: /\bsocket\b/, level: "cautious", reason: "uses network sockets" },
+  { regex: /\brequests\.(post|put|delete)\s*\(/, level: "cautious", reason: "makes mutating HTTP request" },
+  { regex: /\burllib\.request\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" }
+];
+var TYPESCRIPT_PATTERNS = [
+  // Dangerous
+  { regex: /\bchild_process\b/, level: "dangerous", reason: "child_process can execute shell commands" },
+  { regex: /\bexecSync\s*\(/, level: "dangerous", reason: "execSync() executes shell commands" },
+  { regex: /\bspawnSync\s*\(/, level: "dangerous", reason: "spawnSync() executes shell commands" },
+  { regex: /\bfs\.rmSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmSync with recursive deletes directory trees" },
+  { regex: /\bfs\.rmdirSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmdirSync with recursive deletes directory trees" },
+  { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() executes arbitrary code" },
+  { regex: /\bnew\s+Function\s*\(/, level: "dangerous", reason: "new Function() compiles arbitrary code" },
+  { regex: /\bprocess\.exit\s*\(/, level: "dangerous", reason: "process.exit() terminates the process" },
+  { regex: /\brimraf\b/, level: "dangerous", reason: "rimraf deletes directory trees" },
+  // Cautious
+  { regex: /\bfs\.writeFileSync\s*\(/, level: "cautious", reason: "writes to file" },
+  { regex: /\bfs\.writeFile\s*\(/, level: "cautious", reason: "writes to file" },
+  { regex: /\bfs\.appendFile(Sync)?\s*\(/, level: "cautious", reason: "appends to file" },
+  { regex: /\bfs\.unlinkSync\s*\(/, level: "cautious", reason: "deletes file" },
+  { regex: /\bfs\.unlink\s*\(/, level: "cautious", reason: "deletes file" },
+  { regex: /\bfs\.renameSync\s*\(/, level: "cautious", reason: "renames/moves file" },
+  { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: "cautious", reason: "makes mutating HTTP request" },
+  { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" }
+];
+var PERL_PATTERNS = [
+  // Dangerous
+  { regex: /\bsystem\s*\(/, level: "dangerous", reason: "system() executes shell commands" },
+  { regex: /\bexec\s*\(/, level: "dangerous", reason: "exec() replaces the process with a shell command" },
+  { regex: /`[^`]+`/, level: "dangerous", reason: "backtick execution runs shell commands" },
+  { regex: /\bqx\s*[{(]/, level: "dangerous", reason: "qx{} executes shell commands" },
+  { regex: /\bunlink\b/, level: "dangerous", reason: "unlink deletes files" },
+  { regex: /\beval\s+"/, level: "dangerous", reason: 'eval "" executes arbitrary code (string eval)' },
+  { regex: /\brequire\s+\$/, level: "dangerous", reason: "require with variable loads arbitrary modules" },
+  // Cautious
+  { regex: /\bopen\s*\([^)]*['"]?\s*>{1,2}/, level: "cautious", reason: "opens file for writing" },
+  { regex: /\bsocket\b/i, level: "cautious", reason: "uses network sockets" },
+  { regex: /\bIO::Socket\b/, level: "cautious", reason: "uses network sockets" },
+  { regex: /\bLWP::UserAgent\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\bHTTP::Request\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\brename\s*\(/, level: "cautious", reason: "renames files" },
+  { regex: /\brmdir\s*\(/, level: "cautious", reason: "removes directories" },
+  { regex: /\bFile::Path::remove_tree\b/, level: "cautious", reason: "removes directory trees" }
+];
+var PATTERNS_BY_LANGUAGE = {
+  python: PYTHON_PATTERNS,
+  typescript: TYPESCRIPT_PATTERNS,
+  perl: PERL_PATTERNS
+};
+var MAX_SCRIPT_SIZE = 1024 * 1024;
+function scanScriptCode(code, language) {
+  const patterns = PATTERNS_BY_LANGUAGE[language];
+  for (const pattern of patterns) {
+    if (pattern.level === "dangerous" && pattern.regex.test(code)) {
+      return { level: "dangerous", reason: pattern.reason };
+    }
+  }
+  for (const pattern of patterns) {
+    if (pattern.level === "cautious" && pattern.regex.test(code)) {
+      return { level: "cautious", reason: pattern.reason };
+    }
+  }
+  return null;
+}
+function readScriptFile(filePath, cwd) {
+  const fullPath = (0, import_path2.isAbsolute)(filePath) ? filePath : (0, import_path2.resolve)(cwd, filePath);
+  try {
+    const stat = (0, import_fs.statSync)(fullPath);
+    if (stat.size > MAX_SCRIPT_SIZE) {
+      return { error: "script too large to scan" };
+    }
+    const content = (0, import_fs.readFileSync)(fullPath, "utf-8");
+    return { content };
+  } catch (err) {
+    const code = err.code;
+    if (code === "EACCES") return { error: "script not readable (permission denied)" };
+    return { error: "script not found" };
+  }
+}
+
+// src/evaluator.ts
 function safeRegexTest(pattern, input) {
   try {
     return new RegExp(pattern).test(input);
@@ -18650,7 +18754,7 @@ function commandMatchesName(cmd, name) {
   return cmd.command === name;
 }
 var MAX_RECURSION_DEPTH = 10;
-function evaluate(parsed, config, depth = 0) {
+function evaluate(parsed, config, depth = 0, cwd) {
   if (depth > MAX_RECURSION_DEPTH) {
     return { decision: "ask", reason: "too many nested commands", details: [] };
   }
@@ -18663,7 +18767,7 @@ function evaluate(parsed, config, depth = 0) {
   if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
     for (const subCmd of parsed.subshellCommands) {
       const subParsed = parseCommand(subCmd);
-      const subResult = evaluate(subParsed, config, depth + 1);
+      const subResult = evaluate(subParsed, config, depth + 1, cwd);
       if (subResult.decision === "deny") {
         return { decision: "deny", reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
       }
@@ -18676,7 +18780,7 @@ function evaluate(parsed, config, depth = 0) {
   }
   const details = [];
   for (const cmd of parsed.commands) {
-    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments));
+    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments, cwd));
   }
   const decisions = details.map((d) => d.decision);
   if (decisions.includes("deny")) {
@@ -18697,7 +18801,7 @@ function evaluate(parsed, config, depth = 0) {
   }
   return { decision: "allow", reason: "ok", details };
 }
-function evaluateCommand(cmd, config, depth = 0, chainAssignments) {
+function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
   const { command, args: args2 } = cmd;
   const detail = (d) => {
     if (cmd.resolvedFrom) d.resolvedFrom = cmd.resolvedFrom;
@@ -18755,6 +18859,22 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments) {
   }
   if (command === "find") {
     return evaluateFindCommand(cmd, config, depth);
+  }
+  if (command === "npx" || command === "bunx" || command === "pnpx") {
+    const pkgResult = evaluatePkgRunnerSubcommand(cmd, config, depth, cwd);
+    if (pkgResult) return pkgResult;
+  }
+  if (command === "python" || command === "python3") {
+    const pyResult = evaluatePythonCommand(cmd, config, depth, cwd);
+    if (pyResult) return pyResult;
+  }
+  if (command === "node" || command === "tsx" || command === "ts-node") {
+    const nodeResult = evaluateNodeCommand(cmd, config, depth, cwd);
+    if (nodeResult) return nodeResult;
+  }
+  if (command === "perl") {
+    const perlResult = evaluatePerlCommand(cmd, config, depth, cwd);
+    if (perlResult) return perlResult;
   }
   const mergedRule = collectMergedRule(cmd, config);
   if (mergedRule) {
@@ -19632,14 +19752,177 @@ function evaluateFlyCommand(cmd, config, depth = 0) {
     matchedRule: "trustedFlyApps"
   };
 }
+var COMMANDS_WITH_SCRIPT_EVALUATORS = /* @__PURE__ */ new Set(["node", "tsx", "ts-node", "python", "python3", "perl"]);
+function evaluatePkgRunnerSubcommand(cmd, config, depth, cwd) {
+  const { command, args: args2 } = cmd;
+  let i = 0;
+  while (i < args2.length) {
+    if (args2[i] === "--package" || args2[i] === "-p" || args2[i] === "--call" || args2[i] === "-c") {
+      i += 2;
+      continue;
+    }
+    if (args2[i].startsWith("-")) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  if (i >= args2.length) return null;
+  const subcmd = args2[i];
+  if (!COMMANDS_WITH_SCRIPT_EVALUATORS.has(subcmd)) return null;
+  const subArgs = args2.slice(i + 1);
+  const subParsedCmd = {
+    command: subcmd,
+    originalCommand: subcmd,
+    args: subArgs,
+    envPrefixes: [],
+    raw: [subcmd, ...subArgs].join(" ")
+  };
+  const subResult = evaluateCommand(subParsedCmd, config, depth + 1, void 0, cwd);
+  return {
+    command,
+    args: args2,
+    decision: subResult.decision,
+    reason: `${command} ${subcmd}: ${subResult.reason}`,
+    matchedRule: `${command}:subcommand`
+  };
+}
+function userRulesWouldRestrict(cmd, config) {
+  const rule = collectMergedRule(cmd, config);
+  return !!rule && rule.default === "deny";
+}
+function mapScanResult(cmd, scanResult, matchedRule, config) {
+  if (!scanResult) {
+    if (userRulesWouldRestrict(cmd, config)) return null;
+    return { command: cmd.command, args: cmd.args, decision: "allow", reason: "script content is safe", matchedRule };
+  }
+  const reason = scanResult.level === "dangerous" ? `dangerous: ${scanResult.reason}` : scanResult.reason;
+  return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+}
+function scanScriptFile(cmd, filePath, language, matchedRule, config, cwd) {
+  const fileResult = readScriptFile(filePath, cwd || process.cwd());
+  if ("error" in fileResult) {
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason: fileResult.error, matchedRule };
+  }
+  return mapScanResult(cmd, scanScriptCode(fileResult.content, language), matchedRule, config);
+}
+var SAFE_PYTHON_MODULES = /* @__PURE__ */ new Set([
+  "pytest",
+  "unittest",
+  "venv",
+  "pip",
+  "json.tool",
+  "compileall",
+  "pydoc",
+  "doctest",
+  "timeit",
+  "py_compile",
+  "black",
+  "ruff",
+  "mypy",
+  "isort",
+  "ensurepip",
+  "zipfile",
+  "site",
+  "cProfile",
+  "pdb",
+  "dis",
+  "ast",
+  "tokenize",
+  "sysconfig"
+]);
+function evaluatePythonCommand(cmd, config, depth = 0, cwd) {
+  const { command, args: args2 } = cmd;
+  const rule = "python:script";
+  if (args2.some((a) => a === "--version" || a === "--help" || a === "-V")) {
+    return { command, args: args2, decision: "allow", reason: "version/help flag", matchedRule: rule };
+  }
+  const cIdx = args2.indexOf("-c");
+  if (cIdx !== -1) {
+    const code = args2[cIdx + 1];
+    if (!code) {
+      return { command, args: args2, decision: "ask", reason: "missing code after -c", matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, "python"), rule, config);
+  }
+  const mIdx = args2.indexOf("-m");
+  if (mIdx !== -1) {
+    const mod = args2[mIdx + 1];
+    if (!mod) {
+      return { command, args: args2, decision: "ask", reason: "missing module after -m", matchedRule: rule };
+    }
+    if (SAFE_PYTHON_MODULES.has(mod)) {
+      if (userRulesWouldRestrict(cmd, config)) return null;
+      return { command, args: args2, decision: "allow", reason: `safe module: ${mod}`, matchedRule: rule };
+    }
+    return { command, args: args2, decision: "ask", reason: `unknown module: ${mod}`, matchedRule: rule };
+  }
+  const scriptArg = args2.find((a) => !a.startsWith("-") && a.endsWith(".py"));
+  if (scriptArg) {
+    return scanScriptFile(cmd, scriptArg, "python", rule, config, cwd);
+  }
+  if (args2.length === 0) {
+    return { command, args: args2, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
+  }
+  return null;
+}
+var NODE_SCRIPT_EXTENSIONS = /\.(js|mjs|cjs|ts|mts|cts|tsx|jsx)$/;
+function evaluateNodeCommand(cmd, config, depth = 0, cwd) {
+  const { command, args: args2 } = cmd;
+  const rule = "node:script";
+  if (args2.some((a) => a === "--version" || a === "--help" || a === "-v" || a === "-h")) {
+    return { command, args: args2, decision: "allow", reason: "version/help flag", matchedRule: rule };
+  }
+  const evalIdx = args2.findIndex((a) => a === "-e" || a === "--eval" || a === "-p" || a === "--print");
+  if (evalIdx !== -1) {
+    const code = args2[evalIdx + 1];
+    if (!code) {
+      return { command, args: args2, decision: "ask", reason: "missing code after eval flag", matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, "typescript"), rule, config);
+  }
+  const scriptArg = args2.find((a) => !a.startsWith("-") && NODE_SCRIPT_EXTENSIONS.test(a));
+  if (scriptArg) {
+    return scanScriptFile(cmd, scriptArg, "typescript", rule, config, cwd);
+  }
+  if (args2.length === 0) {
+    return { command, args: args2, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
+  }
+  return null;
+}
+function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
+  const { command, args: args2 } = cmd;
+  const rule = "perl:script";
+  if (args2.some((a) => a === "--version" || a === "--help" || a === "-v")) {
+    return { command, args: args2, decision: "allow", reason: "version/help flag", matchedRule: rule };
+  }
+  const eIdx = args2.findIndex((a) => a === "-e" || a === "-E");
+  if (eIdx !== -1) {
+    const code = args2[eIdx + 1];
+    if (!code) {
+      return { command, args: args2, decision: "ask", reason: "missing code after -e", matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, "perl"), rule, config);
+  }
+  const scriptArg = args2.find((a) => !a.startsWith("-") && (a.endsWith(".pl") || a.endsWith(".pm")));
+  if (scriptArg) {
+    return scanScriptFile(cmd, scriptArg, "perl", rule, config, cwd);
+  }
+  if (args2.length === 0) {
+    return { command, args: args2, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
+  }
+  return null;
+}
 
 // src/rules.ts
-var import_fs = require("fs");
+var import_fs2 = require("fs");
 var import_yaml = __toESM(require_dist2(), 1);
-var import_os2 = require("os");
-var import_path2 = require("path");
+var import_os3 = require("os");
+var import_path4 = require("path");
 
 // src/defaults.ts
+var import_os2 = require("os");
+var import_path3 = require("path");
 var SAFE_DEV_TOOLS = [
   "jest",
   "vitest",
@@ -19688,7 +19971,7 @@ var SAFE_DEV_TOOLS = [
   "json",
   "biome"
 ];
-var SCRIPT_RUNNERS = ["tsx", "ts-node", "nodemon"];
+var SCRIPT_RUNNERS = ["nodemon"];
 var REGISTRY_OPS = ["publish", "unpublish", "deprecate", "owner", "access", "token", "adduser", "login", "logout"];
 var SAFE_PKG_MANAGER_CMDS = [
   "install",
@@ -19785,6 +20068,9 @@ var DEFAULT_CONFIG = {
   askOnSubshell: true,
   notifyOnAsk: true,
   notifyOnDeny: true,
+  audit: true,
+  auditPath: (0, import_path3.join)((0, import_os2.homedir)(), ".claude", "warden-audit.jsonl"),
+  auditAllowDecisions: false,
   trustedSSHHosts: [],
   trustedDockerContainers: [],
   trustedKubectlContexts: [],
@@ -19987,6 +20273,7 @@ var DEFAULT_CONFIG = {
       "hash",
       "alias",
       "set",
+      "unset",
       "sleep",
       "wait",
       "time",
@@ -20045,6 +20332,20 @@ var DEFAULT_CONFIG = {
           { match: { argsMatch: ["^plugin(s)?\\s+(list|help|validate|marketplace\\s+(list|help))\\b"] }, decision: "allow", description: "Read-only plugin commands" }
         ]
       },
+      // --- Shell builtins ---
+      {
+        command: "export",
+        default: "allow",
+        argPatterns: [
+          {
+            match: { anyArgMatches: [
+              "^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)="
+            ] },
+            decision: "ask",
+            description: "Env vars that control binary/library resolution"
+          }
+        ]
+      },
       // --- Shell sourcing ---
       ...["source", "."].map((cmd) => ({
         command: cmd,
@@ -20076,15 +20377,9 @@ var DEFAULT_CONFIG = {
         ]
       })),
       // --- Node.js ecosystem ---
-      {
-        command: "node",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^-e$", "^--eval", "^-p$", "^--print"] }, decision: "ask", reason: "evaluates inline code" },
-          { match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] }, decision: "allow", description: "Version/help flags" },
-          { match: { noArgs: true }, decision: "ask", reason: "opens interactive REPL" }
-        ]
-      },
+      { command: "node", default: "ask" },
+      { command: "tsx", default: "ask" },
+      { command: "ts-node", default: "ask" },
       // npx / bunx — package runners
       pkgRunnerRule("npx"),
       pkgRunnerRule("bunx"),
@@ -20107,10 +20402,7 @@ var DEFAULT_CONFIG = {
       // --- Python ---
       ...["python", "python3"].map((cmd) => ({
         command: cmd,
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^--(version|help)$", "^-V$"] }, decision: "allow" }
-        ]
+        default: "ask"
       })),
       { command: "pip", default: "allow" },
       { command: "pip3", default: "allow" },
@@ -20284,7 +20576,8 @@ var DEFAULT_CONFIG = {
         argPatterns: [VERSION_HELP_FLAGS]
       })),
       // --- Scripting languages ---
-      ...["ruby", "perl", "php"].map((cmd) => ({
+      { command: "perl", default: "ask" },
+      ...["ruby", "php"].map((cmd) => ({
         command: cmd,
         default: "ask",
         argPatterns: [
@@ -20387,8 +20680,8 @@ function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
 var USER_CONFIG_PATHS = [
-  (0, import_path2.join)((0, import_os2.homedir)(), ".claude", "warden.yaml"),
-  (0, import_path2.join)((0, import_os2.homedir)(), ".claude", "warden.json")
+  (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden.yaml"),
+  (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden.json")
 ];
 var PROJECT_CONFIG_NAMES = [
   ".claude/warden.yaml",
@@ -20411,7 +20704,7 @@ function loadConfig(cwd) {
   let workspaceRaw = null;
   if (cwd) {
     for (const name of PROJECT_CONFIG_NAMES) {
-      const result = tryLoadFile((0, import_path2.join)(cwd, name));
+      const result = tryLoadFile((0, import_path4.join)(cwd, name));
       if (result) {
         workspaceLayer = extractLayer(result);
         workspaceRaw = result;
@@ -20429,9 +20722,9 @@ function loadConfig(cwd) {
   return config;
 }
 function tryLoadFile(filePath) {
-  if (!(0, import_fs.existsSync)(filePath)) return null;
+  if (!(0, import_fs2.existsSync)(filePath)) return null;
   try {
-    const raw = (0, import_fs.readFileSync)(filePath, "utf-8");
+    const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
     const parsed = filePath.endsWith(".yaml") || filePath.endsWith(".yml") ? (0, import_yaml.parse)(raw) : JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
       return parsed;
@@ -20545,6 +20838,15 @@ function mergeNonLayerFields(config, raw) {
   }
   if (typeof raw.notifyOnDeny === "boolean") {
     config.notifyOnDeny = raw.notifyOnDeny;
+  }
+  if (typeof raw.audit === "boolean") {
+    config.audit = raw.audit;
+  }
+  if (typeof raw.auditPath === "string") {
+    config.auditPath = raw.auditPath;
+  }
+  if (typeof raw.auditAllowDecisions === "boolean") {
+    config.auditAllowDecisions = raw.auditAllowDecisions;
   }
   if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === "object") {
     const overrides = raw.trustedContextOverrides;
@@ -20684,22 +20986,56 @@ function sendNotification(title, message, config) {
   }
 }
 
+// src/audit.ts
+var import_fs3 = require("fs");
+var MAX_LOG_SIZE = 5 * 1024 * 1024;
+var MAX_CMD_LENGTH = 500;
+function logDecision(config, input, result, elapsedMs, yoloActive) {
+  if (!config.audit) return;
+  if (!config.auditAllowDecisions && result.decision === "allow") return;
+  const cmd = input.tool_input?.command;
+  const entry = {
+    ts: (/* @__PURE__ */ new Date()).toISOString(),
+    sid: input.session_id.slice(0, 12),
+    cmd: typeof cmd === "string" ? cmd.slice(0, MAX_CMD_LENGTH) : "",
+    decision: result.decision,
+    reason: result.reason,
+    details: result.decision !== "allow" ? result.details : [],
+    yolo: yoloActive,
+    elapsed_ms: elapsedMs
+  };
+  try {
+    rotateIfNeeded(config.auditPath);
+    (0, import_fs3.appendFileSync)(config.auditPath, JSON.stringify(entry) + "\n");
+  } catch {
+  }
+}
+function rotateIfNeeded(logPath) {
+  try {
+    const stat = (0, import_fs3.statSync)(logPath);
+    if (stat.size >= MAX_LOG_SIZE) {
+      (0, import_fs3.renameSync)(logPath, logPath + ".1");
+    }
+  } catch {
+  }
+}
+
 // src/yolo.ts
-var import_fs2 = require("fs");
-var import_os3 = require("os");
-var import_path3 = require("path");
+var import_fs4 = require("fs");
+var import_os4 = require("os");
+var import_path5 = require("path");
 function yoloFilePath(sessionId) {
-  return (0, import_path3.join)((0, import_os3.tmpdir)(), `claude-warden-yolo-${sessionId}`);
+  return (0, import_path5.join)((0, import_os4.tmpdir)(), `claude-warden-yolo-${sessionId}`);
 }
 function getYoloState(sessionId) {
   const filePath = yoloFilePath(sessionId);
-  if (!(0, import_fs2.existsSync)(filePath)) return null;
+  if (!(0, import_fs4.existsSync)(filePath)) return null;
   try {
-    const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
+    const raw = (0, import_fs4.readFileSync)(filePath, "utf-8");
     const state = JSON.parse(raw);
     if (state.expiresAt && new Date(state.expiresAt) <= /* @__PURE__ */ new Date()) {
       try {
-        (0, import_fs2.unlinkSync)(filePath);
+        (0, import_fs4.unlinkSync)(filePath);
       } catch {
       }
       return null;
@@ -20716,7 +21052,7 @@ function activateYolo(sessionId, durationMinutes, bypassDeny = false) {
     expiresAt: durationMinutes ? new Date(now.getTime() + durationMinutes * 6e4).toISOString() : null,
     bypassDeny
   };
-  (0, import_fs2.writeFileSync)(yoloFilePath(sessionId), JSON.stringify(state), "utf-8");
+  (0, import_fs4.writeFileSync)(yoloFilePath(sessionId), JSON.stringify(state), "utf-8");
   return state;
 }
 var YOLO_PATTERN = /^echo\s+__WARDEN_YOLO_(ACTIVATE|DEACTIVATE|STATUS)__(?::(\w+))?$/;
@@ -20741,9 +21077,9 @@ function parseYoloCommand(command) {
 }
 function deactivateYolo(sessionId) {
   const filePath = yoloFilePath(sessionId);
-  if (!(0, import_fs2.existsSync)(filePath)) return false;
+  if (!(0, import_fs4.existsSync)(filePath)) return false;
   try {
-    (0, import_fs2.unlinkSync)(filePath);
+    (0, import_fs4.unlinkSync)(filePath);
     return true;
   } catch {
     return false;
@@ -20753,6 +21089,7 @@ function deactivateYolo(sessionId) {
 // src/index.ts
 var MAX_STDIN_SIZE = 1024 * 1024;
 async function main() {
+  const startTime = Date.now();
   let raw = "";
   for await (const chunk of process.stdin) {
     raw += chunk;
@@ -20817,12 +21154,34 @@ async function main() {
     process.exit(0);
   }
   const config = loadConfig(input.cwd);
+  let yoloActive = false;
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
+    yoloActive = true;
     const parsed2 = parseCommand(command);
-    const result2 = evaluate(parsed2, config);
+    const result2 = evaluate(parsed2, config, 0, input.cwd);
     if (result2.decision === "deny" && !yoloState.bypassDeny) {
+      const elapsed2 = Date.now() - startTime;
+      logDecision(config, input, result2, elapsed2, true);
+      if (config.notifyOnDeny) {
+        const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
+        sendNotification("Claude Warden", `Blocked: ${truncated}`, config);
+      }
+      const { reason: reason2, systemMessage: systemMessage2 } = formatSystemMessage("deny", command, result2.details);
+      const output2 = {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: reason2
+        },
+        systemMessage: systemMessage2
+      };
+      process.stdout.write(JSON.stringify(output2));
+      process.stderr.write(`${reason2}
+`);
+      process.exit(2);
     } else {
+      logDecision(config, input, result2, Date.now() - startTime, true);
       const expiryInfo = yoloState.expiresAt ? `until ${new Date(yoloState.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "full session";
       const output2 = {
         hookSpecificOutput: {
@@ -20836,8 +21195,10 @@ async function main() {
     }
   }
   const parsed = parseCommand(command);
-  const result = evaluate(parsed, config);
+  const result = evaluate(parsed, config, 0, input.cwd);
+  const elapsed = Date.now() - startTime;
   if (result.decision === "allow") {
+    logDecision(config, input, result, elapsed, false);
     const output2 = {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
@@ -20849,6 +21210,7 @@ async function main() {
     process.exit(0);
   }
   if (result.decision === "deny") {
+    logDecision(config, input, result, elapsed, false);
     if (config.notifyOnDeny) {
       const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
       sendNotification("Claude Warden", `Blocked: ${truncated}`, config);
@@ -20867,6 +21229,7 @@ async function main() {
 `);
     process.exit(2);
   }
+  logDecision(config, input, result, elapsed, false);
   if (config.notifyOnAsk) {
     const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
     sendNotification("Claude Warden", `Permission needed: ${truncated}`, config);

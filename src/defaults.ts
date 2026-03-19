@@ -158,7 +158,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
       'xcode-select', 'xcrun', 'xcodebuild',
       'networkQuality',
       // Misc safe
-      'cd', 'pushd', 'popd', 'dirs', 'hash', 'alias', 'set',
+      'cd', 'pushd', 'popd', 'dirs', 'hash', 'alias', 'set', 'unset',
       'sleep', 'wait', 'time',
       'md5', 'md5sum', 'sha256sum', 'shasum', 'cksum',
       'base64',
@@ -187,6 +187,21 @@ export const DEFAULT_CONFIG: WardenConfig = {
         argPatterns: [
           { match: { anyArgMatches: ['^--(version|help)$', '^-[vh]$'] }, decision: 'allow', description: 'Version/help flags' },
           { match: { argsMatch: ['^plugin(s)?\\s+(list|help|validate|marketplace\\s+(list|help))\\b'] }, decision: 'allow', description: 'Read-only plugin commands' },
+        ],
+      },
+
+      // --- Shell builtins ---
+      {
+        command: 'export',
+        default: 'allow',
+        argPatterns: [
+          {
+            match: { anyArgMatches: [
+              '^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)=',
+            ]},
+            decision: 'ask',
+            description: 'Env vars that control binary/library resolution',
+          },
         ],
       },
 

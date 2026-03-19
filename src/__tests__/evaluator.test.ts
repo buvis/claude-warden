@@ -873,6 +873,49 @@ describe('evaluator', () => {
     });
   });
 
+  describe('export command', () => {
+    it('allows export FOO=bar', () => {
+      expect(eval_('export FOO=bar').decision).toBe('allow');
+    });
+
+    it('allows export NODE_ENV=production', () => {
+      expect(eval_('export NODE_ENV=production').decision).toBe('allow');
+    });
+
+    it('allows export with no args', () => {
+      expect(eval_('export').decision).toBe('allow');
+    });
+
+    it('asks for export PATH=...', () => {
+      expect(eval_('export PATH="/tmp/evil:$PATH"').decision).toBe('ask');
+    });
+
+    it('asks for export LD_PRELOAD=...', () => {
+      expect(eval_('export LD_PRELOAD=/tmp/evil.so').decision).toBe('ask');
+    });
+
+    it('asks for export LD_LIBRARY_PATH=...', () => {
+      expect(eval_('export LD_LIBRARY_PATH=/tmp/evil').decision).toBe('ask');
+    });
+
+    it('asks for export DYLD_INSERT_LIBRARIES=...', () => {
+      expect(eval_('export DYLD_INSERT_LIBRARIES=/tmp/evil.dylib').decision).toBe('ask');
+    });
+
+    it('asks for export DYLD_LIBRARY_PATH=...', () => {
+      expect(eval_('export DYLD_LIBRARY_PATH=/tmp/evil').decision).toBe('ask');
+    });
+
+    it('asks for export DYLD_FRAMEWORK_PATH=...', () => {
+      expect(eval_('export DYLD_FRAMEWORK_PATH=/tmp/evil').decision).toBe('ask');
+    });
+
+    it('allows export PATH in chain — whole chain asks', () => {
+      const r = eval_('export PATH="/usr/local/bin:$PATH" && ls');
+      expect(r.decision).toBe('ask');
+    });
+  });
+
   describe('full-path whitelist', () => {
     it('full-path in alwaysAllow matches only that exact path', () => {
       const layer: ConfigLayer = { alwaysAllow: ['/home/user/bin/my-script.sh'], alwaysDeny: [], rules: [] };
