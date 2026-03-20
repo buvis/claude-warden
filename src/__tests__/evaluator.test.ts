@@ -886,10 +886,39 @@ describe('evaluator', () => {
       expect(eval_('export').decision).toBe('allow');
     });
 
-    it('asks for export PATH=...', () => {
-      expect(eval_('export PATH="/tmp/evil:$PATH"').decision).toBe('ask');
+    // PATH extension (preserves $PATH) → allow
+    it('allows export PATH="/dir:$PATH"', () => {
+      expect(eval_('export PATH="/usr/local/bin:$PATH"').decision).toBe('allow');
     });
 
+    it('allows export PATH="$PATH:/dir"', () => {
+      expect(eval_('export PATH="$PATH:/usr/local/bin"').decision).toBe('allow');
+    });
+
+    it('allows export PATH with ${PATH}', () => {
+      expect(eval_('export PATH="/usr/local/bin:${PATH}"').decision).toBe('allow');
+    });
+
+    it('allows PATH extension in chain', () => {
+      const r = eval_('export PATH="/project/debug:$PATH" && some_tool arg');
+      expect(r.decision).toBe('ask'); // some_tool is unknown → ask
+    });
+
+    it('allows PATH extension chained with known command', () => {
+      const r = eval_('export PATH="/project/debug:$PATH" && ls');
+      expect(r.decision).toBe('allow');
+    });
+
+    // PATH replacement (drops $PATH) → ask
+    it('asks for export PATH without $PATH', () => {
+      expect(eval_('export PATH="/tmp/evil"').decision).toBe('ask');
+    });
+
+    it('asks for export PATH="" (empty)', () => {
+      expect(eval_('export PATH=""').decision).toBe('ask');
+    });
+
+    // Library injection vars → ask
     it('asks for export LD_PRELOAD=...', () => {
       expect(eval_('export LD_PRELOAD=/tmp/evil.so').decision).toBe('ask');
     });
@@ -908,11 +937,6 @@ describe('evaluator', () => {
 
     it('asks for export DYLD_FRAMEWORK_PATH=...', () => {
       expect(eval_('export DYLD_FRAMEWORK_PATH=/tmp/evil').decision).toBe('ask');
-    });
-
-    it('allows export PATH in chain — whole chain asks', () => {
-      const r = eval_('export PATH="/usr/local/bin:$PATH" && ls');
-      expect(r.decision).toBe('ask');
     });
   });
 

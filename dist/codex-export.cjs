@@ -20388,10 +20388,24 @@ var DEFAULT_CONFIG = {
         argPatterns: [
           {
             match: { anyArgMatches: [
-              "^(PATH|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)="
+              "^(LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)="
             ] },
             decision: "ask",
-            description: "Env vars that control binary/library resolution"
+            description: "Env vars that control library loading"
+          },
+          {
+            match: { anyArgMatches: [
+              "^PATH=.*\\$(PATH|\\{PATH\\})"
+            ] },
+            decision: "allow",
+            description: "PATH extension (preserves existing PATH)"
+          },
+          {
+            match: { anyArgMatches: [
+              "^PATH="
+            ] },
+            decision: "ask",
+            description: "PATH replacement (drops existing PATH)"
           }
         ]
       },
