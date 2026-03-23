@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Target-aware security policies (path, database, endpoint) that evaluate commands by their targets, not just names
 - Parser extracts script from `bash script.sh` invocations — evaluates the script path instead of `bash`
 - Glob patterns in `alwaysAllow`/`alwaysDeny`/rules: `*` (single segment), `**` (any depth)
 - Standalone `src/glob.ts` module with `globToRegex` and `pathGlobToRegex`

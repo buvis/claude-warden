@@ -20,12 +20,13 @@ Claude Warden is a Claude Code plugin that provides smart command safety filteri
 
 **Hook entry point**: `src/index.ts` reads JSON from stdin (Claude Code hook protocol), runs the parse→evaluate pipeline, and outputs the permission decision via stdout JSON or exit code 2 (deny).
 
-**Pipeline**: `index.ts` → `parser.ts` → `evaluator.ts` (with config from `rules.ts` + `defaults.ts`)
+**Pipeline**: `index.ts` → `parser.ts` → `evaluator.ts` (with config from `rules.ts` + `defaults.ts`, target policies from `targets.ts`)
 
 - `src/parser.ts` — State-machine shell command splitter. Splits on `|`, `&&`, `||`, `;` while respecting quotes. Extracts env prefixes, normalizes command paths to basename. Recursively parses `sh -c`/`bash -c` arguments. Extracts script path from `bash/sh/zsh script.sh` invocations (evaluates script, not shell). Detects subshells and heredocs. Tracks chain-scoped variable assignments (`VAR=value && ...`) and resolves `$VAR` in command position.
 - `src/evaluator.ts` — Decision engine. Hierarchy: global deny patterns → alwaysDeny → alwaysAllow → chain-local auto-allow → command-specific rules with argument pattern matching → default decision. For pipelines/chains, combines per-command results (any deny → deny, any ask → ask, all allow → allow).
 - `src/defaults.ts` — Built-in rules for ~100 common dev commands. Three tiers: always-allow (cat, ls, grep...), always-deny (sudo, shutdown...), conditional (node, npx, git, docker... with argument-aware patterns).
 - `src/glob.ts` — Glob-to-regex conversion. `globToRegex` (general: `*`, `?`, `[...]`, `{a,b,c}`) and `pathGlobToRegex` (path-aware: `*` = single segment, `**` = any depth).
+- `src/targets.ts` — Target-aware policy evaluator. Three towers: path (filesystem targets with traversal protection), database (connection string/URI parsing), endpoint (URL matching). Uses globToRegex for pattern matching. Called from evaluator after alwaysDeny/alwaysAllow checks.
 - `src/rules.ts` — Loads and merges config from `~/.claude/warden.yaml` (user) and `.claude/warden.yaml` (project). User rules override defaults by command name. Config supports unified `trustedRemotes` (with `context` discriminator for ssh/docker/kubectl/sprite/fly) and `trustedContextOverrides` for context-aware filtering. Legacy separate trusted* keys auto-convert with deprecation warning.
 - `src/types.ts` — All TypeScript interfaces.
 
