@@ -2,14 +2,32 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-23
+
 ### Added
 - Target-aware security policies (path, database, endpoint) that evaluate commands by their targets, not just names
 - Parser extracts script from `bash script.sh` invocations — evaluates the script path instead of `bash`
 - Glob patterns in `alwaysAllow`/`alwaysDeny`/rules: `*` (single segment), `**` (any depth)
 - Standalone `src/glob.ts` module with `globToRegex` and `pathGlobToRegex`
+- Script safety scanning for python, node/tsx/ts-node, and perl — auto-allows safe scripts, flags dangerous patterns
+- npx/bunx/pnpx recursive evaluation — evaluates the subcommand, not the runner
+- `uv run` recursive evaluation — evaluates the inner command
+- Audit logging with JSONL output and size-based rotation (`audit`, `auditPath`, `auditAllowDecisions` config)
+- Conditional `export` rule — allows PATH extension, asks on PATH replacement and LD_PRELOAD
+- Redesigned ask/deny messages with `/warden:allow` hints and option suggestions
+- Published as `@buvis/claude-warden`
 
 ### Changed
 - Unified `trustedSSHHosts`, `trustedDockerContainers`, `trustedKubectlContexts`, `trustedSprites`, `trustedFlyApps` into single `trustedRemotes` array with `context` discriminator. Old keys still work with deprecation warning.
+
+### Fixed
+- Script evaluators respect user-configured deny rules
+- Chain-local rm resolves variables for target policy checking
+- Malformed glob patterns in target policies no longer crash
+- CWD special chars no longer trigger glob matching in path policies
+- Database target policies require host presence when host is specified
+- Target policies checked before chain-resolved auto-allow to prevent bypass
+- Eliminated double-evaluation and double-logging in yolo deny path
 
 ## [2.3.0] - 2026-03-16
 
