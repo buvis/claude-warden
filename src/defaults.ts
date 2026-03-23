@@ -98,6 +98,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
   auditPath: join(homedir(), '.claude', 'warden-audit.jsonl'),
   auditAllowDecisions: false,
   trustedRemotes: [],
+  targetPolicies: [],
 
   layers: [{
     alwaysAllow: [

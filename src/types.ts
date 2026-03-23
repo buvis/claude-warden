@@ -68,9 +68,37 @@ export interface TrustedRemote extends TrustedTarget {
   context: RemoteContext;
 }
 
+export interface TargetPolicyBase {
+  decision: Decision;
+  reason?: string;
+  commands?: string[];
+  allowAll?: boolean;
+}
+
+export interface PathPolicy extends TargetPolicyBase {
+  type: 'path';
+  path: string;
+  recursive?: boolean;
+}
+
+export interface DatabasePolicy extends TargetPolicyBase {
+  type: 'database';
+  host: string;
+  port?: number;
+  database?: string;
+}
+
+export interface EndpointPolicy extends TargetPolicyBase {
+  type: 'endpoint';
+  pattern: string;
+}
+
+export type TargetPolicy = PathPolicy | DatabasePolicy | EndpointPolicy;
+
 export interface WardenConfig {
   layers: ConfigLayer[];
   trustedRemotes: TrustedRemote[];
+  targetPolicies: TargetPolicy[];
   trustedContextOverrides?: ConfigLayer;
   defaultDecision: Decision;
   askOnSubshell: boolean;

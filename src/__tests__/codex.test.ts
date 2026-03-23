@@ -6,6 +6,7 @@ function baseConfig(layers: WardenConfig['layers']): WardenConfig {
   return {
     layers,
     trustedRemotes: [],
+    targetPolicies: [],
     defaultDecision: 'ask',
     askOnSubshell: true,
     notifyOnAsk: false,
