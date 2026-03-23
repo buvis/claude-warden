@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
 import { homedir } from 'os';
 import { join } from 'path';
-import type { WardenConfig, ConfigLayer, CommandRule, TrustedTarget, TrustedRemote, RemoteContext } from './types';
+import type { WardenConfig, ConfigLayer, CommandRule, TrustedTarget, TrustedRemote, RemoteContext, TargetPolicy, PathPolicy, DatabasePolicy, EndpointPolicy } from './types';
 import { DEFAULT_CONFIG } from './defaults';
 
 const VALID_DECISIONS = new Set(['allow', 'deny', 'ask']);
@@ -166,6 +166,65 @@ export function parseTrustedList(raw: unknown[]): TrustedTarget[] {
   }).filter((t): t is TrustedTarget => t !== null);
 }
 
+export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
+  const results: TargetPolicy[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object' || !('type' in entry)) {
+      process.stderr.write(`[warden] Warning: targetPolicies entry missing "type" field, skipping\n`);
+      continue;
+    }
+    const obj = entry as Record<string, unknown>;
+    if (typeof obj.decision !== 'string' || !isValidDecision(obj.decision)) {
+      process.stderr.write(`[warden] Warning: targetPolicies entry missing or invalid "decision", skipping\n`);
+      continue;
+    }
+    const base = {
+      decision: obj.decision,
+      ...(typeof obj.reason === 'string' && { reason: obj.reason }),
+      ...(Array.isArray(obj.commands) && { commands: obj.commands as string[] }),
+      ...(obj.allowAll === true && { allowAll: true }),
+    };
+    switch (obj.type) {
+      case 'path': {
+        if (typeof obj.path !== 'string') {
+          process.stderr.write(`[warden] Warning: path targetPolicy missing "path" field, skipping\n`);
+          continue;
+        }
+        const policy: PathPolicy = { ...base, type: 'path', path: obj.path, recursive: typeof obj.recursive === 'boolean' ? obj.recursive : true };
+        results.push(policy);
+        break;
+      }
+      case 'database': {
+        if (typeof obj.host !== 'string') {
+          process.stderr.write(`[warden] Warning: database targetPolicy missing "host" field, skipping\n`);
+          continue;
+        }
+        const policy: DatabasePolicy = {
+          ...base,
+          type: 'database',
+          host: obj.host,
+          ...(typeof obj.port === 'number' && { port: obj.port }),
+          ...(typeof obj.database === 'string' && { database: obj.database }),
+        };
+        results.push(policy);
+        break;
+      }
+      case 'endpoint': {
+        if (typeof obj.pattern !== 'string') {
+          process.stderr.write(`[warden] Warning: endpoint targetPolicy missing "pattern" field, skipping\n`);
+          continue;
+        }
+        const policy: EndpointPolicy = { ...base, type: 'endpoint', pattern: obj.pattern };
+        results.push(policy);
+        break;
+      }
+      default:
+        process.stderr.write(`[warden] Warning: unknown targetPolicy type "${String(obj.type)}", skipping\n`);
+    }
+  }
+  return results;
+}
+
 const LEGACY_REMOTE_MAP: Record<string, RemoteContext> = {
   trustedSSHHosts: 'ssh',
   trustedDockerContainers: 'docker',
@@ -202,6 +261,9 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
       const targets = parseTrustedList(raw[key] as unknown[]);
       config.trustedRemotes = [...config.trustedRemotes, ...targets.map(t => ({ ...t, context }))];
     }
+  }
+  if (Array.isArray(raw.targetPolicies)) {
+    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies)];
   }
   if (typeof raw.defaultDecision === 'string') {
     if (isValidDecision(raw.defaultDecision)) {
