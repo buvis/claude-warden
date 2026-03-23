@@ -250,6 +250,24 @@ describe('target policies', () => {
       expect(result).toBeNull();
     });
 
+    it('malformed glob in database host policy does not crash', () => {
+      const config = configWith([{ type: 'database', host: '[invalid', decision: 'deny' }]);
+      const result = evaluateTargetPolicies(cmd('psql', ['-h', 'localhost']), '/', config);
+      expect(result).toBeNull();
+    });
+
+    it('malformed glob in endpoint pattern does not crash', () => {
+      const config = configWith([{ type: 'endpoint', pattern: 'https://[invalid', decision: 'deny' }]);
+      const result = evaluateTargetPolicies(cmd('curl', ['https://example.com']), '/', config);
+      expect(result).toBeNull();
+    });
+
+    it('malformed glob in path policy does not crash', () => {
+      const config = configWith([{ type: 'path', path: '/tmp/[invalid', decision: 'deny' }]);
+      const result = evaluateTargetPolicies(cmd('rm', ['/tmp/file']), '/', config);
+      expect(result).toBeNull();
+    });
+
     it('database glob matching', () => {
       const config = configWith([{ type: 'database', host: '*', database: 'prod_*', decision: 'deny' }]);
       const result = evaluateTargetPolicies(cmd('psql', ['-h', 'any', '-d', 'prod_users']), '/', config);
