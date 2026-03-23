@@ -4,7 +4,7 @@ import type { ParsedCommand, WardenConfig, CommandEvalDetail, TargetPolicy, Path
 import { globToRegex, pathGlobToRegex } from './glob';
 
 const PATH_COMMANDS = ['rm', 'chmod', 'chown', 'cp', 'mv', 'tee', 'mkdir', 'rmdir', 'touch', 'ln'];
-const DATABASE_COMMANDS = ['psql', 'mysql', 'mariadb', 'redis-cli', 'mongosh', 'mongo'];
+const DATABASE_COMMANDS = ['psql', 'mysql', 'mariadb', 'redis-cli', 'mongosh', 'mongo', 'pg_dump', 'mysqldump', 'mongodump'];
 const ENDPOINT_COMMANDS = ['curl', 'wget', 'http', 'httpie'];
 
 interface ParsedConnectionInfo {

@@ -284,7 +284,7 @@ describe('target policies', () => {
 
     it('default commands for database type', () => {
       const config = configWith([{ type: 'database', host: 'localhost', decision: 'deny' }]);
-      for (const c of ['psql', 'mysql', 'mariadb', 'redis-cli', 'mongosh', 'mongo']) {
+      for (const c of ['psql', 'mysql', 'mariadb', 'redis-cli', 'mongosh', 'mongo', 'pg_dump', 'mysqldump', 'mongodump']) {
         const result = evaluateTargetPolicies(cmd(c, ['-h', 'localhost']), '/', config);
         expect(result).not.toBeNull();
       }

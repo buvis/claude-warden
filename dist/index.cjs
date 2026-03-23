@@ -18848,7 +18848,7 @@ function pathGlobToRegex(pattern) {
 var import_path3 = require("path");
 var import_os2 = require("os");
 var PATH_COMMANDS = ["rm", "chmod", "chown", "cp", "mv", "tee", "mkdir", "rmdir", "touch", "ln"];
-var DATABASE_COMMANDS = ["psql", "mysql", "mariadb", "redis-cli", "mongosh", "mongo"];
+var DATABASE_COMMANDS = ["psql", "mysql", "mariadb", "redis-cli", "mongosh", "mongo", "pg_dump", "mysqldump", "mongodump"];
 var ENDPOINT_COMMANDS = ["curl", "wget", "http", "httpie"];
 function expandHome(p) {
   if (p === "~") return (0, import_os2.homedir)();
