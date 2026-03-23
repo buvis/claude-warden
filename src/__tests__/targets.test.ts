@@ -592,5 +592,21 @@ describe('target policies', () => {
       const result = evaluate(parsed, config, 0, '/');
       expect(result.decision).toBe('allow');
     });
+
+    it('chain-local rm with target deny blocks resolved path', () => {
+      const config = structuredClone(DEFAULT_CONFIG);
+      config.targetPolicies = [{ type: 'path', path: '/secret', decision: 'deny' }];
+      const parsed = parseCommand('DIR=/secret && rm -rf $DIR');
+      const result = evaluate(parsed, config, 0, '/');
+      expect(result.decision).toBe('deny');
+    });
+
+    it('chain-local rm with target allow on /tmp is allowed', () => {
+      const config = structuredClone(DEFAULT_CONFIG);
+      config.targetPolicies = [{ type: 'path', path: '/tmp', decision: 'allow' }];
+      const parsed = parseCommand('DIR=/tmp && rm -rf $DIR');
+      const result = evaluate(parsed, config, 0, '/');
+      expect(result.decision).toBe('allow');
+    });
   });
 });

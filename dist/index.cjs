@@ -19183,7 +19183,7 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
     }
   }
   if (command === "rm" && chainAssignments?.size) {
-    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
+    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
     if (rmResult) return detail(rmResult);
   }
   const remotes = config.trustedRemotes || [];
@@ -19259,7 +19259,7 @@ function extractVarName(text) {
   const m = text.match(VAR_REF_REGEX2);
   return m ? m[1] : null;
 }
-function evaluateRmChainLocal(cmd, chainAssignments, config) {
+function evaluateRmChainLocal(cmd, chainAssignments, config, cwd) {
   const { command, args: args2 } = cmd;
   const hasRecursive = args2.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
   if (!hasRecursive) return null;
@@ -19277,6 +19277,21 @@ function evaluateRmChainLocal(cmd, chainAssignments, config) {
       const ruleResult = evaluateRule(cmd, rule);
       if (ruleResult.decision === "deny") return null;
       break;
+    }
+  }
+  if (cwd && config.targetPolicies?.length) {
+    const resolvedArgs = args2.map((arg) => {
+      const varName = extractVarName(arg);
+      if (varName) {
+        const assignment = chainAssignments.get(varName);
+        if (assignment?.value) return assignment.value;
+      }
+      return arg;
+    });
+    const resolvedCmd = { ...cmd, args: resolvedArgs };
+    const targetResult = evaluateTargetPolicies(resolvedCmd, cwd, config);
+    if (targetResult && targetResult.decision === "deny") {
+      return { command, args: args2, decision: "deny", reason: targetResult.reason, matchedRule: targetResult.matchedRule };
     }
   }
   return { command, args: args2, decision: "allow", reason: "chain-local cleanup", matchedRule: "chainLocalRm" };

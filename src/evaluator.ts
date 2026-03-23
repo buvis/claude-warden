@@ -157,10 +157,9 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
 
   // 1d. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
   // Only upgrades ask→allow — if rules would deny, respect that.
-  // Note: target policies can't check chain-local rm because cmd.args contain
-  // unresolved variable references ($DIR), not actual paths.
+  // Resolves variables for target policy checking.
   if (command === 'rm' && chainAssignments?.size) {
-    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
+    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
     if (rmResult) return detail(rmResult);
   }
 
@@ -250,7 +249,7 @@ function extractVarName(text: string): string | null {
   return m ? m[1] : null;
 }
 
-function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig): CommandEvalDetail | null {
+function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig, cwd?: string): CommandEvalDetail | null {
   const { command, args } = cmd;
   // Only handle recursive rm (the dangerous pattern)
   const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
@@ -278,6 +277,24 @@ function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, 
       const ruleResult = evaluateRule(cmd, rule);
       if (ruleResult.decision === 'deny') return null;
       break; // highest-priority layer wins
+    }
+  }
+
+  // Check target policies against resolved variable values
+  if (cwd && config.targetPolicies?.length) {
+    const resolvedArgs = args.map(arg => {
+      const varName = extractVarName(arg);
+      if (varName) {
+        const assignment = chainAssignments.get(varName);
+        if (assignment?.value) return assignment.value;
+      }
+      return arg;
+    });
+    const resolvedCmd: ParsedCommand = { ...cmd, args: resolvedArgs };
+    const targetResult = evaluateTargetPolicies(resolvedCmd, cwd, config);
+    if (targetResult && targetResult.decision === 'deny') {
+      // Return deny to prevent fallthrough to normal rule evaluation
+      return { command, args, decision: 'deny', reason: targetResult.reason, matchedRule: targetResult.matchedRule };
     }
   }
 
