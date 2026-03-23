@@ -85,6 +85,36 @@ notifyOnDeny: true
 #   alwaysDeny: []
 #   rules: []
 
+# Target-aware security policies — evaluate commands by their targets
+# (filesystem paths, database connections, HTTP endpoints), not just names.
+# Policies from user and project configs are concatenated. If multiple match,
+# most restrictive wins (deny > allow).
+#
+# targetPolicies:
+#   - type: path
+#     path: /tmp
+#     decision: allow
+#     allowAll: true        # any command targeting /tmp
+#   - type: path
+#     path: "{{cwd}}/node_modules"
+#     decision: allow
+#   - type: path
+#     path: ~/.ssh
+#     decision: deny
+#   - type: database
+#     host: localhost
+#     database: "test_*"
+#     decision: allow
+#   - type: database
+#     host: "*.prod.*"
+#     decision: deny
+#   - type: endpoint
+#     pattern: "https://api.dev.example.com/*"
+#     decision: allow
+#   - type: endpoint
+#     pattern: "https://*.prod.*"
+#     decision: deny
+
 # Command-specific rules (override built-in rules by command name).
 # The first scope (project > user > default) with a rule for a given command wins.
 #
