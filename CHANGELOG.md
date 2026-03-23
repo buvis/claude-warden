@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-23
+
+### Fixed
+- Update postpublish script to use buvis-plugins marketplace, remove stale docs scripts
+
 ## [0.2.0] - 2026-03-23
 
 ### Added
