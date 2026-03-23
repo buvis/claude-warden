@@ -18969,7 +18969,8 @@ function evaluateDatabasePolicy(policy, cmd) {
   const port = flagInfo.port ?? uriInfo.port;
   const database = flagInfo.database ?? uriInfo.database;
   if (!host && !port && !database) return false;
-  if (host) {
+  if (policy.host !== void 0) {
+    if (host === void 0) return false;
     const hostRegex = globToRegex(policy.host);
     if (!hostRegex.test(host)) return false;
   }

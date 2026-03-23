@@ -244,6 +244,12 @@ describe('target policies', () => {
       expect(result).toBeNull();
     });
 
+    it('policy specifies host but command has no host returns null', () => {
+      const config = configWith([{ type: 'database', host: 'prod', decision: 'deny' }]);
+      const result = evaluateTargetPolicies(cmd('psql', ['-d', 'mydb']), '/', config);
+      expect(result).toBeNull();
+    });
+
     it('database glob matching', () => {
       const config = configWith([{ type: 'database', host: '*', database: 'prod_*', decision: 'deny' }]);
       const result = evaluateTargetPolicies(cmd('psql', ['-h', 'any', '-d', 'prod_users']), '/', config);

@@ -115,7 +115,8 @@ function evaluateDatabasePolicy(policy: DatabasePolicy, cmd: ParsedCommand): boo
 
   if (!host && !port && !database) return false;
 
-  if (host) {
+  if (policy.host !== undefined) {
+    if (host === undefined) return false;
     const hostRegex = globToRegex(policy.host);
     if (!hostRegex.test(host)) return false;
   }
