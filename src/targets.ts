@@ -1,7 +1,7 @@
 import { resolve, normalize } from 'path';
 import { homedir } from 'os';
 import type { ParsedCommand, WardenConfig, CommandEvalDetail, TargetPolicy, PathPolicy, DatabasePolicy, EndpointPolicy } from './types';
-import { globToRegex } from './glob';
+import { globToRegex, pathGlobToRegex } from './glob';
 
 const PATH_COMMANDS = ['rm', 'chmod', 'chown', 'cp', 'mv', 'tee', 'mkdir', 'rmdir', 'touch', 'ln'];
 const DATABASE_COMMANDS = ['psql', 'mysql', 'mariadb', 'redis-cli', 'mongosh', 'mongo'];
@@ -37,17 +37,32 @@ function policyAppliesToCommand(policy: TargetPolicy, command: string): boolean 
   return commands.includes(command);
 }
 
+function hasGlobChars(s: string): boolean {
+  return /[*?[\]{]/.test(s);
+}
+
 function evaluatePathPolicy(policy: PathPolicy, cmd: ParsedCommand, cwd: string): boolean {
   const recursive = policy.recursive ?? true;
-  const policyPath = normalize(resolve(cwd, expandHome(expandCwd(policy.path, cwd))));
+  const expandedPath = expandHome(expandCwd(policy.path, cwd));
+  const policyPath = normalize(resolve(cwd, expandedPath));
+  const useGlob = hasGlobChars(expandedPath);
 
   for (const arg of cmd.args) {
     if (arg.startsWith('-')) continue;
-    const argPath = normalize(resolve(cwd, arg));
-    if (recursive) {
-      if (argPath === policyPath || argPath.startsWith(policyPath + '/')) return true;
+    const argPath = normalize(resolve(cwd, expandHome(arg)));
+    if (useGlob) {
+      const regexStr = pathGlobToRegex(policyPath);
+      if (recursive) {
+        if (new RegExp(`^${regexStr}(/.*)?$`).test(argPath)) return true;
+      } else {
+        if (new RegExp(`^${regexStr}$`).test(argPath)) return true;
+      }
     } else {
-      if (argPath === policyPath) return true;
+      if (recursive) {
+        if (argPath === policyPath || argPath.startsWith(policyPath + '/')) return true;
+      } else {
+        if (argPath === policyPath) return true;
+      }
     }
   }
   return false;
@@ -110,7 +125,8 @@ function evaluateDatabasePolicy(policy: DatabasePolicy, cmd: ParsedCommand): boo
     if (port === undefined || port !== policy.port) return false;
   }
 
-  if (policy.database !== undefined && database !== undefined) {
+  if (policy.database !== undefined) {
+    if (database === undefined) return false;
     const dbRegex = globToRegex(policy.database);
     if (!dbRegex.test(database)) return false;
   }
@@ -165,26 +181,23 @@ export function evaluateTargetPolicies(
   if (matching.length === 0) return null;
 
   // Most restrictive wins: deny > ask > allow
-  let winningDecision = matching[0].decision;
-  let winningReason = matching[0].reason ?? `target policy (${matching[0].type})`;
+  let winningPolicy = matching[0];
   for (const policy of matching) {
     if (policy.decision === 'deny') {
-      winningDecision = 'deny';
-      winningReason = policy.reason ?? `target policy (${policy.type})`;
+      winningPolicy = policy;
       break;
     }
-    if (policy.decision === 'ask' && winningDecision === 'allow') {
-      winningDecision = 'ask';
-      winningReason = policy.reason ?? `target policy (${policy.type})`;
+    if (policy.decision === 'ask' && winningPolicy.decision === 'allow') {
+      winningPolicy = policy;
     }
   }
 
   return {
     command: cmd.command,
     args: cmd.args,
-    decision: winningDecision,
-    reason: winningReason,
-    matchedRule: `targetPolicy:${matching[0].type}`,
+    decision: winningPolicy.decision,
+    reason: winningPolicy.reason ?? `target policy (${winningPolicy.type})`,
+    matchedRule: `targetPolicy:${winningPolicy.type}`,
     resolvedFrom: cmd.resolvedFrom,
   };
 }

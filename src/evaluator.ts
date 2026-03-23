@@ -149,7 +149,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   // 1c. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
   // Only upgrades ask→allow — if rules would deny, respect that.
   if (command === 'rm' && chainAssignments?.size) {
-    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
+    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
     if (rmResult) return detail(rmResult);
   }
 
@@ -245,7 +245,7 @@ function extractVarName(text: string): string | null {
   return m ? m[1] : null;
 }
 
-function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig): CommandEvalDetail | null {
+function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig, cwd?: string): CommandEvalDetail | null {
   const { command, args } = cmd;
   // Only handle recursive rm (the dangerous pattern)
   const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
@@ -274,6 +274,12 @@ function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, 
       if (ruleResult.decision === 'deny') return null;
       break; // highest-priority layer wins
     }
+  }
+
+  // Check target policies before auto-allowing
+  if (cwd && config.targetPolicies?.length) {
+    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
+    if (targetResult && targetResult.decision === 'deny') return targetResult;
   }
 
   return { command, args, decision: 'allow', reason: 'chain-local cleanup', matchedRule: 'chainLocalRm' };

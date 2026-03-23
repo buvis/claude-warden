@@ -466,4 +466,71 @@ describe('target policies', () => {
       expect(result!.decision).toBe('deny');
     });
   });
+
+  describe('rework fixes', () => {
+    it('database policy does not match when command omits database but policy specifies one', () => {
+      const config = configWith([
+        { type: 'database', host: 'prod', database: 'secret_db', decision: 'deny' },
+      ]);
+      const result = evaluateTargetPolicies(cmd('psql', ['-h', 'prod']), '/', config);
+      expect(result).toBeNull();
+    });
+
+    it('database policy matches when command provides matching database', () => {
+      const config = configWith([
+        { type: 'database', host: 'prod', database: 'secret_db', decision: 'deny' },
+      ]);
+      const result = evaluateTargetPolicies(cmd('psql', ['-h', 'prod', '-d', 'secret_db']), '/', config);
+      expect(result).not.toBeNull();
+      expect(result!.decision).toBe('deny');
+    });
+
+    it('matchedRule reflects winning policy type, not first policy', () => {
+      const config = configWith([
+        { type: 'path', path: '/tmp', decision: 'allow', allowAll: true },
+        { type: 'endpoint', pattern: 'https://evil.com/*', decision: 'deny', allowAll: true },
+      ]);
+      const result = evaluateTargetPolicies(
+        cmd('curl', ['/tmp/out', 'https://evil.com/data']), '/tmp', config
+      );
+      expect(result!.decision).toBe('deny');
+      expect(result!.matchedRule).toBe('targetPolicy:endpoint');
+    });
+
+    it('path policy supports glob patterns with *', () => {
+      const config = configWith([
+        { type: 'path', path: '/tmp/*/build', decision: 'allow' },
+      ]);
+      const result = evaluateTargetPolicies(cmd('rm', ['/tmp/foo/build/output']), '/', config);
+      expect(result).not.toBeNull();
+      expect(result!.decision).toBe('allow');
+    });
+
+    it('path policy glob * does not cross segments', () => {
+      const config = configWith([
+        { type: 'path', path: '/tmp/*/build', decision: 'allow', recursive: false },
+      ]);
+      const result = evaluateTargetPolicies(cmd('rm', ['/tmp/foo/bar/build']), '/', config);
+      expect(result).toBeNull();
+    });
+
+    it('path policy supports ** glob', () => {
+      const config = configWith([
+        { type: 'path', path: '/home/**/.ssh', decision: 'deny' },
+      ]);
+      const result = evaluateTargetPolicies(cmd('rm', ['/home/user/sub/.ssh/key']), '/', config);
+      expect(result).not.toBeNull();
+      expect(result!.decision).toBe('deny');
+    });
+
+    it('expands ~ in command args', () => {
+      const home = require('os').homedir();
+      const config = configWith([
+        { type: 'path', path: '~/.ssh', decision: 'deny' },
+      ]);
+      const result = evaluateTargetPolicies(cmd('rm', ['~/.ssh/id_rsa']), '/', config);
+      expect(result).not.toBeNull();
+      expect(result!.decision).toBe('deny');
+    });
+  });
 });
