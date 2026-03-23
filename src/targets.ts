@@ -47,9 +47,15 @@ function evaluatePathPolicy(policy: PathPolicy, cmd: ParsedCommand, cwd: string)
   const policyPath = normalize(resolve(cwd, expandedPath));
   const useGlob = hasGlobChars(expandedPath);
 
-  const globRegex = useGlob
-    ? new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? '(/.*)?' : ''}$`)
-    : null;
+  let globRegex: RegExp | null = null;
+  if (useGlob) {
+    try {
+      globRegex = new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? '(/.*)?' : ''}$`);
+    } catch {
+      process.stderr.write(`[warden] Warning: invalid glob pattern in path target policy: ${policy.path}\n`);
+      return false;
+    }
+  }
 
   for (const arg of cmd.args) {
     if (arg.startsWith('-')) continue;
@@ -117,8 +123,13 @@ function evaluateDatabasePolicy(policy: DatabasePolicy, cmd: ParsedCommand): boo
 
   if (policy.host !== undefined) {
     if (host === undefined) return false;
-    const hostRegex = globToRegex(policy.host);
-    if (!hostRegex.test(host)) return false;
+    try {
+      const hostRegex = globToRegex(policy.host);
+      if (!hostRegex.test(host)) return false;
+    } catch {
+      process.stderr.write(`[warden] Warning: invalid glob pattern in database host policy: ${policy.host}\n`);
+      return false;
+    }
   }
 
   if (policy.port !== undefined) {
@@ -127,8 +138,13 @@ function evaluateDatabasePolicy(policy: DatabasePolicy, cmd: ParsedCommand): boo
 
   if (policy.database !== undefined) {
     if (database === undefined) return false;
-    const dbRegex = globToRegex(policy.database);
-    if (!dbRegex.test(database)) return false;
+    try {
+      const dbRegex = globToRegex(policy.database);
+      if (!dbRegex.test(database)) return false;
+    } catch {
+      process.stderr.write(`[warden] Warning: invalid glob pattern in database policy: ${policy.database}\n`);
+      return false;
+    }
   }
 
   return true;
@@ -156,7 +172,13 @@ function extractUrls(cmd: ParsedCommand): string[] {
 
 function evaluateEndpointPolicy(policy: EndpointPolicy, cmd: ParsedCommand): boolean {
   const urls = extractUrls(cmd);
-  const patternRegex = globToRegex(policy.pattern);
+  let patternRegex: RegExp;
+  try {
+    patternRegex = globToRegex(policy.pattern);
+  } catch {
+    process.stderr.write(`[warden] Warning: invalid glob pattern in endpoint policy: ${policy.pattern}\n`);
+    return false;
+  }
   return urls.some(url => patternRegex.test(url));
 }
 

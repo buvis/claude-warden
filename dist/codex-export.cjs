@@ -18885,7 +18885,16 @@ function evaluatePathPolicy(policy, cmd, cwd) {
   const expandedPath = expandHome(expandCwd(policy.path, cwd));
   const policyPath = (0, import_path3.normalize)((0, import_path3.resolve)(cwd, expandedPath));
   const useGlob = hasGlobChars(expandedPath);
-  const globRegex = useGlob ? new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? "(/.*)?" : ""}$`) : null;
+  let globRegex = null;
+  if (useGlob) {
+    try {
+      globRegex = new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? "(/.*)?" : ""}$`);
+    } catch {
+      process.stderr.write(`[warden] Warning: invalid glob pattern in path target policy: ${policy.path}
+`);
+      return false;
+    }
+  }
   for (const arg of cmd.args) {
     if (arg.startsWith("-")) continue;
     const argPath = (0, import_path3.normalize)((0, import_path3.resolve)(cwd, expandHome(arg)));
@@ -18971,16 +18980,28 @@ function evaluateDatabasePolicy(policy, cmd) {
   if (!host && !port && !database) return false;
   if (policy.host !== void 0) {
     if (host === void 0) return false;
-    const hostRegex = globToRegex(policy.host);
-    if (!hostRegex.test(host)) return false;
+    try {
+      const hostRegex = globToRegex(policy.host);
+      if (!hostRegex.test(host)) return false;
+    } catch {
+      process.stderr.write(`[warden] Warning: invalid glob pattern in database host policy: ${policy.host}
+`);
+      return false;
+    }
   }
   if (policy.port !== void 0) {
     if (port === void 0 || port !== policy.port) return false;
   }
   if (policy.database !== void 0) {
     if (database === void 0) return false;
-    const dbRegex = globToRegex(policy.database);
-    if (!dbRegex.test(database)) return false;
+    try {
+      const dbRegex = globToRegex(policy.database);
+      if (!dbRegex.test(database)) return false;
+    } catch {
+      process.stderr.write(`[warden] Warning: invalid glob pattern in database policy: ${policy.database}
+`);
+      return false;
+    }
   }
   return true;
 }
@@ -19005,7 +19026,14 @@ function extractUrls(cmd) {
 }
 function evaluateEndpointPolicy(policy, cmd) {
   const urls = extractUrls(cmd);
-  const patternRegex = globToRegex(policy.pattern);
+  let patternRegex;
+  try {
+    patternRegex = globToRegex(policy.pattern);
+  } catch {
+    process.stderr.write(`[warden] Warning: invalid glob pattern in endpoint policy: ${policy.pattern}
+`);
+    return false;
+  }
   return urls.some((url) => patternRegex.test(url));
 }
 function policyMatches(policy, cmd, cwd) {
