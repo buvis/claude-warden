@@ -19,11 +19,13 @@ askOnSubshell: true
 notifyOnAsk: true
 notifyOnDeny: true
 
-# Additional commands to always allow (checked after alwaysDeny within this scope)
+# Additional commands to always allow (checked after alwaysDeny within this scope).
+# Supports glob patterns: * (single segment), ** (any depth).
 # alwaysAllow:
 #   - terraform
 #   - flyctl
 #   - my-safe-tool
+#   - ~/.claude/skills/**            # all skill scripts (bash script extraction)
 
 # Additional commands to always deny (checked first within this scope)
 # alwaysDeny:
@@ -102,6 +104,11 @@ notifyOnDeny: true
 # for command: "python" — NOT "bash" or "sh". A common mistake is writing rules
 # for "bash" with argPatterns matching "python"; this won't work because warden
 # sees the command as "python".
+#
+# Shell script extraction: `bash script.sh` and `sh -x /path/to/script.sh arg`
+# are evaluated as the script (basename), not as "bash". This means rules for
+# "bash" won't match script invocations. Use alwaysAllow with glob patterns
+# (e.g. ~/.claude/skills/**) or rules with the script path to allow them.
 #
 # rules:
 #   # Allow all python commands

@@ -304,6 +304,26 @@ describe('integration: realistic commands', () => {
     });
   });
 
+  describe('bash script extraction', () => {
+    it('bash script.sh extracts script as command', () => {
+      // script.sh is unknown → default ask
+      expect(warden('bash script.sh').decision).toBe('ask');
+    });
+
+    it('bash -x /path/to/cat.sh evaluates as cat (basename)', () => {
+      // basename 'cat.sh' is unknown → ask (not the same as 'cat')
+      expect(warden('bash -x /path/to/cat.sh').decision).toBe('ask');
+    });
+
+    it('bash --version still evaluates as bash', () => {
+      expect(warden('bash --version').decision).toBe('allow');
+    });
+
+    it('bash -c still recursively parses inner command', () => {
+      expect(warden('bash -c "cat file | wc -l"').decision).toBe('allow');
+    });
+  });
+
   describe('version/help flags always safe', () => {
     it('node --version → allow', () => {
       expect(warden('node --version').decision).toBe('allow');

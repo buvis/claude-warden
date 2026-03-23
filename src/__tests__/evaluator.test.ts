@@ -1032,6 +1032,114 @@ describe('evaluator', () => {
       };
       expect(evaluate(parseCommand(`${home}/bin/my-tool arg1`), config).decision).toBe('allow');
     });
+
+    it('tilde in command originalCommand matches tilde in config', () => {
+      // When bash-parser preserves ~ in the command, ~/path should still match ~/path config
+      const layer: ConfigLayer = { alwaysAllow: ['~/bin/my-tool'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      const parsed = parseCommand('~/bin/my-tool arg1');
+      expect(evaluate(parsed, config).decision).toBe('allow');
+    });
+  });
+
+  describe('glob patterns in path matching', () => {
+    const home = require('os').homedir();
+
+    it('** glob in alwaysAllow matches deep paths', () => {
+      const layer: ConfigLayer = { alwaysAllow: [`${home}/.claude/skills/**`], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand(`${home}/.claude/skills/use-gemini/scripts/gemini-run.sh -f file.md`), config).decision).toBe('allow');
+    });
+
+    it('** glob with tilde in alwaysAllow matches deep paths', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['~/.claude/skills/**'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand(`${home}/.claude/skills/use-gemini/scripts/gemini-run.sh -f file.md`), config).decision).toBe('allow');
+    });
+
+    it('** glob does not match unrelated paths', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['~/.claude/skills/**'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/tmp/evil.sh'), config).decision).toBe('ask');
+    });
+
+    it('* glob matches single path segment', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['/opt/tools/*/run.sh'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/opt/tools/mytool/run.sh'), config).decision).toBe('allow');
+      // * should not cross path boundaries
+      expect(evaluate(parseCommand('/opt/tools/deep/nested/run.sh'), config).decision).toBe('ask');
+    });
+
+    it('glob in alwaysDeny blocks matching paths', () => {
+      const layer: ConfigLayer = { alwaysAllow: [], alwaysDeny: ['/opt/dangerous/**'], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/opt/dangerous/scripts/nuke.sh'), config).decision).toBe('deny');
+    });
+
+    it('glob in rules command field matches paths', () => {
+      const layer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{ command: '/opt/scripts/**', default: 'allow' }],
+      };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('/opt/scripts/deploy.sh --env prod'), config).decision).toBe('allow');
+    });
+
+    it('basename glob *.sh matches command basename', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['*.sh'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      // basename matching: command field is the basename
+      expect(evaluate(parseCommand('/any/path/script.sh'), config).decision).toBe('allow');
+    });
+  });
+
+  describe('bash script extraction with glob allow', () => {
+    const home = require('os').homedir();
+
+    it('bash -x ~/.claude/skills/*/script.sh auto-allows with glob', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['~/.claude/skills/**'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      // Parser extracts script from bash invocation
+      expect(evaluate(parseCommand(`bash -x ${home}/.claude/skills/use-gemini/scripts/gemini-run.sh -f file.md`), config).decision).toBe('allow');
+    });
+
+    it('bash -x /tmp/evil.sh still asks with skill glob', () => {
+      const layer: ConfigLayer = { alwaysAllow: ['~/.claude/skills/**'], alwaysDeny: [], rules: [] };
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [layer, DEFAULT_CONFIG.layers[0]],
+      };
+      expect(evaluate(parseCommand('bash -x /tmp/evil.sh'), config).decision).toBe('ask');
+    });
   });
 
   describe('recursion depth limit', () => {

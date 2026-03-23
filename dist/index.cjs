@@ -18138,6 +18138,7 @@ var require_dist2 = __commonJS({
 // src/parser.ts
 var import_bash_parser = __toESM(require_src(), 1);
 var import_path = require("path");
+var import_os = require("os");
 var HEREDOC_REGEX = /<<-?\s*['"]?\w+['"]?/;
 function preprocessCatHeredocs(input) {
   const regex = /\$\(cat\s+<<-?\s*['"]?(\w+)['"]?\n([\s\S]*?)\n\1\s*\)/g;
@@ -18306,6 +18307,25 @@ function walkNode(node, result) {
             result.hasSubshell = true;
           }
           result.subshellCommands.push(...innerResult.subshellCommands);
+        }
+      } else if ((parsed.command === "sh" || parsed.command === "bash" || parsed.command === "zsh") && parsed.args.length >= 1) {
+        const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
+        if (scriptIdx !== -1) {
+          let scriptPath = parsed.args[scriptIdx];
+          if (scriptPath.startsWith("~/")) {
+            scriptPath = (0, import_os.homedir)() + scriptPath.slice(1);
+          }
+          const scriptCommand = scriptPath.includes("/") ? (0, import_path.basename)(scriptPath) : scriptPath;
+          const scriptArgs = parsed.args.slice(scriptIdx + 1);
+          result.commands.push({
+            command: scriptCommand,
+            originalCommand: scriptPath,
+            args: scriptArgs,
+            envPrefixes: parsed.envPrefixes,
+            raw: parsed.raw
+          });
+        } else {
+          result.commands.push(parsed);
         }
       } else {
         result.commands.push(parsed);
@@ -18630,7 +18650,7 @@ function regexFallbackParse(input) {
 }
 
 // src/evaluator.ts
-var import_os = require("os");
+var import_os2 = require("os");
 
 // src/script-scanner.ts
 var import_fs = require("fs");
@@ -18744,12 +18764,42 @@ function safeRegexTest(pattern, input) {
     return false;
   }
 }
+function pathGlobToRegex(pattern) {
+  let result = "";
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "*" && pattern[i + 1] === "*") {
+      result += ".*";
+      i++;
+    } else if (pattern[i] === "*") {
+      result += "[^/]*";
+    } else if (".+^${}()|[]\\".includes(pattern[i])) {
+      result += "\\" + pattern[i];
+    } else {
+      result += pattern[i];
+    }
+  }
+  return result;
+}
+function expandTilde(path) {
+  return path.startsWith("~/") ? (0, import_os2.homedir)() + path.slice(1) : path;
+}
 function commandMatchesName(cmd, name) {
+  if (name.includes("*")) {
+    const expanded = expandTilde(name);
+    const regexStr = pathGlobToRegex(expanded);
+    try {
+      const re = new RegExp(`^${regexStr}$`);
+      const target = name.includes("/") ? expandTilde(cmd.originalCommand) : cmd.command;
+      return re.test(target);
+    } catch {
+      return false;
+    }
+  }
   if (name.startsWith("/")) {
-    return cmd.originalCommand === name;
+    return expandTilde(cmd.originalCommand) === name;
   }
   if (name.startsWith("~/")) {
-    return cmd.originalCommand === (0, import_os.homedir)() + name.slice(1);
+    return expandTilde(cmd.originalCommand) === (0, import_os2.homedir)() + name.slice(1);
   }
   return cmd.command === name;
 }
@@ -19917,11 +19967,11 @@ function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
 // src/rules.ts
 var import_fs2 = require("fs");
 var import_yaml = __toESM(require_dist2(), 1);
-var import_os3 = require("os");
+var import_os4 = require("os");
 var import_path4 = require("path");
 
 // src/defaults.ts
-var import_os2 = require("os");
+var import_os3 = require("os");
 var import_path3 = require("path");
 var SAFE_DEV_TOOLS = [
   "jest",
@@ -20069,7 +20119,7 @@ var DEFAULT_CONFIG = {
   notifyOnAsk: true,
   notifyOnDeny: true,
   audit: true,
-  auditPath: (0, import_path3.join)((0, import_os2.homedir)(), ".claude", "warden-audit.jsonl"),
+  auditPath: (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden-audit.jsonl"),
   auditAllowDecisions: false,
   trustedSSHHosts: [],
   trustedDockerContainers: [],
@@ -20694,8 +20744,8 @@ function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
 var USER_CONFIG_PATHS = [
-  (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden.yaml"),
-  (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden.json")
+  (0, import_path4.join)((0, import_os4.homedir)(), ".claude", "warden.yaml"),
+  (0, import_path4.join)((0, import_os4.homedir)(), ".claude", "warden.json")
 ];
 var PROJECT_CONFIG_NAMES = [
   ".claude/warden.yaml",
@@ -21036,10 +21086,10 @@ function rotateIfNeeded(logPath) {
 
 // src/yolo.ts
 var import_fs4 = require("fs");
-var import_os4 = require("os");
+var import_os5 = require("os");
 var import_path5 = require("path");
 function yoloFilePath(sessionId) {
-  return (0, import_path5.join)((0, import_os4.tmpdir)(), `claude-warden-yolo-${sessionId}`);
+  return (0, import_path5.join)((0, import_os5.tmpdir)(), `claude-warden-yolo-${sessionId}`);
 }
 function getYoloState(sessionId) {
   const filePath = yoloFilePath(sessionId);

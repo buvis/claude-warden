@@ -18,16 +18,55 @@ function safeRegexTest(pattern: string, input: string): boolean {
 }
 
 /**
+ * Convert a path glob pattern to a RegExp string.
+ * Path-aware: * matches within one segment, ** matches across segments.
+ */
+function pathGlobToRegex(pattern: string): string {
+  let result = '';
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === '*' && pattern[i + 1] === '*') {
+      result += '.*';
+      i++; // skip second *
+    } else if (pattern[i] === '*') {
+      result += '[^/]*';
+    } else if ('.+^${}()|[]\\'.includes(pattern[i])) {
+      result += '\\' + pattern[i];
+    } else {
+      result += pattern[i];
+    }
+  }
+  return result;
+}
+
+/** Expand leading ~/ to the user's home directory. */
+function expandTilde(path: string): string {
+  return path.startsWith('~/') ? homedir() + path.slice(1) : path;
+}
+
+/**
  * Match a config entry name against a parsed command.
  * If the name contains '/' (full path), match against originalCommand (with ~ expansion).
+ * Glob patterns (* and **) are supported in path-based names.
  * Otherwise, match against the basename (current behavior).
  */
 function commandMatchesName(cmd: ParsedCommand, name: string): boolean {
+  if (name.includes('*')) {
+    const expanded = expandTilde(name);
+    const regexStr = pathGlobToRegex(expanded);
+    try {
+      const re = new RegExp(`^${regexStr}$`);
+      // Path-based globs match originalCommand, basename globs match command
+      const target = name.includes('/') ? expandTilde(cmd.originalCommand) : cmd.command;
+      return re.test(target);
+    } catch {
+      return false;
+    }
+  }
   if (name.startsWith('/')) {
-    return cmd.originalCommand === name;
+    return expandTilde(cmd.originalCommand) === name;
   }
   if (name.startsWith('~/')) {
-    return cmd.originalCommand === homedir() + name.slice(1);
+    return expandTilde(cmd.originalCommand) === homedir() + name.slice(1);
   }
   return cmd.command === name;
 }

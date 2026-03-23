@@ -133,6 +133,48 @@ describe('parseCommand', () => {
     expect(result.commands[1].command).toBe('npm');
   });
 
+  it('extracts script as command from bash script.sh', () => {
+    const result = parseCommand('bash script.sh');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('script.sh');
+    expect(result.commands[0].args).toEqual([]);
+  });
+
+  it('extracts script as command from bash -x /path/to/script.sh arg1', () => {
+    const result = parseCommand('bash -x /path/to/script.sh arg1');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('script.sh');
+    expect(result.commands[0].originalCommand).toBe('/path/to/script.sh');
+    expect(result.commands[0].args).toEqual(['arg1']);
+  });
+
+  it('extracts script as command from sh with multiple flags', () => {
+    const result = parseCommand('sh -xe /tmp/setup.sh -f config.yaml');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('setup.sh');
+    expect(result.commands[0].originalCommand).toBe('/tmp/setup.sh');
+    expect(result.commands[0].args).toEqual(['-f', 'config.yaml']);
+  });
+
+  it('keeps bash --version as bash command', () => {
+    const result = parseCommand('bash --version');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('bash');
+    expect(result.commands[0].args).toEqual(['--version']);
+  });
+
+  it('keeps bare bash as bash command', () => {
+    const result = parseCommand('bash');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('bash');
+  });
+
+  it('extracts script from zsh invocation', () => {
+    const result = parseCommand('zsh /path/to/init.sh');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('init.sh');
+  });
+
   it('handles heredocs by extracting base command', () => {
     const result = parseCommand('cat <<EOF\nhello\nEOF');
     expect(result.hasSubshell).toBe(true); // heredocs flagged as complex

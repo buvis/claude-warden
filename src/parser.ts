@@ -1,5 +1,6 @@
 import parse from 'bash-parser';
 import { basename } from 'path';
+import { homedir } from 'os';
 import type { ParsedCommand, ParseResult, ChainAssignment } from './types';
 
 interface AstNode {
@@ -282,6 +283,30 @@ function walkNode(node: AstNode, result: WalkResult): void {
             result.hasSubshell = true;
           }
           result.subshellCommands.push(...innerResult.subshellCommands);
+        }
+      } else if (
+        (parsed.command === 'sh' || parsed.command === 'bash' || parsed.command === 'zsh') &&
+        parsed.args.length >= 1
+      ) {
+        // Handle sh/bash/zsh <script> — extract script as the command
+        const scriptIdx = parsed.args.findIndex(a => !a.startsWith('-'));
+        if (scriptIdx !== -1) {
+          let scriptPath = parsed.args[scriptIdx];
+          if (scriptPath.startsWith('~/')) {
+            scriptPath = homedir() + scriptPath.slice(1);
+          }
+          const scriptCommand = scriptPath.includes('/') ? basename(scriptPath) : scriptPath;
+          const scriptArgs = parsed.args.slice(scriptIdx + 1);
+          result.commands.push({
+            command: scriptCommand,
+            originalCommand: scriptPath,
+            args: scriptArgs,
+            envPrefixes: parsed.envPrefixes,
+            raw: parsed.raw,
+          });
+        } else {
+          // All args are flags (e.g. bash --version) — keep as-is
+          result.commands.push(parsed);
         }
       } else {
         result.commands.push(parsed);

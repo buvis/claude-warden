@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Parser extracts script from `bash script.sh` invocations — evaluates the script path instead of `bash`
+- Glob patterns in `alwaysAllow`/`alwaysDeny`/rules: `*` (single segment), `**` (any depth)
+
 ## [2.3.0] - 2026-03-16
 
 ### Features
