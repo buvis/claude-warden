@@ -130,9 +130,18 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     }
   }
 
-  // 1b. Chain-resolved command auto-allow: if command was resolved from a static
-  // chain-local variable, didn't hit alwaysDeny, AND has no matching rules
-  // (which may contain deny/ask patterns for dangerous args), auto-allow it.
+  // 1b. Target-aware policies (path, database, endpoint)
+  // Checked before chain-resolved auto-allow so user-configured target denies
+  // can't be bypassed by chain variable resolution.
+  if (cwd && config.targetPolicies?.length) {
+    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
+    if (targetResult) return detail(targetResult);
+  }
+
+  // 1c. Chain-resolved command auto-allow: if command was resolved from a static
+  // chain-local variable, didn't hit alwaysDeny/alwaysAllow/targetPolicies,
+  // AND has no matching rules (which may contain deny/ask patterns for dangerous args),
+  // auto-allow it.
   if (cmd.resolvedFrom && chainAssignments) {
     const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
     if (varMatch) {
@@ -146,17 +155,13 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     }
   }
 
-  // 1c. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
+  // 1d. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
   // Only upgrades ask→allow — if rules would deny, respect that.
+  // Note: target policies can't check chain-local rm because cmd.args contain
+  // unresolved variable references ($DIR), not actual paths.
   if (command === 'rm' && chainAssignments?.size) {
-    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
+    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
     if (rmResult) return detail(rmResult);
-  }
-
-  // 1d. Target-aware policies (path, database, endpoint)
-  if (cwd && config.targetPolicies?.length) {
-    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
-    if (targetResult) return detail(targetResult);
   }
 
   // 2. Remote target whitelisting with recursive command evaluation
@@ -245,7 +250,7 @@ function extractVarName(text: string): string | null {
   return m ? m[1] : null;
 }
 
-function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig, cwd?: string): CommandEvalDetail | null {
+function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig): CommandEvalDetail | null {
   const { command, args } = cmd;
   // Only handle recursive rm (the dangerous pattern)
   const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
@@ -274,12 +279,6 @@ function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, 
       if (ruleResult.decision === 'deny') return null;
       break; // highest-priority layer wins
     }
-  }
-
-  // Check target policies before auto-allowing
-  if (cwd && config.targetPolicies?.length) {
-    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
-    if (targetResult && targetResult.decision === 'deny') return targetResult;
   }
 
   return { command, args, decision: 'allow', reason: 'chain-local cleanup', matchedRule: 'chainLocalRm' };

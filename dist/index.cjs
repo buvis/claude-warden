@@ -18650,7 +18650,7 @@ function regexFallbackParse(input) {
 }
 
 // src/evaluator.ts
-var import_os2 = require("os");
+var import_os3 = require("os");
 
 // src/script-scanner.ts
 var import_fs = require("fs");
@@ -18844,6 +18844,200 @@ function pathGlobToRegex(pattern) {
   return result;
 }
 
+// src/targets.ts
+var import_path3 = require("path");
+var import_os2 = require("os");
+var PATH_COMMANDS = ["rm", "chmod", "chown", "cp", "mv", "tee", "mkdir", "rmdir", "touch", "ln"];
+var DATABASE_COMMANDS = ["psql", "mysql", "mariadb", "redis-cli", "mongosh", "mongo"];
+var ENDPOINT_COMMANDS = ["curl", "wget", "http", "httpie"];
+function expandHome(p) {
+  if (p === "~") return (0, import_os2.homedir)();
+  if (p.startsWith("~/")) return (0, import_os2.homedir)() + p.slice(1);
+  return p;
+}
+function expandCwd(p, cwd) {
+  return p.replace(/\{\{cwd\}\}/g, cwd);
+}
+function defaultCommandsForType(type) {
+  switch (type) {
+    case "path":
+      return PATH_COMMANDS;
+    case "database":
+      return DATABASE_COMMANDS;
+    case "endpoint":
+      return ENDPOINT_COMMANDS;
+  }
+}
+function policyAppliesToCommand(policy, command) {
+  if (policy.allowAll) return true;
+  const commands = policy.commands ?? defaultCommandsForType(policy.type);
+  return commands.includes(command);
+}
+function hasGlobChars(s) {
+  return /[*?[\]{]/.test(s);
+}
+function evaluatePathPolicy(policy, cmd, cwd) {
+  const recursive = policy.recursive ?? true;
+  const expandedPath = expandHome(expandCwd(policy.path, cwd));
+  const policyPath = (0, import_path3.normalize)((0, import_path3.resolve)(cwd, expandedPath));
+  const useGlob = hasGlobChars(expandedPath);
+  const globRegex = useGlob ? new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? "(/.*)?" : ""}$`) : null;
+  for (const arg of cmd.args) {
+    if (arg.startsWith("-")) continue;
+    const argPath = (0, import_path3.normalize)((0, import_path3.resolve)(cwd, expandHome(arg)));
+    if (globRegex) {
+      if (globRegex.test(argPath)) return true;
+    } else {
+      if (recursive) {
+        if (argPath === policyPath || argPath.startsWith(policyPath + "/")) return true;
+      } else {
+        if (argPath === policyPath) return true;
+      }
+    }
+  }
+  return false;
+}
+function parseConnectionFlags(args2) {
+  const info = {};
+  for (let i = 0; i < args2.length; i++) {
+    const arg = args2[i];
+    if (arg.startsWith("--host=")) {
+      info.host = arg.slice(7);
+      continue;
+    }
+    if (arg.startsWith("--port=")) {
+      info.port = Number(arg.slice(7));
+      continue;
+    }
+    if (arg.startsWith("--dbname=")) {
+      info.database = arg.slice(9);
+      continue;
+    }
+    if (arg === "--host" && i + 1 < args2.length) {
+      info.host = args2[++i];
+      continue;
+    }
+    if (arg === "--port" && i + 1 < args2.length) {
+      info.port = Number(args2[++i]);
+      continue;
+    }
+    if (arg === "--dbname" && i + 1 < args2.length) {
+      info.database = args2[++i];
+      continue;
+    }
+    if (arg === "-h" && i + 1 < args2.length) {
+      info.host = args2[++i];
+      continue;
+    }
+    if (arg === "-d" && i + 1 < args2.length) {
+      info.database = args2[++i];
+      continue;
+    }
+    if (arg === "-p" && i + 1 < args2.length) {
+      info.port = Number(args2[++i]);
+      continue;
+    }
+  }
+  return info;
+}
+function parseConnectionUri(args2) {
+  const uriPattern = /^(postgresql|postgres|mongodb|redis|mysql|mariadb):\/\//;
+  for (const arg of args2) {
+    if (!uriPattern.test(arg)) continue;
+    try {
+      const url = new URL(arg);
+      const info = {};
+      if (url.hostname) info.host = url.hostname;
+      if (url.port) info.port = Number(url.port);
+      const dbPath = url.pathname.replace(/^\//, "");
+      if (dbPath) info.database = dbPath;
+      return info;
+    } catch {
+      continue;
+    }
+  }
+  return {};
+}
+function evaluateDatabasePolicy(policy, cmd) {
+  const flagInfo = parseConnectionFlags(cmd.args);
+  const uriInfo = parseConnectionUri(cmd.args);
+  const host = flagInfo.host ?? uriInfo.host;
+  const port = flagInfo.port ?? uriInfo.port;
+  const database = flagInfo.database ?? uriInfo.database;
+  if (!host && !port && !database) return false;
+  if (host) {
+    const hostRegex = globToRegex(policy.host);
+    if (!hostRegex.test(host)) return false;
+  }
+  if (policy.port !== void 0) {
+    if (port === void 0 || port !== policy.port) return false;
+  }
+  if (policy.database !== void 0) {
+    if (database === void 0) return false;
+    const dbRegex = globToRegex(policy.database);
+    if (!dbRegex.test(database)) return false;
+  }
+  return true;
+}
+function extractUrls(cmd) {
+  const urls = [];
+  const args2 = cmd.args;
+  for (let i = 0; i < args2.length; i++) {
+    const arg = args2[i];
+    if (arg === "--url" && i + 1 < args2.length) {
+      urls.push(args2[++i]);
+      continue;
+    }
+    if (arg.startsWith("http://") || arg.startsWith("https://")) {
+      urls.push(arg);
+    }
+  }
+  return urls;
+}
+function evaluateEndpointPolicy(policy, cmd) {
+  const urls = extractUrls(cmd);
+  const patternRegex = globToRegex(policy.pattern);
+  return urls.some((url) => patternRegex.test(url));
+}
+function policyMatches(policy, cmd, cwd) {
+  switch (policy.type) {
+    case "path":
+      return evaluatePathPolicy(policy, cmd, cwd);
+    case "database":
+      return evaluateDatabasePolicy(policy, cmd);
+    case "endpoint":
+      return evaluateEndpointPolicy(policy, cmd);
+  }
+}
+function evaluateTargetPolicies(cmd, cwd, config) {
+  const matching = [];
+  for (const policy of config.targetPolicies) {
+    if (!policyAppliesToCommand(policy, cmd.command)) continue;
+    if (policyMatches(policy, cmd, cwd)) {
+      matching.push(policy);
+    }
+  }
+  if (matching.length === 0) return null;
+  let winningPolicy = matching[0];
+  for (const policy of matching) {
+    if (policy.decision === "deny") {
+      winningPolicy = policy;
+      break;
+    }
+    if (policy.decision === "ask" && winningPolicy.decision === "allow") {
+      winningPolicy = policy;
+    }
+  }
+  return {
+    command: cmd.command,
+    args: cmd.args,
+    decision: winningPolicy.decision,
+    reason: winningPolicy.reason ?? `target policy (${winningPolicy.type})`,
+    matchedRule: `targetPolicy:${winningPolicy.type}`,
+    resolvedFrom: cmd.resolvedFrom
+  };
+}
+
 // src/evaluator.ts
 function safeRegexTest(pattern, input) {
   try {
@@ -18855,7 +19049,7 @@ function safeRegexTest(pattern, input) {
   }
 }
 function expandTilde(path) {
-  return path.startsWith("~/") ? (0, import_os2.homedir)() + path.slice(1) : path;
+  return path.startsWith("~/") ? (0, import_os3.homedir)() + path.slice(1) : path;
 }
 function commandMatchesName(cmd, name) {
   if (name.includes("*")) {
@@ -18873,7 +19067,7 @@ function commandMatchesName(cmd, name) {
     return expandTilde(cmd.originalCommand) === name;
   }
   if (name.startsWith("~/")) {
-    return expandTilde(cmd.originalCommand) === (0, import_os2.homedir)() + name.slice(1);
+    return expandTilde(cmd.originalCommand) === (0, import_os3.homedir)() + name.slice(1);
   }
   return cmd.command === name;
 }
@@ -18938,6 +19132,10 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
     if (layer.alwaysAllow.some((name) => commandMatchesName(cmd, name))) {
       return detail({ command, args: args2, decision: "allow", reason: "safe", matchedRule: "alwaysAllow" });
     }
+  }
+  if (cwd && config.targetPolicies?.length) {
+    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
+    if (targetResult) return detail(targetResult);
   }
   if (cmd.resolvedFrom && chainAssignments) {
     const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
@@ -20015,12 +20213,12 @@ function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
 // src/rules.ts
 var import_fs2 = require("fs");
 var import_yaml = __toESM(require_dist2(), 1);
-var import_os4 = require("os");
-var import_path4 = require("path");
+var import_os5 = require("os");
+var import_path5 = require("path");
 
 // src/defaults.ts
-var import_os3 = require("os");
-var import_path3 = require("path");
+var import_os4 = require("os");
+var import_path4 = require("path");
 var SAFE_DEV_TOOLS = [
   "jest",
   "vitest",
@@ -20167,9 +20365,10 @@ var DEFAULT_CONFIG = {
   notifyOnAsk: true,
   notifyOnDeny: true,
   audit: true,
-  auditPath: (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden-audit.jsonl"),
+  auditPath: (0, import_path4.join)((0, import_os4.homedir)(), ".claude", "warden-audit.jsonl"),
   auditAllowDecisions: false,
   trustedRemotes: [],
+  targetPolicies: [],
   layers: [{
     alwaysAllow: [
       // Read-only file operations
@@ -20788,8 +20987,8 @@ function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
 var USER_CONFIG_PATHS = [
-  (0, import_path4.join)((0, import_os4.homedir)(), ".claude", "warden.yaml"),
-  (0, import_path4.join)((0, import_os4.homedir)(), ".claude", "warden.json")
+  (0, import_path5.join)((0, import_os5.homedir)(), ".claude", "warden.yaml"),
+  (0, import_path5.join)((0, import_os5.homedir)(), ".claude", "warden.json")
 ];
 var PROJECT_CONFIG_NAMES = [
   ".claude/warden.yaml",
@@ -20812,7 +21011,7 @@ function loadConfig(cwd) {
   let workspaceRaw = null;
   if (cwd) {
     for (const name of PROJECT_CONFIG_NAMES) {
-      const result = tryLoadFile((0, import_path4.join)(cwd, name));
+      const result = tryLoadFile((0, import_path5.join)(cwd, name));
       if (result) {
         workspaceLayer = extractLayer(result);
         workspaceRaw = result;
@@ -20914,6 +21113,70 @@ function parseTrustedList(raw) {
     return null;
   }).filter((t) => t !== null);
 }
+function parseTargetPolicies(raw) {
+  const results = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || !("type" in entry)) {
+      process.stderr.write(`[warden] Warning: targetPolicies entry missing "type" field, skipping
+`);
+      continue;
+    }
+    const obj = entry;
+    if (typeof obj.decision !== "string" || !isValidDecision(obj.decision)) {
+      process.stderr.write(`[warden] Warning: targetPolicies entry missing or invalid "decision", skipping
+`);
+      continue;
+    }
+    const base = {
+      decision: obj.decision,
+      ...typeof obj.reason === "string" && { reason: obj.reason },
+      ...Array.isArray(obj.commands) && { commands: obj.commands },
+      ...obj.allowAll === true && { allowAll: true }
+    };
+    switch (obj.type) {
+      case "path": {
+        if (typeof obj.path !== "string") {
+          process.stderr.write(`[warden] Warning: path targetPolicy missing "path" field, skipping
+`);
+          continue;
+        }
+        const policy = { ...base, type: "path", path: obj.path, recursive: typeof obj.recursive === "boolean" ? obj.recursive : true };
+        results.push(policy);
+        break;
+      }
+      case "database": {
+        if (typeof obj.host !== "string") {
+          process.stderr.write(`[warden] Warning: database targetPolicy missing "host" field, skipping
+`);
+          continue;
+        }
+        const policy = {
+          ...base,
+          type: "database",
+          host: obj.host,
+          ...typeof obj.port === "number" && { port: obj.port },
+          ...typeof obj.database === "string" && { database: obj.database }
+        };
+        results.push(policy);
+        break;
+      }
+      case "endpoint": {
+        if (typeof obj.pattern !== "string") {
+          process.stderr.write(`[warden] Warning: endpoint targetPolicy missing "pattern" field, skipping
+`);
+          continue;
+        }
+        const policy = { ...base, type: "endpoint", pattern: obj.pattern };
+        results.push(policy);
+        break;
+      }
+      default:
+        process.stderr.write(`[warden] Warning: unknown targetPolicy type "${String(obj.type)}", skipping
+`);
+    }
+  }
+  return results;
+}
 var LEGACY_REMOTE_MAP = {
   trustedSSHHosts: "ssh",
   trustedDockerContainers: "docker",
@@ -20945,6 +21208,9 @@ function mergeNonLayerFields(config, raw) {
       const targets = parseTrustedList(raw[key]);
       config.trustedRemotes = [...config.trustedRemotes, ...targets.map((t) => ({ ...t, context }))];
     }
+  }
+  if (Array.isArray(raw.targetPolicies)) {
+    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies)];
   }
   if (typeof raw.defaultDecision === "string") {
     if (isValidDecision(raw.defaultDecision)) {
@@ -21146,10 +21412,10 @@ function rotateIfNeeded(logPath) {
 
 // src/yolo.ts
 var import_fs4 = require("fs");
-var import_os5 = require("os");
-var import_path5 = require("path");
+var import_os6 = require("os");
+var import_path6 = require("path");
 function yoloFilePath(sessionId) {
-  return (0, import_path5.join)((0, import_os5.tmpdir)(), `claude-warden-yolo-${sessionId}`);
+  return (0, import_path6.join)((0, import_os6.tmpdir)(), `claude-warden-yolo-${sessionId}`);
 }
 function getYoloState(sessionId) {
   const filePath = yoloFilePath(sessionId);

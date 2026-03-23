@@ -47,16 +47,15 @@ function evaluatePathPolicy(policy: PathPolicy, cmd: ParsedCommand, cwd: string)
   const policyPath = normalize(resolve(cwd, expandedPath));
   const useGlob = hasGlobChars(expandedPath);
 
+  const globRegex = useGlob
+    ? new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? '(/.*)?' : ''}$`)
+    : null;
+
   for (const arg of cmd.args) {
     if (arg.startsWith('-')) continue;
     const argPath = normalize(resolve(cwd, expandHome(arg)));
-    if (useGlob) {
-      const regexStr = pathGlobToRegex(policyPath);
-      if (recursive) {
-        if (new RegExp(`^${regexStr}(/.*)?$`).test(argPath)) return true;
-      } else {
-        if (new RegExp(`^${regexStr}$`).test(argPath)) return true;
-      }
+    if (globRegex) {
+      if (globRegex.test(argPath)) return true;
     } else {
       if (recursive) {
         if (argPath === policyPath || argPath.startsWith(policyPath + '/')) return true;

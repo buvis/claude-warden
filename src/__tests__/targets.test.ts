@@ -533,4 +533,26 @@ describe('target policies', () => {
       expect(result!.decision).toBe('deny');
     });
   });
+
+  describe('target policies before chain-resolved auto-allow', () => {
+    it('target deny blocks chain-resolved command with no rules', () => {
+      // Simulate: RM=/bin/rm && $RM /etc/passwd
+      // The $RM resolves to rm (no user rules for it, but defaults exist)
+      // Path policy denies /etc — should block it before chain-resolved auto-allow
+      const config = structuredClone(DEFAULT_CONFIG);
+      config.targetPolicies = [{ type: 'path', path: '/etc', decision: 'deny' }];
+      const parsed = parseCommand('RM=/bin/rm && $RM /etc/passwd');
+      const result = evaluate(parsed, config, 0, '/');
+      expect(result.decision).toBe('deny');
+      expect(result.reason).toContain('target policy');
+    });
+
+    it('target allow on /tmp lets chain-resolved rm through', () => {
+      const config = structuredClone(DEFAULT_CONFIG);
+      config.targetPolicies = [{ type: 'path', path: '/tmp', decision: 'allow' }];
+      const parsed = parseCommand('RM=/bin/rm && $RM /tmp/scratch');
+      const result = evaluate(parsed, config, 0, '/');
+      expect(result.decision).toBe('allow');
+    });
+  });
 });
