@@ -18884,7 +18884,8 @@ function evaluatePathPolicy(policy, cmd, cwd) {
   const recursive = policy.recursive ?? true;
   const expandedPath = expandHome(expandCwd(policy.path, cwd));
   const policyPath = (0, import_path3.normalize)((0, import_path3.resolve)(cwd, expandedPath));
-  const useGlob = hasGlobChars(expandedPath);
+  const pathWithoutTemplate = policy.path.replace(/\{\{cwd\}\}/g, "");
+  const useGlob = hasGlobChars(pathWithoutTemplate);
   let globRegex = null;
   if (useGlob) {
     try {

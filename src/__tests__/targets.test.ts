@@ -60,6 +60,13 @@ describe('target policies', () => {
       expect(result).toBeNull();
     });
 
+    it('{{cwd}} expansion: cwd with glob-like chars does not trigger glob matching', () => {
+      const config = configWith([{ type: 'path', path: '{{cwd}}/build', decision: 'deny' }]);
+      const result = evaluateTargetPolicies(cmd('rm', ['/project[0]/build/output']), '/project[0]', config);
+      expect(result).not.toBeNull();
+      expect(result!.decision).toBe('deny');
+    });
+
     it('path traversal normalization: /tmp/../etc/passwd does NOT match /tmp', () => {
       const config = configWith([{ type: 'path', path: '/tmp', decision: 'allow' }]);
       const result = evaluateTargetPolicies(cmd('rm', ['/tmp/../etc/passwd']), '/', config);

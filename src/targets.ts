@@ -45,7 +45,11 @@ function evaluatePathPolicy(policy: PathPolicy, cmd: ParsedCommand, cwd: string)
   const recursive = policy.recursive ?? true;
   const expandedPath = expandHome(expandCwd(policy.path, cwd));
   const policyPath = normalize(resolve(cwd, expandedPath));
-  const useGlob = hasGlobChars(expandedPath);
+  // Check glob chars in the original policy path (before cwd/home expansion)
+  // to avoid treating cwd's special characters as globs.
+  // Strip {{cwd}} template before checking since braces aren't glob patterns.
+  const pathWithoutTemplate = policy.path.replace(/\{\{cwd\}\}/g, '');
+  const useGlob = hasGlobChars(pathWithoutTemplate);
 
   let globRegex: RegExp | null = null;
   if (useGlob) {
