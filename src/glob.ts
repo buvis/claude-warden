@@ -9,6 +9,8 @@ export function globToRegex(pattern: string): RegExp {
   while (i < pattern.length) {
     const ch = pattern[i];
     if (ch === '*') {
+      // Consume all consecutive * chars
+      while (pattern[i + 1] === '*') i++;
       regex += '.*';
     } else if (ch === '?') {
       regex += '.';
@@ -36,7 +38,7 @@ export function globToRegex(pattern: string): RegExp {
       } else {
         regex += '\\{';
       }
-    } else if ('.+^$|\\()'.includes(ch)) {
+    } else if ('.+^$|\\()[]'.includes(ch)) {
       regex += '\\' + ch;
     } else {
       regex += ch;
@@ -58,8 +60,9 @@ export function pathGlobToRegex(pattern: string): string {
   while (i < pattern.length) {
     const ch = pattern[i];
     if (ch === '*' && pattern[i + 1] === '*') {
+      // Consume all consecutive * chars
+      while (pattern[i + 1] === '*') i++;
       result += '.*';
-      i++; // skip second *
     } else if (ch === '*') {
       result += '[^/]*';
     } else if (ch === '?') {

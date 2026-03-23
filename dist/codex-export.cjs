@@ -18765,6 +18765,7 @@ function globToRegex(pattern) {
   while (i < pattern.length) {
     const ch = pattern[i];
     if (ch === "*") {
+      while (pattern[i + 1] === "*") i++;
       regex += ".*";
     } else if (ch === "?") {
       regex += ".";
@@ -18792,7 +18793,7 @@ function globToRegex(pattern) {
       } else {
         regex += "\\{";
       }
-    } else if (".+^$|\\()".includes(ch)) {
+    } else if (".+^$|\\()[]".includes(ch)) {
       regex += "\\" + ch;
     } else {
       regex += ch;
@@ -18807,8 +18808,8 @@ function pathGlobToRegex(pattern) {
   while (i < pattern.length) {
     const ch = pattern[i];
     if (ch === "*" && pattern[i + 1] === "*") {
+      while (pattern[i + 1] === "*") i++;
       result += ".*";
-      i++;
     } else if (ch === "*") {
       result += "[^/]*";
     } else if (ch === "?") {

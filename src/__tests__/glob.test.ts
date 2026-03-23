@@ -62,6 +62,28 @@ describe('globToRegex', () => {
     expect(re.test('staging.internal.company.com')).toBe(true);
     expect(re.test('deep.staging.internal.company.com')).toBe(true);
   });
+
+  it('empty string matches only empty string', () => {
+    const re = globToRegex('');
+    expect(re.test('')).toBe(true);
+    expect(re.test('a')).toBe(false);
+  });
+
+  it('consecutive *** treated as single *', () => {
+    const re = globToRegex('foo***bar');
+    expect(re.test('foo-anything-bar')).toBe(true);
+    expect(re.test('foobar')).toBe(true);
+  });
+
+  it('unclosed [ produces invalid regex and throws', () => {
+    expect(() => globToRegex('test[abc')).toThrow();
+  });
+
+  it('literal ] outside character class is escaped', () => {
+    const re = globToRegex('foo]bar');
+    expect(re.test('foo]bar')).toBe(true);
+    expect(re.test('foobar')).toBe(false);
+  });
 });
 
 describe('pathGlobToRegex', () => {
@@ -120,5 +142,17 @@ describe('pathGlobToRegex', () => {
     expect(re.test('/opt/mytool/scripts/deploy.sh')).toBe(true);
     expect(re.test('/opt/mytool/scripts/deep/nested/run.sh')).toBe(true);
     expect(re.test('/opt/a/b/scripts/run.sh')).toBe(false); // * doesn't cross /
+  });
+
+  it('? does not match /', () => {
+    const re = new RegExp(`^${pathGlobToRegex('/tmp/?')}$`);
+    expect(re.test('/tmp/a')).toBe(true);
+    expect(re.test('/tmp/')).toBe(false); // ? must match a non-/ char
+  });
+
+  it('consecutive *** treated as **', () => {
+    const re = new RegExp(`^${pathGlobToRegex('/opt/***/run.sh')}$`);
+    expect(re.test('/opt/deep/nested/run.sh')).toBe(true);
+    expect(re.test('/opt/x/run.sh')).toBe(true);
   });
 });
