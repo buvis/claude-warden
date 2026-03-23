@@ -97,11 +97,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
   audit: true,
   auditPath: join(homedir(), '.claude', 'warden-audit.jsonl'),
   auditAllowDecisions: false,
-  trustedSSHHosts: [],
-  trustedDockerContainers: [],
-  trustedKubectlContexts: [],
-  trustedSprites: [],
-  trustedFlyApps: [],
+  trustedRemotes: [],
 
   layers: [{
     alwaysAllow: [

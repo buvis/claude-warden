@@ -62,13 +62,15 @@ export interface TrustedTarget {
   overrides?: ConfigLayer;
 }
 
+export type RemoteContext = 'ssh' | 'docker' | 'kubectl' | 'sprite' | 'fly';
+
+export interface TrustedRemote extends TrustedTarget {
+  context: RemoteContext;
+}
+
 export interface WardenConfig {
   layers: ConfigLayer[];
-  trustedSSHHosts?: TrustedTarget[];
-  trustedDockerContainers?: TrustedTarget[];
-  trustedKubectlContexts?: TrustedTarget[];
-  trustedSprites?: TrustedTarget[];
-  trustedFlyApps?: TrustedTarget[];
+  trustedRemotes: TrustedRemote[];
   trustedContextOverrides?: ConfigLayer;
   defaultDecision: Decision;
   askOnSubshell: boolean;

@@ -206,6 +206,61 @@ describe('rule merging across layers', () => {
   });
 });
 
+describe('legacy trusted* config conversion', () => {
+  it('trustedSSHHosts auto-converts to trustedRemotes with context: ssh', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    const fs = require('fs');
+    const tmpDir = '/tmp/warden-test-legacy-remotes';
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.mkdirSync(`${tmpDir}/.claude`, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/.claude/warden.yaml`, `
+trustedSSHHosts:
+  - devserver
+  - name: prod-bastion
+    allowAll: true
+`);
+
+    const config = loadConfig(tmpDir);
+
+    expect(config.trustedRemotes).toHaveLength(2);
+    expect(config.trustedRemotes[0]).toEqual({ name: 'devserver', context: 'ssh' });
+    expect(config.trustedRemotes[1]).toEqual({ name: 'prod-bastion', context: 'ssh', allowAll: true });
+
+    const warnings = stderrSpy.mock.calls.map(c => String(c[0]));
+    expect(warnings.some(w => w.includes('trustedSSHHosts is deprecated'))).toBe(true);
+
+    stderrSpy.mockRestore();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('trustedRemotes works directly without deprecation warning', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    const fs = require('fs');
+    const tmpDir = '/tmp/warden-test-unified-remotes';
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.mkdirSync(`${tmpDir}/.claude`, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/.claude/warden.yaml`, `
+trustedRemotes:
+  - context: docker
+    name: my-app
+    allowAll: true
+`);
+
+    const config = loadConfig(tmpDir);
+
+    expect(config.trustedRemotes).toHaveLength(1);
+    expect(config.trustedRemotes[0]).toEqual({ name: 'my-app', context: 'docker', allowAll: true });
+
+    const warnings = stderrSpy.mock.calls.map(c => String(c[0]));
+    expect(warnings.some(w => w.includes('deprecated'))).toBe(false);
+
+    stderrSpy.mockRestore();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
 describe('config validation warnings', () => {
   it('warns when argPatterns reference another known command name', () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);

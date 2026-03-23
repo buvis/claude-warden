@@ -18954,25 +18954,41 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
     const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
     if (rmResult) return detail(rmResult);
   }
-  if ((command === "ssh" || command === "scp" || command === "rsync") && config.trustedSSHHosts?.length) {
-    const sshResult = evaluateSSHCommand(cmd, config, depth);
-    if (sshResult) return sshResult;
+  const remotes = config.trustedRemotes || [];
+  if (command === "ssh" || command === "scp" || command === "rsync") {
+    const targets = remotes.filter((t) => t.context === "ssh");
+    if (targets.length) {
+      const sshResult = evaluateSSHCommand(cmd, config, targets, depth);
+      if (sshResult) return sshResult;
+    }
   }
-  if (command === "docker" && config.trustedDockerContainers?.length) {
-    const dockerResult = evaluateDockerExec(cmd, config, depth);
-    if (dockerResult) return dockerResult;
+  if (command === "docker") {
+    const targets = remotes.filter((t) => t.context === "docker");
+    if (targets.length) {
+      const dockerResult = evaluateDockerExec(cmd, config, targets, depth);
+      if (dockerResult) return dockerResult;
+    }
   }
-  if (command === "kubectl" && config.trustedKubectlContexts?.length) {
-    const kubectlResult = evaluateKubectlExec(cmd, config, depth);
-    if (kubectlResult) return kubectlResult;
+  if (command === "kubectl") {
+    const targets = remotes.filter((t) => t.context === "kubectl");
+    if (targets.length) {
+      const kubectlResult = evaluateKubectlExec(cmd, config, targets, depth);
+      if (kubectlResult) return kubectlResult;
+    }
   }
-  if (command === "sprite" && config.trustedSprites?.length) {
-    const spriteResult = evaluateSpriteExec(cmd, config, depth);
-    if (spriteResult) return spriteResult;
+  if (command === "sprite") {
+    const targets = remotes.filter((t) => t.context === "sprite");
+    if (targets.length) {
+      const spriteResult = evaluateSpriteExec(cmd, config, targets, depth);
+      if (spriteResult) return spriteResult;
+    }
   }
-  if ((command === "fly" || command === "flyctl") && config.trustedFlyApps?.length) {
-    const flyResult = evaluateFlyCommand(cmd, config, depth);
-    if (flyResult) return flyResult;
+  if (command === "fly" || command === "flyctl") {
+    const targets = remotes.filter((t) => t.context === "fly");
+    if (targets.length) {
+      const flyResult = evaluateFlyCommand(cmd, config, targets, depth);
+      if (flyResult) return flyResult;
+    }
   }
   if (command === "uv") {
     const uvResult = evaluateUvCommand(cmd, config, depth);
@@ -19439,9 +19455,9 @@ function extractHostFromRemotePath(args2) {
   }
   return null;
 }
-function evaluateSSHCommand(cmd, config, depth = 0) {
+function evaluateSSHCommand(cmd, config, targets, depth = 0) {
   const { command, args: args2 } = cmd;
-  const trustedHosts = config.trustedSSHHosts || [];
+  const trustedHosts = targets;
   if (command === "scp" || command === "rsync") {
     const host2 = extractHostFromRemotePath(args2);
     if (!host2) return null;
@@ -19453,7 +19469,7 @@ function evaluateSSHCommand(cmd, config, depth = 0) {
         args: args2,
         decision: "allow",
         reason: `Trusted SSH host "${host2}"${target2.allowAll ? " (allowAll)" : ""}`,
-        matchedRule: "trustedSSHHosts"
+        matchedRule: "trustedRemotes:ssh"
       };
     }
     if (target2.overrides.alwaysDeny.some((name) => name === command)) {
@@ -19462,7 +19478,7 @@ function evaluateSSHCommand(cmd, config, depth = 0) {
         args: args2,
         decision: "deny",
         reason: `Trusted SSH host "${host2}": "${command}" blocked by overrides`,
-        matchedRule: "trustedSSHHosts"
+        matchedRule: "trustedRemotes:ssh"
       };
     }
     return {
@@ -19470,7 +19486,7 @@ function evaluateSSHCommand(cmd, config, depth = 0) {
       args: args2,
       decision: "allow",
       reason: `Trusted SSH host "${host2}"`,
-      matchedRule: "trustedSSHHosts"
+      matchedRule: "trustedRemotes:ssh"
     };
   }
   const { host, remoteCommand } = parseSSHArgs(args2);
@@ -19483,7 +19499,7 @@ function evaluateSSHCommand(cmd, config, depth = 0) {
       args: args2,
       decision: "allow",
       reason: `Trusted SSH host "${host}" (interactive)`,
-      matchedRule: "trustedSSHHosts"
+      matchedRule: "trustedRemotes:ssh"
     };
   }
   if (target.allowAll) {
@@ -19492,7 +19508,7 @@ function evaluateSSHCommand(cmd, config, depth = 0) {
       args: args2,
       decision: "allow",
       reason: `Trusted SSH host "${host}" (allowAll)`,
-      matchedRule: "trustedSSHHosts"
+      matchedRule: "trustedRemotes:ssh"
     };
   }
   const parsed = parseCommand(remoteCommand);
@@ -19502,7 +19518,7 @@ function evaluateSSHCommand(cmd, config, depth = 0) {
     args: args2,
     decision: result.decision,
     reason: `Trusted SSH host "${host}": ${result.reason}`,
-    matchedRule: "trustedSSHHosts"
+    matchedRule: "trustedRemotes:ssh"
   };
 }
 var DOCKER_EXEC_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
@@ -19585,12 +19601,12 @@ function parseDockerExecArgs(args2) {
   }
   return { target, remoteArgs };
 }
-function evaluateDockerExec(cmd, config, depth = 0) {
+function evaluateDockerExec(cmd, config, targets, depth = 0) {
   const { command, args: args2 } = cmd;
   if (args2[0] !== "exec") return null;
   const { target: containerName, remoteArgs } = parseDockerExecArgs(args2.slice(1));
   if (!containerName) return null;
-  const matched = findMatchingTarget(containerName, config.trustedDockerContainers || []);
+  const matched = findMatchingTarget(containerName, targets);
   if (!matched) return null;
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
@@ -19598,7 +19614,7 @@ function evaluateDockerExec(cmd, config, depth = 0) {
     args: args2,
     decision: result.decision,
     reason: `Trusted Docker container "${containerName}" (${result.reason})`,
-    matchedRule: "trustedDockerContainers"
+    matchedRule: "trustedRemotes:docker"
   };
 }
 var KUBECTL_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
@@ -19665,12 +19681,12 @@ function parseKubectlExecArgs(args2) {
   }
   return { context, pod, remoteArgs };
 }
-function evaluateKubectlExec(cmd, config, depth = 0) {
+function evaluateKubectlExec(cmd, config, targets, depth = 0) {
   const { command, args: args2 } = cmd;
   if (args2[0] !== "exec") return null;
   const { context, pod, remoteArgs } = parseKubectlExecArgs(args2.slice(1));
   if (!context) return null;
-  const matched = findMatchingTarget(context, config.trustedKubectlContexts || []);
+  const matched = findMatchingTarget(context, targets);
   if (!matched) return null;
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
@@ -19678,7 +19694,7 @@ function evaluateKubectlExec(cmd, config, depth = 0) {
     args: args2,
     decision: result.decision,
     reason: `Trusted kubectl context "${context}"${pod ? `, pod "${pod}"` : ""} (${result.reason})`,
-    matchedRule: "trustedKubectlContexts"
+    matchedRule: "trustedRemotes:kubectl"
   };
 }
 var SPRITE_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
@@ -19732,11 +19748,11 @@ function parseSpriteExecArgs(args2) {
   }
   return { spriteName, remoteArgs };
 }
-function evaluateSpriteExec(cmd, config, depth = 0) {
+function evaluateSpriteExec(cmd, config, targets, depth = 0) {
   const { command, args: args2 } = cmd;
   const { spriteName, remoteArgs } = parseSpriteExecArgs(args2);
   if (!spriteName) return null;
-  const matched = findMatchingTarget(spriteName, config.trustedSprites || []);
+  const matched = findMatchingTarget(spriteName, targets);
   if (!matched) return null;
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
@@ -19744,7 +19760,7 @@ function evaluateSpriteExec(cmd, config, depth = 0) {
     args: args2,
     decision: result.decision,
     reason: `Trusted sprite "${spriteName}" (${result.reason})`,
-    matchedRule: "trustedSprites"
+    matchedRule: "trustedRemotes:sprite"
   };
 }
 var FLY_SSH_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
@@ -19818,12 +19834,12 @@ function parseFlySSHArgs(args2) {
   }
   return { app, remoteArgs, isSSH: isSSH && foundConsole };
 }
-function evaluateFlyCommand(cmd, config, depth = 0) {
+function evaluateFlyCommand(cmd, config, targets, depth = 0) {
   const { command, args: args2 } = cmd;
   const { app, remoteArgs, isSSH } = parseFlySSHArgs(args2);
   if (!isSSH) return null;
   if (!app) return null;
-  const matched = findMatchingTarget(app, config.trustedFlyApps || []);
+  const matched = findMatchingTarget(app, targets);
   if (!matched) return null;
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
@@ -19831,7 +19847,7 @@ function evaluateFlyCommand(cmd, config, depth = 0) {
     args: args2,
     decision: result.decision,
     reason: `Trusted Fly app "${app}" (${result.reason})`,
-    matchedRule: "trustedFlyApps"
+    matchedRule: "trustedRemotes:fly"
   };
 }
 var COMMANDS_WITH_SCRIPT_EVALUATORS = /* @__PURE__ */ new Set(["node", "tsx", "ts-node", "python", "python3", "perl"]);
@@ -20153,11 +20169,7 @@ var DEFAULT_CONFIG = {
   audit: true,
   auditPath: (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden-audit.jsonl"),
   auditAllowDecisions: false,
-  trustedSSHHosts: [],
-  trustedDockerContainers: [],
-  trustedKubectlContexts: [],
-  trustedSprites: [],
-  trustedFlyApps: [],
+  trustedRemotes: [],
   layers: [{
     alwaysAllow: [
       // Read-only file operations
@@ -20902,21 +20914,37 @@ function parseTrustedList(raw) {
     return null;
   }).filter((t) => t !== null);
 }
+var LEGACY_REMOTE_MAP = {
+  trustedSSHHosts: "ssh",
+  trustedDockerContainers: "docker",
+  trustedKubectlContexts: "kubectl",
+  trustedSprites: "sprite",
+  trustedFlyApps: "fly"
+};
+function parseTrustedRemotes(raw) {
+  return raw.filter((entry) => !!entry && typeof entry === "object" && "context" in entry && "name" in entry).map((entry) => {
+    const remote = {
+      name: String(entry.name),
+      context: String(entry.context)
+    };
+    if (entry.allowAll === true) remote.allowAll = true;
+    if (entry.overrides && typeof entry.overrides === "object") {
+      remote.overrides = extractLayer(entry.overrides);
+    }
+    return remote;
+  });
+}
 function mergeNonLayerFields(config, raw) {
-  if (Array.isArray(raw.trustedSSHHosts)) {
-    config.trustedSSHHosts = [...config.trustedSSHHosts || [], ...parseTrustedList(raw.trustedSSHHosts)];
+  if (Array.isArray(raw.trustedRemotes)) {
+    config.trustedRemotes = [...config.trustedRemotes, ...parseTrustedRemotes(raw.trustedRemotes)];
   }
-  if (Array.isArray(raw.trustedDockerContainers)) {
-    config.trustedDockerContainers = [...config.trustedDockerContainers || [], ...parseTrustedList(raw.trustedDockerContainers)];
-  }
-  if (Array.isArray(raw.trustedKubectlContexts)) {
-    config.trustedKubectlContexts = [...config.trustedKubectlContexts || [], ...parseTrustedList(raw.trustedKubectlContexts)];
-  }
-  if (Array.isArray(raw.trustedSprites)) {
-    config.trustedSprites = [...config.trustedSprites || [], ...parseTrustedList(raw.trustedSprites)];
-  }
-  if (Array.isArray(raw.trustedFlyApps)) {
-    config.trustedFlyApps = [...config.trustedFlyApps || [], ...parseTrustedList(raw.trustedFlyApps)];
+  for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
+    if (Array.isArray(raw[key])) {
+      process.stderr.write(`[warden] Warning: ${key} is deprecated, use trustedRemotes with context: "${context}" instead
+`);
+      const targets = parseTrustedList(raw[key]);
+      config.trustedRemotes = [...config.trustedRemotes, ...targets.map((t) => ({ ...t, context }))];
+    }
   }
   if (typeof raw.defaultDecision === "string") {
     if (isValidDecision(raw.defaultDecision)) {

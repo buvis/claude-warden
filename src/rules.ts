@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
 import { homedir } from 'os';
 import { join } from 'path';
-import type { WardenConfig, ConfigLayer, CommandRule, TrustedTarget } from './types';
+import type { WardenConfig, ConfigLayer, CommandRule, TrustedTarget, TrustedRemote, RemoteContext } from './types';
 import { DEFAULT_CONFIG } from './defaults';
 
 const VALID_DECISIONS = new Set(['allow', 'deny', 'ask']);
@@ -166,21 +166,42 @@ export function parseTrustedList(raw: unknown[]): TrustedTarget[] {
   }).filter((t): t is TrustedTarget => t !== null);
 }
 
+const LEGACY_REMOTE_MAP: Record<string, RemoteContext> = {
+  trustedSSHHosts: 'ssh',
+  trustedDockerContainers: 'docker',
+  trustedKubectlContexts: 'kubectl',
+  trustedSprites: 'sprite',
+  trustedFlyApps: 'fly',
+};
+
+function parseTrustedRemotes(raw: unknown[]): TrustedRemote[] {
+  return raw
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && 'context' in entry && 'name' in entry)
+    .map(entry => {
+      const remote: TrustedRemote = {
+        name: String(entry.name),
+        context: String(entry.context) as RemoteContext,
+      };
+      if (entry.allowAll === true) remote.allowAll = true;
+      if (entry.overrides && typeof entry.overrides === 'object') {
+        remote.overrides = extractLayer(entry.overrides as Record<string, unknown>);
+      }
+      return remote;
+    });
+}
+
 function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>): void {
-  if (Array.isArray(raw.trustedSSHHosts)) {
-    config.trustedSSHHosts = [...(config.trustedSSHHosts || []), ...parseTrustedList(raw.trustedSSHHosts)];
+  // Unified trustedRemotes
+  if (Array.isArray(raw.trustedRemotes)) {
+    config.trustedRemotes = [...config.trustedRemotes, ...parseTrustedRemotes(raw.trustedRemotes)];
   }
-  if (Array.isArray(raw.trustedDockerContainers)) {
-    config.trustedDockerContainers = [...(config.trustedDockerContainers || []), ...parseTrustedList(raw.trustedDockerContainers)];
-  }
-  if (Array.isArray(raw.trustedKubectlContexts)) {
-    config.trustedKubectlContexts = [...(config.trustedKubectlContexts || []), ...parseTrustedList(raw.trustedKubectlContexts)];
-  }
-  if (Array.isArray(raw.trustedSprites)) {
-    config.trustedSprites = [...(config.trustedSprites || []), ...parseTrustedList(raw.trustedSprites)];
-  }
-  if (Array.isArray(raw.trustedFlyApps)) {
-    config.trustedFlyApps = [...(config.trustedFlyApps || []), ...parseTrustedList(raw.trustedFlyApps)];
+  // Legacy keys → convert to trustedRemotes with context
+  for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
+    if (Array.isArray(raw[key])) {
+      process.stderr.write(`[warden] Warning: ${key} is deprecated, use trustedRemotes with context: "${context}" instead\n`);
+      const targets = parseTrustedList(raw[key] as unknown[]);
+      config.trustedRemotes = [...config.trustedRemotes, ...targets.map(t => ({ ...t, context }))];
+    }
   }
   if (typeof raw.defaultDecision === 'string') {
     if (isValidDecision(raw.defaultDecision)) {

@@ -5,6 +5,7 @@ import type { WardenConfig } from '../types';
 function baseConfig(layers: WardenConfig['layers']): WardenConfig {
   return {
     layers,
+    trustedRemotes: [],
     defaultDecision: 'ask',
     askOnSubshell: true,
     notifyOnAsk: false,

@@ -32,58 +32,47 @@ notifyOnDeny: true
 #   - nc
 #   - ncat
 
-# Trusted SSH hosts — ssh/scp/rsync to these hosts are auto-allowed.
-# Remote commands on trusted hosts are recursively evaluated through warden rules.
-# Supports glob patterns (* wildcards).
-# Entries can be strings (use global overrides) or objects with per-target settings.
-# trustedSSHHosts:
-#   - devserver                          # string → uses global overrides only
-#   - staging-*
-#   - "*.internal.company.com"
-#   - name: prod-bastion                 # object with per-target overrides
+# Trusted remote execution contexts — SSH, Docker, kubectl, Sprite, Fly.io.
+# Commands on trusted remotes are recursively evaluated through warden rules.
+# Supports glob patterns (* wildcards) for names.
+# Each entry requires a `context` (ssh, docker, kubectl, sprite, fly) and `name`.
+# Optional: `allowAll: true` to skip all checks, `overrides` for per-target rules.
+#
+# Legacy keys (trustedSSHHosts, trustedDockerContainers, trustedKubectlContexts,
+# trustedSprites, trustedFlyApps) still work but emit a deprecation warning.
+#
+# trustedRemotes:
+#   - context: ssh
+#     name: devserver
+#   - context: ssh
+#     name: staging-*
+#   - context: ssh
+#     name: "*.internal.company.com"
+#   - context: ssh
+#     name: prod-bastion
 #     overrides:
 #       alwaysAllow: [systemctl]
-
-# Trusted Docker containers — docker exec to these containers are auto-allowed.
-# Remote commands are recursively evaluated through warden rules.
-# trustedDockerContainers:
-#   - my-app                             # string → uses global overrides only
-#   - name: dev-container                # object with allowAll (skip all checks)
+#   - context: docker
+#     name: my-app
+#   - context: docker
+#     name: dev-container
 #     allowAll: true
-#   - name: staging-*                    # object with per-target overrides
-#     overrides:
-#       alwaysAllow: [sudo, apt]
-
-# Trusted kubectl contexts — kubectl exec in these contexts are auto-allowed.
-# Remote commands (after --) are recursively evaluated through warden rules.
-# trustedKubectlContexts:
-#   - minikube
-#   - name: dev-cluster-*
+#   - context: kubectl
+#     name: minikube
+#   - context: kubectl
+#     name: dev-cluster-*
 #     overrides:
 #       alwaysAllow: [sudo]
-#   - name: prod-cluster
-#     overrides:
-#       alwaysDeny: [rm]
-
-# Trusted Sprites — sprite exec/console to these sprites are auto-allowed.
-# Remote commands are recursively evaluated through warden rules.
-# trustedSprites:
-#   - my-sprite                          # string → uses global overrides only
-#   - name: yudu-claw                    # allowAll: skip all checks (disposable env)
+#   - context: sprite
+#     name: my-sprite
+#   - context: sprite
+#     name: yudu-claw
 #     allowAll: true
-#   - name: dev-*                        # per-target overrides
-#     overrides:
-#       alwaysAllow: [sudo, apt]
-
-# Trusted Fly.io apps — fly ssh console to these apps are auto-allowed.
-# Remote commands (-C or after --) are recursively evaluated through warden rules.
-# trustedFlyApps:
-#   - my-fly-app
-#   - name: staging-*
+#   - context: fly
+#     name: my-fly-app
+#   - context: fly
+#     name: staging-*
 #     allowAll: true
-#   - name: prod-app
-#     overrides:
-#       alwaysAllow: [sudo, apt]
 
 # Override rules when evaluating commands inside trusted remote contexts
 # (docker exec, kubectl exec, ssh, sprite exec). These overrides are applied

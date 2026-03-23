@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import type {
   ParseResult, WardenConfig, EvalResult, Decision,
   CommandEvalDetail, ParsedCommand, CommandRule, TrustedTarget,
-  ChainAssignment,
+  TrustedRemote, ChainAssignment,
 } from './types';
 import { parseCommand } from './parser';
 import { scanScriptCode, readScriptFile } from './script-scanner';
@@ -153,25 +153,41 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   }
 
   // 2. Remote target whitelisting with recursive command evaluation
-  if ((command === 'ssh' || command === 'scp' || command === 'rsync') && config.trustedSSHHosts?.length) {
-    const sshResult = evaluateSSHCommand(cmd, config, depth);
-    if (sshResult) return sshResult;
+  const remotes = config.trustedRemotes || [];
+  if ((command === 'ssh' || command === 'scp' || command === 'rsync')) {
+    const targets = remotes.filter(t => t.context === 'ssh');
+    if (targets.length) {
+      const sshResult = evaluateSSHCommand(cmd, config, targets, depth);
+      if (sshResult) return sshResult;
+    }
   }
-  if (command === 'docker' && config.trustedDockerContainers?.length) {
-    const dockerResult = evaluateDockerExec(cmd, config, depth);
-    if (dockerResult) return dockerResult;
+  if (command === 'docker') {
+    const targets = remotes.filter(t => t.context === 'docker');
+    if (targets.length) {
+      const dockerResult = evaluateDockerExec(cmd, config, targets, depth);
+      if (dockerResult) return dockerResult;
+    }
   }
-  if (command === 'kubectl' && config.trustedKubectlContexts?.length) {
-    const kubectlResult = evaluateKubectlExec(cmd, config, depth);
-    if (kubectlResult) return kubectlResult;
+  if (command === 'kubectl') {
+    const targets = remotes.filter(t => t.context === 'kubectl');
+    if (targets.length) {
+      const kubectlResult = evaluateKubectlExec(cmd, config, targets, depth);
+      if (kubectlResult) return kubectlResult;
+    }
   }
-  if (command === 'sprite' && config.trustedSprites?.length) {
-    const spriteResult = evaluateSpriteExec(cmd, config, depth);
-    if (spriteResult) return spriteResult;
+  if (command === 'sprite') {
+    const targets = remotes.filter(t => t.context === 'sprite');
+    if (targets.length) {
+      const spriteResult = evaluateSpriteExec(cmd, config, targets, depth);
+      if (spriteResult) return spriteResult;
+    }
   }
-  if ((command === 'fly' || command === 'flyctl') && config.trustedFlyApps?.length) {
-    const flyResult = evaluateFlyCommand(cmd, config, depth);
-    if (flyResult) return flyResult;
+  if (command === 'fly' || command === 'flyctl') {
+    const targets = remotes.filter(t => t.context === 'fly');
+    if (targets.length) {
+      const flyResult = evaluateFlyCommand(cmd, config, targets, depth);
+      if (flyResult) return flyResult;
+    }
   }
   if (command === 'uv') {
     const uvResult = evaluateUvCommand(cmd, config, depth);
@@ -727,9 +743,9 @@ function extractHostFromRemotePath(args: string[]): string | null {
   return null;
 }
 
-function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, targets: TrustedRemote[], depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
-  const trustedHosts = config.trustedSSHHosts || [];
+  const trustedHosts = targets;
 
   if (command === 'scp' || command === 'rsync') {
     const host = extractHostFromRemotePath(args);
@@ -741,7 +757,7 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
         command, args,
         decision: 'allow',
         reason: `Trusted SSH host "${host}"${target.allowAll ? ' (allowAll)' : ''}`,
-        matchedRule: 'trustedSSHHosts',
+        matchedRule: 'trustedRemotes:ssh',
       };
     }
     if (target.overrides.alwaysDeny.some(name => name === command)) {
@@ -749,14 +765,14 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
         command, args,
         decision: 'deny',
         reason: `Trusted SSH host "${host}": "${command}" blocked by overrides`,
-        matchedRule: 'trustedSSHHosts',
+        matchedRule: 'trustedRemotes:ssh',
       };
     }
     return {
       command, args,
       decision: 'allow',
       reason: `Trusted SSH host "${host}"`,
-      matchedRule: 'trustedSSHHosts',
+      matchedRule: 'trustedRemotes:ssh',
     };
   }
 
@@ -772,7 +788,7 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
       command, args,
       decision: 'allow',
       reason: `Trusted SSH host "${host}" (interactive)`,
-      matchedRule: 'trustedSSHHosts',
+      matchedRule: 'trustedRemotes:ssh',
     };
   }
 
@@ -782,7 +798,7 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
       command, args,
       decision: 'allow',
       reason: `Trusted SSH host "${host}" (allowAll)`,
-      matchedRule: 'trustedSSHHosts',
+      matchedRule: 'trustedRemotes:ssh',
     };
   }
   const parsed = parseCommand(remoteCommand);
@@ -791,7 +807,7 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
     command, args,
     decision: result.decision,
     reason: `Trusted SSH host "${host}": ${result.reason}`,
-    matchedRule: 'trustedSSHHosts',
+    matchedRule: 'trustedRemotes:ssh',
   };
 }
 
@@ -907,13 +923,13 @@ function parseDockerExecArgs(args: string[]): ExecParseResult {
   return { target, remoteArgs };
 }
 
-function evaluateDockerExec(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+function evaluateDockerExec(cmd: ParsedCommand, config: WardenConfig, targets: TrustedRemote[], depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   if (args[0] !== 'exec') return null;
 
   const { target: containerName, remoteArgs } = parseDockerExecArgs(args.slice(1));
   if (!containerName) return null;
-  const matched = findMatchingTarget(containerName, config.trustedDockerContainers || []);
+  const matched = findMatchingTarget(containerName, targets);
   if (!matched) return null;
 
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
@@ -921,7 +937,7 @@ function evaluateDockerExec(cmd: ParsedCommand, config: WardenConfig, depth: num
     command, args,
     decision: result.decision,
     reason: `Trusted Docker container "${containerName}" (${result.reason})`,
-    matchedRule: 'trustedDockerContainers',
+    matchedRule: 'trustedRemotes:docker',
   };
 }
 
@@ -982,13 +998,13 @@ function parseKubectlExecArgs(args: string[]): { context: string | null; pod: st
   return { context, pod, remoteArgs };
 }
 
-function evaluateKubectlExec(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+function evaluateKubectlExec(cmd: ParsedCommand, config: WardenConfig, targets: TrustedRemote[], depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   if (args[0] !== 'exec') return null;
 
   const { context, pod, remoteArgs } = parseKubectlExecArgs(args.slice(1));
   if (!context) return null;
-  const matched = findMatchingTarget(context, config.trustedKubectlContexts || []);
+  const matched = findMatchingTarget(context, targets);
   if (!matched) return null;
 
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
@@ -996,7 +1012,7 @@ function evaluateKubectlExec(cmd: ParsedCommand, config: WardenConfig, depth: nu
     command, args,
     decision: result.decision,
     reason: `Trusted kubectl context "${context}"${pod ? `, pod "${pod}"` : ''} (${result.reason})`,
-    matchedRule: 'trustedKubectlContexts',
+    matchedRule: 'trustedRemotes:kubectl',
   };
 }
 
@@ -1065,11 +1081,11 @@ function parseSpriteExecArgs(args: string[]): { spriteName: string | null; remot
   return { spriteName, remoteArgs };
 }
 
-function evaluateSpriteExec(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+function evaluateSpriteExec(cmd: ParsedCommand, config: WardenConfig, targets: TrustedRemote[], depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   const { spriteName, remoteArgs } = parseSpriteExecArgs(args);
   if (!spriteName) return null;
-  const matched = findMatchingTarget(spriteName, config.trustedSprites || []);
+  const matched = findMatchingTarget(spriteName, targets);
   if (!matched) return null;
 
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
@@ -1077,7 +1093,7 @@ function evaluateSpriteExec(cmd: ParsedCommand, config: WardenConfig, depth: num
     command, args,
     decision: result.decision,
     reason: `Trusted sprite "${spriteName}" (${result.reason})`,
-    matchedRule: 'trustedSprites',
+    matchedRule: 'trustedRemotes:sprite',
   };
 }
 
@@ -1169,7 +1185,7 @@ function parseFlySSHArgs(args: string[]): FlySSHParseResult {
   return { app, remoteArgs, isSSH: isSSH && foundConsole };
 }
 
-function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, targets: TrustedRemote[], depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
   const { app, remoteArgs, isSSH } = parseFlySSHArgs(args);
 
@@ -1177,7 +1193,7 @@ function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
   if (!isSSH) return null;
   if (!app) return null;
 
-  const matched = findMatchingTarget(app, config.trustedFlyApps || []);
+  const matched = findMatchingTarget(app, targets);
   if (!matched) return null;
 
   const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
@@ -1185,7 +1201,7 @@ function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, depth: num
     command, args,
     decision: result.decision,
     reason: `Trusted Fly app "${app}" (${result.reason})`,
-    matchedRule: 'trustedFlyApps',
+    matchedRule: 'trustedRemotes:fly',
   };
 }
 

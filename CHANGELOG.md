@@ -5,6 +5,10 @@
 ### Added
 - Parser extracts script from `bash script.sh` invocations — evaluates the script path instead of `bash`
 - Glob patterns in `alwaysAllow`/`alwaysDeny`/rules: `*` (single segment), `**` (any depth)
+- Standalone `src/glob.ts` module with `globToRegex` and `pathGlobToRegex`
+
+### Changed
+- Unified `trustedSSHHosts`, `trustedDockerContainers`, `trustedKubectlContexts`, `trustedSprites`, `trustedFlyApps` into single `trustedRemotes` array with `context` discriminator. Old keys still work with deprecation warning.
 
 ## [2.3.0] - 2026-03-16
 
