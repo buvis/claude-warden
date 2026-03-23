@@ -18754,6 +18754,95 @@ function readScriptFile(filePath, cwd) {
   }
 }
 
+// src/glob.ts
+function globToRegex(pattern) {
+  let regex = "";
+  let i = 0;
+  while (i < pattern.length) {
+    const ch = pattern[i];
+    if (ch === "*") {
+      regex += ".*";
+    } else if (ch === "?") {
+      regex += ".";
+    } else if (ch === "[") {
+      i++;
+      if (i < pattern.length && pattern[i] === "!") {
+        regex += "[^";
+        i++;
+      } else {
+        regex += "[";
+      }
+      while (i < pattern.length && pattern[i] !== "]") {
+        regex += pattern[i];
+        i++;
+      }
+      if (i < pattern.length) {
+        regex += "]";
+      }
+    } else if (ch === "{") {
+      const end = pattern.indexOf("}", i);
+      if (end !== -1) {
+        const alternatives = pattern.slice(i + 1, end).split(",").map((s) => s.replace(/[.+^$|\\()]/g, "\\$&"));
+        regex += `(${alternatives.join("|")})`;
+        i = end;
+      } else {
+        regex += "\\{";
+      }
+    } else if (".+^$|\\()".includes(ch)) {
+      regex += "\\" + ch;
+    } else {
+      regex += ch;
+    }
+    i++;
+  }
+  return new RegExp(`^${regex}$`);
+}
+function pathGlobToRegex(pattern) {
+  let result = "";
+  let i = 0;
+  while (i < pattern.length) {
+    const ch = pattern[i];
+    if (ch === "*" && pattern[i + 1] === "*") {
+      result += ".*";
+      i++;
+    } else if (ch === "*") {
+      result += "[^/]*";
+    } else if (ch === "?") {
+      result += "[^/]";
+    } else if (ch === "[") {
+      i++;
+      if (i < pattern.length && pattern[i] === "!") {
+        result += "[^";
+        i++;
+      } else {
+        result += "[";
+      }
+      while (i < pattern.length && pattern[i] !== "]") {
+        result += pattern[i];
+        i++;
+      }
+      if (i < pattern.length) {
+        result += "]";
+      }
+    } else if (ch === "{") {
+      const end = pattern.indexOf("}", i);
+      if (end !== -1) {
+        const alternatives = pattern.slice(i + 1, end).split(",").map((s) => s.replace(/[.+^$|\\()]/g, "\\$&"));
+        result += `(${alternatives.join("|")})`;
+        i = end;
+      } else {
+        result += "\\{";
+      }
+    } else if (".+^$|\\()[]".includes(ch)) {
+      result += "\\" + ch;
+    } else {
+      result += ch;
+    }
+    i++;
+  }
+  return result;
+}
+
 // src/evaluator.ts
 function safeRegexTest(pattern, input) {
   try {
@@ -18763,22 +18852,6 @@ function safeRegexTest(pattern, input) {
 `);
     return false;
   }
-}
-function pathGlobToRegex(pattern) {
-  let result = "";
-  for (let i = 0; i < pattern.length; i++) {
-    if (pattern[i] === "*" && pattern[i + 1] === "*") {
-      result += ".*";
-      i++;
-    } else if (pattern[i] === "*") {
-      result += "[^/]*";
-    } else if (".+^${}()|[]\\".includes(pattern[i])) {
-      result += "\\" + pattern[i];
-    } else {
-      result += pattern[i];
-    }
-  }
-  return result;
 }
 function expandTilde(path) {
   return path.startsWith("~/") ? (0, import_os2.homedir)() + path.slice(1) : path;
@@ -19325,48 +19398,6 @@ var SSH_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
   "-W",
   "-w"
 ]);
-function globToRegex(pattern) {
-  let regex = "";
-  let i = 0;
-  while (i < pattern.length) {
-    const ch = pattern[i];
-    if (ch === "*") {
-      regex += ".*";
-    } else if (ch === "?") {
-      regex += ".";
-    } else if (ch === "[") {
-      i++;
-      if (i < pattern.length && pattern[i] === "!") {
-        regex += "[^";
-        i++;
-      } else {
-        regex += "[";
-      }
-      while (i < pattern.length && pattern[i] !== "]") {
-        regex += pattern[i];
-        i++;
-      }
-      if (i < pattern.length) {
-        regex += "]";
-      }
-    } else if (ch === "{") {
-      const end = pattern.indexOf("}", i);
-      if (end !== -1) {
-        const alternatives = pattern.slice(i + 1, end).split(",").map((s) => s.replace(/[.+^$|\\()]/g, "\\$&"));
-        regex += `(${alternatives.join("|")})`;
-        i = end;
-      } else {
-        regex += "\\{";
-      }
-    } else if (".+^$|\\()".includes(ch)) {
-      regex += "\\" + ch;
-    } else {
-      regex += ch;
-    }
-    i++;
-  }
-  return new RegExp(`^${regex}$`);
-}
 function findMatchingTarget(value, targets) {
   return targets.find((t) => globToRegex(t.name).test(value)) || null;
 }

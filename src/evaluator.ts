@@ -6,6 +6,7 @@ import type {
 } from './types';
 import { parseCommand } from './parser';
 import { scanScriptCode, readScriptFile } from './script-scanner';
+import { globToRegex, pathGlobToRegex } from './glob';
 
 /** Safely test a regex pattern, returning false on invalid patterns. */
 function safeRegexTest(pattern: string, input: string): boolean {
@@ -15,27 +16,6 @@ function safeRegexTest(pattern: string, input: string): boolean {
     process.stderr.write(`[warden] Warning: invalid regex pattern: ${pattern}\n`);
     return false;
   }
-}
-
-/**
- * Convert a path glob pattern to a RegExp string.
- * Path-aware: * matches within one segment, ** matches across segments.
- */
-function pathGlobToRegex(pattern: string): string {
-  let result = '';
-  for (let i = 0; i < pattern.length; i++) {
-    if (pattern[i] === '*' && pattern[i + 1] === '*') {
-      result += '.*';
-      i++; // skip second *
-    } else if (pattern[i] === '*') {
-      result += '[^/]*';
-    } else if ('.+^${}()|[]\\'.includes(pattern[i])) {
-      result += '\\' + pattern[i];
-    } else {
-      result += pattern[i];
-    }
-  }
-  return result;
 }
 
 /** Expand leading ~/ to the user's home directory. */
@@ -689,53 +669,6 @@ const SSH_FLAGS_WITH_VALUE = new Set([
   '-b', '-c', '-D', '-E', '-e', '-F', '-I', '-i', '-J', '-L',
   '-l', '-m', '-O', '-o', '-p', '-Q', '-R', '-S', '-W', '-w',
 ]);
-
-/** Convert a glob pattern to a RegExp. Supports *, ?, [...], and {a,b,c}. */
-function globToRegex(pattern: string): RegExp {
-  let regex = '';
-  let i = 0;
-  while (i < pattern.length) {
-    const ch = pattern[i];
-    if (ch === '*') {
-      regex += '.*';
-    } else if (ch === '?') {
-      regex += '.';
-    } else if (ch === '[') {
-      // Pass through character class until closing ]
-      i++;
-      // Handle negation [!...] → [^...]
-      if (i < pattern.length && pattern[i] === '!') {
-        regex += '[^';
-        i++;
-      } else {
-        regex += '[';
-      }
-      while (i < pattern.length && pattern[i] !== ']') {
-        regex += pattern[i];
-        i++;
-      }
-      if (i < pattern.length) {
-        regex += ']';
-      }
-    } else if (ch === '{') {
-      // Brace expansion {a,b,c} → (a|b|c)
-      const end = pattern.indexOf('}', i);
-      if (end !== -1) {
-        const alternatives = pattern.slice(i + 1, end).split(',').map(s => s.replace(/[.+^$|\\()]/g, '\\$&'));
-        regex += `(${alternatives.join('|')})`;
-        i = end;
-      } else {
-        regex += '\\{';
-      }
-    } else if ('.+^$|\\()'.includes(ch)) {
-      regex += '\\' + ch;
-    } else {
-      regex += ch;
-    }
-    i++;
-  }
-  return new RegExp(`^${regex}$`);
-}
 
 function matchesPattern(value: string, targets: TrustedTarget[]): boolean {
   return targets.some(t => globToRegex(t.name).test(value));
