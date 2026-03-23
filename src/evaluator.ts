@@ -7,6 +7,7 @@ import type {
 import { parseCommand } from './parser';
 import { scanScriptCode, readScriptFile } from './script-scanner';
 import { globToRegex, pathGlobToRegex } from './glob';
+import { evaluateTargetPolicies } from './targets';
 
 /** Safely test a regex pattern, returning false on invalid patterns. */
 function safeRegexTest(pattern: string, input: string): boolean {
@@ -150,6 +151,12 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   if (command === 'rm' && chainAssignments?.size) {
     const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config);
     if (rmResult) return detail(rmResult);
+  }
+
+  // 1d. Target-aware policies (path, database, endpoint)
+  if (cwd && config.targetPolicies?.length) {
+    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
+    if (targetResult) return detail(targetResult);
   }
 
   // 2. Remote target whitelisting with recursive command evaluation
