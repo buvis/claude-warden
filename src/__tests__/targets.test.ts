@@ -294,6 +294,13 @@ describe('target policies', () => {
       expect(result!.decision).toBe('deny');
     });
 
+    it('--url= syntax: curl --url=https://internal.api/secret', () => {
+      const config = configWith([{ type: 'endpoint', pattern: 'https://internal.api*', decision: 'deny' }]);
+      const result = evaluateTargetPolicies(cmd('curl', ['--url=https://internal.api/secret']), '/', config);
+      expect(result).not.toBeNull();
+      expect(result!.decision).toBe('deny');
+    });
+
     it('glob matching: pattern https://api.dev.* matches', () => {
       const config = configWith([{ type: 'endpoint', pattern: 'https://api.dev.*', decision: 'allow' }]);
       const result = evaluateTargetPolicies(cmd('curl', ['https://api.dev.example.com']), '/', config);

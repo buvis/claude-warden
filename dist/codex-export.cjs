@@ -18993,6 +18993,10 @@ function extractUrls(cmd) {
       urls.push(args2[++i]);
       continue;
     }
+    if (arg.startsWith("--url=")) {
+      urls.push(arg.slice(6));
+      continue;
+    }
     if (arg.startsWith("http://") || arg.startsWith("https://")) {
       urls.push(arg);
     }

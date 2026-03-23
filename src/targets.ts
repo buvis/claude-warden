@@ -143,6 +143,10 @@ function extractUrls(cmd: ParsedCommand): string[] {
       urls.push(args[++i]);
       continue;
     }
+    if (arg.startsWith('--url=')) {
+      urls.push(arg.slice(6));
+      continue;
+    }
     if (arg.startsWith('http://') || arg.startsWith('https://')) {
       urls.push(arg);
     }
