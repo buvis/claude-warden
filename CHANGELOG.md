@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-24
+
+### Fixed
+- Log fatal errors to stderr instead of silently swallowing them
+
 ## [0.2.2] - 2026-03-24
 
 ### Fixed
