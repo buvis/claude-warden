@@ -45,6 +45,10 @@ Releases are done remotely by creating a GitHub release (not by publishing local
 1. Merge PR to `master`
 2. `gh release create vX.Y.Z --target master --title "vX.Y.Z" --notes "..."`
 
+**Burned npm versions:** v3.0.0 was published to npm by mistake and can never be reused. When versioning reaches v3, start from v3.0.1.
+
+**Version bumps require explicit user approval.** Never change the major or minor version without asking first.
+
 ## Safety invariant for auto-allow features
 
 The evaluator has features that auto-allow commands without user prompts (chain-local variable resolution, chain-local rm cleanup, trusted remote contexts). These must never override user-configured restrictions:
