@@ -1,0 +1,66 @@
+site_name: Claude Warden
+site_url: https://buvis.github.io/claude-warden/
+site_description: Smart command safety filter for Claude Code
+repo_url: https://github.com/buvis/claude-warden
+repo_name: buvis/claude-warden
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - def_list
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: guide/getting-started.md
+      - Configuration: guide/configuration.md
+      - Built-in Defaults: guide/defaults.md
+      - Trusted Remotes: guide/trusted-remotes.md
+      - Target Policies: guide/target-policies.md
+      - YOLO Mode: guide/yolo-mode.md
+      - Slash Commands: guide/slash-commands.md
+      - Notifications & Audit: guide/notifications-audit.md
+      - FAQ: guide/faq.md
+  - Developer Guide:
+      - Architecture: dev/architecture.md
+      - Contributing: dev/contributing.md
+      - Hook Protocol: dev/hook-protocol.md
+      - Codex Export: dev/codex-export.md

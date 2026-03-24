@@ -2,31 +2,15 @@
 
 [![GitHub license](https://img.shields.io/github/license/buvis/claude-warden)](https://github.com/buvis/claude-warden/blob/master/LICENSE)
 
-Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands, evaluates each against configurable safety rules, and returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
+Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands into AST, evaluates each against configurable safety rules, returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
 
 ## The problem
 
-Claude Code's permission system is all-or-nothing. In the default mode, you're prompted for **every** shell command — even `ls`, `cat`, and `grep`. This creates a painful UX where you're clicking "Allow" hundreds of times per session on obviously safe commands. The alternative (yolo mode) disables all prompts, which is dangerous.
+Claude Code's permission system is all-or-nothing. Default mode prompts for **every** shell command — even `ls` and `cat`. YOLO mode disables all prompts, which is dangerous. No middle ground.
 
-There's no middle ground: you can't say "allow `git` but block `git push --force`", or "allow `ssh` to my dev server but prompt for production". And compound commands like `npm run build && npm test` trigger a single opaque prompt with no visibility into what's actually being run.
+## What Warden does
 
-## How Warden solves it
-
-Warden hooks into Claude Code's `PreToolUse` event and **parses every shell command into an AST** using [bash-parser](https://github.com/vorpaljs/bash-parser). This means it doesn't just see `npm run build && git push --force` as a single string — it walks the AST to extract each individual command, then evaluates them independently against a configurable rule engine.
-
-This AST-based approach enables:
-
-- **Pipe and chain decomposition**: `cat file | grep pattern | wc -l` is parsed into three commands, each evaluated separately. All safe → auto-allow. One dangerous → deny the whole pipeline.
-- **Argument-aware rules**: `git status` → allow, `git push --force` → prompt. `rm temp.txt` → allow, `rm -rf /` → prompt. The evaluator matches against argument patterns, not just command names.
-- **Recursive evaluation of remote commands**: `ssh devserver 'cat /etc/hosts'` → Warden extracts the remote command, parses it through the same pipeline, and allows it. `ssh devserver 'sudo rm -rf /'` → denied. Same for `docker exec`, `kubectl exec`, and `sprite exec`.
-- **Shell wrapper unwrapping**: `sh -c "npm run build && npm test"` → the inner command is extracted and recursively parsed/evaluated, not treated as an opaque string.
-- **Env prefix handling**: `NODE_ENV=production npm run build` → correctly evaluates `npm run build`, ignoring the env prefix.
-- **Recursive subshell evaluation**: Commands with `$()` or backticks are extracted, parsed, and recursively evaluated through the same pipeline. `echo $(cat file.txt)` → both `echo` and `cat` are evaluated individually. Only unparseable constructs (heredocs, complex shell syntax) fall back to prompting when `askOnSubshell` is enabled.
-- **Feedback on blocked commands**: When a command is blocked or flagged, Warden provides a system message explaining why and a YAML snippet showing how to allow it in your config.
-
-The result: **100+ common dev commands auto-approved**, dangerous commands auto-denied, everything else configurable — with zero changes to how you use Claude Code.
-
-### Before and after
+Hooks into Claude Code's `PreToolUse` event. Parses every command through [bash-parser](https://github.com/vorpaljs/bash-parser), walks the AST to extract individual commands from pipes, chains, and subshells, evaluates each independently.
 
 | Command | Without Warden | With Warden |
 |---------|---------------|-------------|
@@ -36,7 +20,6 @@ The result: **100+ common dev commands auto-approved**, dangerous commands auto-
 | `git push --force origin main` | Prompted | Prompted (force push is risky) |
 | `sudo rm -rf /` | Prompted | Auto-denied (sudo is blocked) |
 | `ssh devserver cat /etc/hosts` | Prompted | Auto-allowed (trusted host + safe cmd) |
-| `ssh devserver sudo rm -rf /` | Prompted | Auto-denied (trusted host + dangerous cmd) |
 
 ## Install
 
@@ -47,221 +30,20 @@ Two commands inside Claude Code:
 /plugin install warden@buvis-plugins
 ```
 
-Restart Claude Code and Warden is active.
-
-## Codex CLI (experimental)
-
-Codex currently uses `execpolicy` (`.rules` files) for command approvals. Warden can export your effective command-level decisions to a Codex rules file:
-
-```bash
-pnpm run build
-pnpm run codex:export-rules
-```
-
-This writes `.codex/rules/warden.rules` in the current project by default.
-
-- Use `--cwd <dir>` to choose which workspace config to load.
-- Use `--out <path>` to choose an output path.
-- Use `--stdout` to print the generated rules.
-
-Example:
-
-```bash
-node dist/codex-export.cjs --cwd . --out .codex/rules/warden.rules
-```
+Restart Claude Code and Warden is active. Works out of the box with sensible defaults.
 
 ## Configure
 
-Warden works out of the box with sensible defaults. To customize, create a config file:
+Create config files to customize:
 
-- **User-level** (applies everywhere): `~/.claude/warden.yaml`
-- **Project-level** (overrides user-level): `.claude/warden.yaml`
+- **User-level**: `~/.claude/warden.yaml`
+- **Project-level**: `.claude/warden.yaml`
 
-Copy [config/warden.default.yaml](config/warden.default.yaml) as a starting point.
+Copy [`config/warden.default.yaml`](config/warden.default.yaml) as a starting point.
 
-### Config priority (scoped layers)
+## Documentation
 
-Config is evaluated in layers with **project > user > default** priority:
-
-1. **Project-level** (`.claude/warden.yaml`) — highest priority
-2. **User-level** (`~/.claude/warden.yaml`)
-3. **Built-in defaults**
-
-Within each layer, `alwaysDeny` is checked before `alwaysAllow`. The first layer with a matching entry wins. For command-specific rules, the first layer that defines a rule for a given command wins.
-
-This means:
-- A project `alwaysDeny` for `curl` overrides a user `alwaysAllow` for `curl`
-- A user `alwaysAllow` for `sudo` overrides the default `alwaysDeny` for `sudo`
-- A project rule for `npm` overrides the default rule for `npm`
-
-### Config options
-
-```yaml
-# Default decision for unknown commands: allow | deny | ask
-defaultDecision: ask
-
-# Trigger "ask" for commands with $() or backticks
-askOnSubshell: true
-
-# Add commands to always allow/deny (scoped to this config level)
-alwaysAllow:
-  - terraform
-  - flyctl
-alwaysDeny:
-  - nc
-
-# Trusted remote targets (auto-allow connection, evaluate remote commands)
-trustedSSHHosts:
-  - devserver
-  - "*.internal.company.com"
-trustedDockerContainers:
-  - my-app
-  - dev-*
-trustedKubectlContexts:
-  - minikube
-trustedSprites:
-  - my-sprite
-
-# Per-command rules (override built-in defaults for this scope)
-rules:
-  - command: npx
-    default: allow
-  - command: docker
-    default: ask
-    argPatterns:
-      - match:
-          anyArgMatches: ['^(ps|images|logs)$']
-        decision: allow
-        description: Read-only docker commands
-```
-
-## YOLO mode
-
-Need to temporarily bypass all permission prompts? YOLO mode auto-allows all commands for a limited time or the full session — while still blocking always-deny commands (like `sudo`, `shutdown`) for safety.
-
-### Activate via slash command
-
-```
-/warden:yolo session    # Full session, no expiry
-/warden:yolo 5m         # 5 minutes
-/warden:yolo 15m        # 15 minutes
-/warden:yolo off        # Turn off immediately
-```
-
-Running `/warden:yolo` with no arguments shows a menu of duration options.
-
-### Activate via environment variable
-
-For non-interactive sessions where `/warden:yolo` can't be invoked (e.g. piped prompts), set the `WARDEN_YOLO` env var:
-
-```bash
-WARDEN_YOLO=true claude < prompts.txt
-WARDEN_YOLO=1 claude < prompts.txt
-```
-
-Unlike the slash command, `WARDEN_YOLO` bypasses **all** checks including always-deny commands — it short-circuits before any parsing or evaluation, same as `--dangerously-skip-permissions`.
-
-### How it works
-
-YOLO mode is **session-scoped** — it only affects the current Claude Code session. The hook intercepts special activation commands and stores state in a temp file keyed by session ID. When a command is evaluated during YOLO mode, the hook skips normal rule evaluation and auto-allows (except always-deny commands). Expired YOLO states are cleaned up automatically.
-
-### Discovery
-
-When Warden prompts you for permission (`ask` decision), the system message includes a tip about YOLO mode so you can discover it when you need it most.
-
-## Feedback and `/warden:allow`
-
-When Warden blocks or flags a command, it includes a system message explaining:
-
-1. **Why** the command was blocked/flagged (per-command reasons)
-2. **How to allow it** — a ready-to-use YAML snippet for your config
-
-Use the `/warden:allow` slash command to apply the suggested config change. It will ask which scope (project or user) to use.
-
-## Built-in defaults
-
-### Always allowed (~60 commands)
-File readers (`cat`, `head`, `tail`, `less`), search tools (`grep`, `rg`, `find`, `fd`), directory listing (`ls`, `tree`), text processing (`sed`, `awk`, `jq`), git, package managers (`npm`, `pnpm`, `yarn`), build tools (`make`, `cargo`, `go`, `tsc`), and more.
-
-### Always denied
-`sudo`, `su`, `mkfs`, `fdisk`, `dd`, `shutdown`, `reboot`, `iptables`, `crontab`, `systemctl`, `launchctl`
-
-### Conditional rules
-Commands like `node`, `npx`, `docker`, `ssh`, `git push --force`, `rm`, `chmod` have argument-aware rules. For example:
-- `git` is allowed but `git push --force` triggers a prompt
-- `rm temp.txt` is allowed but `rm -rf /` is prompted
-- `chmod 644 file` prompts but `chmod -R 777 /var` is denied
-
-### Trusted remote targets
-Configure trusted hosts/containers/contexts to auto-allow connections and recursively evaluate remote commands:
-- **SSH**: `trustedSSHHosts` — also covers `scp` and `rsync`
-- **Docker**: `trustedDockerContainers` — for `docker exec`
-- **kubectl**: `trustedKubectlContexts` — for `kubectl exec` (requires explicit `--context`)
-- **Sprite**: `trustedSprites` — for `sprite exec`/`console`
-
-All support glob patterns: `*`, `?`, `[...]`, `[!...]`, `{a,b,c}`
-
-## How it works
-
-1. Claude Code calls the `PreToolUse` hook before every Bash command
-2. Warden parses the command into an AST via [bash-parser](https://github.com/vorpaljs/bash-parser), walking the tree to extract individual commands from pipes, chains, logical expressions, and subshells
-3. Shell wrappers (`sh -c`, `bash -c`) and remote commands (`ssh`, `docker exec`, `kubectl exec`, `sprite exec`) are recursively parsed and evaluated
-4. Each command is evaluated through the rule hierarchy: alwaysDeny → alwaysAllow → trusted remote targets → command-specific rules with argument matching → default decision (checked per layer in priority order)
-5. Results are combined: any deny → deny whole pipeline, any ask → ask, all allow → allow
-6. Returns the decision via stdout JSON (allow/ask) or exit code 2 (deny), with a system message explaining the reasoning for deny/ask decisions
-
-## FAQ
-
-### Warden says "All commands are safe" but I still get a permission prompt
-
-This usually means **another plugin's hook** is overriding Warden's decision. When multiple PreToolUse hooks run, Claude Code uses "most restrictive wins" — if any hook returns `ask`, it overrides another hook's `allow`.
-
-**Common culprit:** The `github-dev` plugin ships a `git_commit_confirm.py` hook that returns `permissionDecision: "ask"` for every `git commit` command, regardless of what Warden decides. You'll see something like:
-
-```
-Hook PreToolUse:Bash requires confirmation for this command:
-[warden] All commands are safe
-```
-
-Warden evaluated the command as safe, but the other hook forced a confirmation prompt.
-
-**How to fix:** Uninstall or disable the conflicting plugin. For example:
-
-```
-/plugin uninstall github-dev
-```
-
-**How to diagnose:** If you see Warden's `[warden] All commands are safe` message alongside a permission prompt, another hook is the cause. Check your installed plugins for PreToolUse hooks:
-
-```
-/plugin list
-```
-
-Then inspect each plugin's `hooks/hooks.json` for PreToolUse entries targeting `Bash`.
-
-## Fork info
-
-This is a fork of [banyudu/claude-warden](https://github.com/banyudu/claude-warden). The original repo is tracked as the `banyudu` remote for selective cherry-picking.
-
-```bash
-# pull individual changes from the original repo
-git fetch banyudu
-git cherry-pick <commit>
-
-# or bulk sync (may conflict with local changes)
-git fetch banyudu
-git merge banyudu/main
-```
-
-## Development
-
-```bash
-pnpm install
-pnpm run build        # Build to dist/index.cjs
-pnpm run test         # Run tests
-pnpm run typecheck    # Type check
-pnpm run dev          # Watch mode
-```
+Full user and developer documentation at **[buvis.github.io/claude-warden](https://buvis.github.io/claude-warden/)**.
 
 ## License
 
