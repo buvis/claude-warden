@@ -21686,8 +21686,17 @@ async function main() {
   process.exit(0);
 }
 main().catch((err) => {
-  process.stderr.write(`[warden] fatal: ${err?.message ?? err}
+  const msg = `[warden] fatal: ${err?.message ?? err}`;
+  process.stderr.write(`${msg}
 `);
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "ask",
+      permissionDecisionReason: msg
+    }
+  };
+  process.stdout.write(JSON.stringify(output));
   process.exit(0);
 });
 /*! Bundled license information:

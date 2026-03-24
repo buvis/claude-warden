@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-03-24
+
+### Fixed
+- Crash handler now returns `ask` instead of silently passing through, so broken config or bugs surface as prompts rather than allowing commands unchecked
+
 ## [3.0.0] - 2026-03-24
 
 ### Changed

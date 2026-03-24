@@ -194,6 +194,15 @@ async function main() {
 }
 
 main().catch((err) => {
-  process.stderr.write(`[warden] fatal: ${err?.message ?? err}\n`);
+  const msg = `[warden] fatal: ${err?.message ?? err}`;
+  process.stderr.write(`${msg}\n`);
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask' as const,
+      permissionDecisionReason: msg,
+    },
+  };
+  process.stdout.write(JSON.stringify(output));
   process.exit(0);
 });
