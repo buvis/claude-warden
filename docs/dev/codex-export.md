@@ -11,9 +11,9 @@ pnpm run codex:export-rules
 
 Options:
 
-- `--cwd <dir>` — workspace config to load (default: current directory)
-- `--out <path>` — output path (default: `<cwd>/.codex/rules/warden.rules`)
-- `--stdout` — print to stdout instead of file
+- `--cwd <dir>` - workspace config to load (default: current directory)
+- `--out <path>` - output path (default: `<cwd>/.codex/rules/warden.rules`)
+- `--stdout` - print to stdout instead of file
 
 Example:
 

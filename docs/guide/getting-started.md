@@ -15,13 +15,13 @@ Restart Claude Code to activate the hook.
 
 Warden registers a PreToolUse hook that intercepts every Bash tool call. The pipeline:
 
-1. **Parse** — splits the command into individual parts (handling pipes, chains, quotes, shell wrappers)
-2. **Evaluate** — checks each part against safety rules (global deny list, allow list, argument patterns, target policies)
-3. **Decide** — returns `allow` (silent), `ask` (falls through to user prompt), or `deny` (blocks with reason on stderr)
+1. **Parse** - splits the command into individual parts (handling pipes, chains, quotes, shell wrappers)
+2. **Evaluate** - checks each part against safety rules (global deny list, allow list, argument patterns, target policies)
+3. **Decide** - returns `allow` (silent), `ask` (falls through to user prompt), or `deny` (blocks with reason on stderr)
 
 ## First steps
 
-Warden works out of the box. The built-in defaults cover 100+ common dev commands — `ls`, `cat`, `grep`, `git`, `npm`, `node`, `docker`, and many more — with argument-aware rules that distinguish safe from risky usage.
+Warden works out of the box. The built-in defaults cover 100+ common dev commands - `ls`, `cat`, `grep`, `git`, `npm`, `node`, `docker`, and many more - with argument-aware rules that distinguish safe from risky usage.
 
 No configuration needed to start. Just install and go.
 

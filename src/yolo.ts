@@ -22,7 +22,7 @@ export function getYoloState(sessionId: string): YoloState | null {
 
     // Check expiry
     if (state.expiresAt && new Date(state.expiresAt) <= new Date()) {
-      // Expired — clean up
+      // Expired - clean up
       try { unlinkSync(filePath); } catch {}
       return null;
     }

@@ -47,7 +47,7 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"},"session_id":"test
 
 ## Releasing
 
-Releases publish via CI when a GitHub release is created — not locally.
+Releases publish via CI when a GitHub release is created - not locally.
 
 ```bash
 pnpm run release           # patch bump
@@ -61,8 +61,8 @@ This bumps version, updates changelog, commits, pushes, and creates a GitHub rel
 
 Auto-allow features (chain variable resolution, chain rm cleanup, trusted remotes) must never override user restrictions:
 
-1. `alwaysDeny` always checked first — no auto-allow can bypass it
+1. `alwaysDeny` always checked first - no auto-allow can bypass it
 2. Chain-resolved auto-allow only fires when no matching rules exist
 3. Chain-local rm checks rules before allowing
 
-Principle: auto-allow only upgrades the default "ask" — never downgrades an explicit deny.
+Principle: auto-allow only upgrades the default "ask" - never downgrades an explicit deny.

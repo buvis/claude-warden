@@ -90,7 +90,7 @@ const KNOWN_COMMANDS = new Set([
 /**
  * Detect likely misconfiguration where argPatterns on one command
  * seem to reference another command name (e.g. argPatterns on "bash"
- * matching "python"). This is a common user mistake — rules must
+ * matching "python"). This is a common user mistake - rules must
  * target the actual command being invoked.
  */
 function warnArgPatternCommandMismatch(rule: CommandRule): void {
@@ -107,7 +107,7 @@ function warnArgPatternCommandMismatch(rule: CommandRule): void {
       for (const lit of literals) {
         if (lit !== rule.command && KNOWN_COMMANDS.has(lit)) {
           process.stderr.write(
-            `[warden] Warning: rule for "${rule.command}" has argPattern matching "${lit}" — ` +
+            `[warden] Warning: rule for "${rule.command}" has argPattern matching "${lit}" - ` +
             `this won't work as expected. Rules are matched by the command being run, not its arguments. ` +
             `If you want to control "${lit}", add a separate rule with command: "${lit}".\n`
           );

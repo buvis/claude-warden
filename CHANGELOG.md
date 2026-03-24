@@ -21,14 +21,14 @@
 
 ### Added
 - Target-aware security policies (path, database, endpoint) that evaluate commands by their targets, not just names
-- Parser extracts script from `bash script.sh` invocations — evaluates the script path instead of `bash`
+- Parser extracts script from `bash script.sh` invocations - evaluates the script path instead of `bash`
 - Glob patterns in `alwaysAllow`/`alwaysDeny`/rules: `*` (single segment), `**` (any depth)
 - Standalone `src/glob.ts` module with `globToRegex` and `pathGlobToRegex`
-- Script safety scanning for python, node/tsx/ts-node, and perl — auto-allows safe scripts, flags dangerous patterns
-- npx/bunx/pnpx recursive evaluation — evaluates the subcommand, not the runner
-- `uv run` recursive evaluation — evaluates the inner command
+- Script safety scanning for python, node/tsx/ts-node, and perl - auto-allows safe scripts, flags dangerous patterns
+- npx/bunx/pnpx recursive evaluation - evaluates the subcommand, not the runner
+- `uv run` recursive evaluation - evaluates the inner command
 - Audit logging with JSONL output and size-based rotation (`audit`, `auditPath`, `auditAllowDecisions` config)
-- Conditional `export` rule — allows PATH extension, asks on PATH replacement and LD_PRELOAD
+- Conditional `export` rule - allows PATH extension, asks on PATH replacement and LD_PRELOAD
 - Redesigned ask/deny messages with `/warden:allow` hints and option suggestions
 - Published as `@buvis/claude-warden`
 

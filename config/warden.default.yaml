@@ -32,7 +32,7 @@ notifyOnDeny: true
 #   - nc
 #   - ncat
 
-# Trusted remote execution contexts — SSH, Docker, kubectl, Sprite, Fly.io.
+# Trusted remote execution contexts - SSH, Docker, kubectl, Sprite, Fly.io.
 # Commands on trusted remotes are recursively evaluated through warden rules.
 # Supports glob patterns (* wildcards) for names.
 # Each entry requires a `context` (ssh, docker, kubectl, sprite, fly) and `name`.
@@ -85,7 +85,7 @@ notifyOnDeny: true
 #   alwaysDeny: []
 #   rules: []
 
-# Target-aware security policies — evaluate commands by their targets
+# Target-aware security policies - evaluate commands by their targets
 # (filesystem paths, database connections, HTTP endpoints), not just names.
 # Policies from user and project configs are concatenated. If multiple match,
 # most restrictive wins (deny > allow).
@@ -120,7 +120,7 @@ notifyOnDeny: true
 #
 # IMPORTANT: Rules are matched by the command being executed, not by arguments.
 # For example, when Claude runs `python -c "import foo"`, warden looks up rules
-# for command: "python" — NOT "bash" or "sh". A common mistake is writing rules
+# for command: "python" - NOT "bash" or "sh". A common mistake is writing rules
 # for "bash" with argPatterns matching "python"; this won't work because warden
 # sees the command as "python".
 #

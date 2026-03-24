@@ -80,7 +80,7 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
       }
     }
   } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
-    // Unparseable subshell (heredocs, complex constructs) — fall back to ask
+    // Unparseable subshell (heredocs, complex constructs) - fall back to ask
     return { decision: 'ask', reason: 'contains subshell', details: [] };
   }
 
@@ -147,7 +147,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     if (varMatch) {
       const assignment = chainAssignments.get(varMatch[1]);
       if (assignment && !assignment.isDynamic && assignment.value !== null) {
-        // Only auto-allow if no rules exist — rules may have dangerous-arg patterns
+        // Only auto-allow if no rules exist - rules may have dangerous-arg patterns
         if (!collectMergedRule(cmd, config)) {
           return detail({ command, args, decision: 'allow', reason: `chain-local binary (${assignment.value})`, matchedRule: 'chainResolved' });
         }
@@ -156,7 +156,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   }
 
   // 1d. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
-  // Only upgrades ask→allow — if rules would deny, respect that.
+  // Only upgrades ask→allow - if rules would deny, respect that.
   // Resolves variables for target policy checking.
   if (command === 'rm' && chainAssignments?.size) {
     const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
@@ -217,7 +217,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     if (pkgResult) return pkgResult;
   }
 
-  // 2c. Script safety scanning — language-specific evaluators
+  // 2c. Script safety scanning - language-specific evaluators
   if (command === 'python' || command === 'python3') {
     const pyResult = evaluatePythonCommand(cmd, config, depth, cwd);
     if (pyResult) return pyResult;
@@ -231,7 +231,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     if (perlResult) return perlResult;
   }
 
-  // 3. Scoped command rules — collect and merge across layers
+  // 3. Scoped command rules - collect and merge across layers
   const mergedRule = collectMergedRule(cmd, config);
   if (mergedRule) {
     return evaluateRule(cmd, mergedRule);
@@ -241,7 +241,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   return { command, args, decision: config.defaultDecision, reason: 'unknown command', matchedRule: 'default' };
 }
 
-/** Match $VAR, ${VAR}, "$VAR", "${VAR}" — with optional surrounding quotes. */
+/** Match $VAR, ${VAR}, "$VAR", "${VAR}" - with optional surrounding quotes. */
 const VAR_REF_REGEX = /^"?\$\{?(\w+)\}?"?$/;
 
 function extractVarName(text: string): string | null {
@@ -267,7 +267,7 @@ function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, 
   }
 
   // Respect user rules: if any layer's rule default is deny, don't override.
-  // Check layer rules directly — merged argPatterns from lower layers shouldn't
+  // Check layer rules directly - merged argPatterns from lower layers shouldn't
   // mask a higher-priority layer's intent to deny.
   for (const layer of config.layers) {
     const rule = layer.rules.find(r => commandMatchesName(cmd, r.command));
@@ -432,7 +432,7 @@ function parseUvRunSubcommand(args: string[]): { subcommand: ParsedCommand | nul
       continue;
     }
 
-    // Unknown flag — can't safely resolve
+    // Unknown flag - can't safely resolve
     return { subcommand: null, unresolved: true };
   }
 
@@ -469,7 +469,7 @@ function evaluateUvCommand(cmd: ParsedCommand, config: WardenConfig, depth: numb
         matchedRule: 'uv:run',
       };
     }
-    // No inner command (bare `uv run`) — fall through to rules
+    // No inner command (bare `uv run`) - fall through to rules
     return null;
   }
 
@@ -608,7 +608,7 @@ function evaluateXargsCommand(cmd: ParsedCommand, config: WardenConfig, depth: n
     };
   }
 
-  // Handle sh/bash/zsh -c "..." — recursively parse inner command
+  // Handle sh/bash/zsh -c "..." - recursively parse inner command
   const isShellExec =
     (subcommand.command === 'sh' || subcommand.command === 'bash' || subcommand.command === 'zsh') &&
     subcommand.args.length >= 2 &&
@@ -821,7 +821,7 @@ function evaluateSSHCommand(cmd: ParsedCommand, config: WardenConfig, targets: T
     };
   }
 
-  // Trusted host with remote command — recursively evaluate with context overrides
+  // Trusted host with remote command - recursively evaluate with context overrides
   if (target.allowAll) {
     return {
       command, args,
@@ -911,7 +911,7 @@ function evaluateRemoteCommand(
     return evaluate(parsed, overriddenConfig, depth + 1);
   }
 
-  // Normal command — construct a ParsedCommand directly from structured args
+  // Normal command - construct a ParsedCommand directly from structured args
   const parsed: ParseResult = {
     commands: [{ command: remoteCmd, originalCommand: remoteCmd, args: remoteArgs.slice(1), envPrefixes: [], raw: remoteArgs.join(' ') }],
     hasSubshell: false,
@@ -1095,7 +1095,7 @@ function parseSpriteExecArgs(args: string[]): { spriteName: string | null; remot
         i++;
         continue;
       }
-      // Unknown positional before subcommand — bail
+      // Unknown positional before subcommand - bail
       return { spriteName: null, remoteArgs: [] };
     }
 
@@ -1218,7 +1218,7 @@ function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, targets: T
   const { command, args } = cmd;
   const { app, remoteArgs, isSSH } = parseFlySSHArgs(args);
 
-  // Only handle ssh console — other fly commands fall through to regular rules
+  // Only handle ssh console - other fly commands fall through to regular rules
   if (!isSSH) return null;
   if (!app) return null;
 
@@ -1284,7 +1284,7 @@ function evaluatePkgRunnerSubcommand(cmd: ParsedCommand, config: WardenConfig, d
 /**
  * Check if user rules explicitly deny this command. Returns true only if a rule
  * sets `default: 'deny'`, meaning the script evaluator should NOT override with allow.
- * A rule with `default: 'ask'` (the built-in baseline) is fine — the script scanner
+ * A rule with `default: 'ask'` (the built-in baseline) is fine - the script scanner
  * is providing additional info to upgrade ask → allow. Only explicit deny is a hard block.
  * Respects safety invariant: auto-allow never downgrades a user's explicit deny.
  */
@@ -1301,7 +1301,7 @@ function mapScanResult(
   config: WardenConfig,
 ): CommandEvalDetail | null {
   if (!scanResult) {
-    // Safe script — but respect user rules if they restrict this command
+    // Safe script - but respect user rules if they restrict this command
     if (userRulesWouldRestrict(cmd, config)) return null;
     return { command: cmd.command, args: cmd.args, decision: 'allow', reason: 'script content is safe', matchedRule };
   }

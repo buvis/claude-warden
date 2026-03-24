@@ -52,7 +52,7 @@ export function globToRegex(pattern: string): RegExp {
  * Path-aware glob → regex string (not compiled).
  * * matches a single path segment ([^/]*), ** matches any depth (.*).
  * Also supports ?, [...], [!...], {a,b,c}.
- * Returns a string — callers wrap in ^...$ anchors.
+ * Returns a string - callers wrap in ^...$ anchors.
  */
 export function pathGlobToRegex(pattern: string): string {
   let result = '';

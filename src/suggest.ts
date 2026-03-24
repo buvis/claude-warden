@@ -77,7 +77,7 @@ export function formatSystemMessage(
   const relevant = details.filter(d => d.decision !== 'allow');
 
   if (decision === 'ask') {
-    // Compact 1-line reason — use resolved name if available
+    // Compact 1-line reason - use resolved name if available
     const parts = relevant.map(d => {
       const displayName = d.resolvedFrom ? `${d.command} (via ${d.resolvedFrom})` : d.command;
       return `${displayName}: ${d.reason}`;
@@ -86,7 +86,7 @@ export function formatSystemMessage(
     const allowHint = cmds.length === 1 ? `/warden:allow ${cmds[0]}` : '/warden:allow';
     const reason = `[warden] ${parts.join('; ')} (${allowHint})`;
 
-    // Verbose help in systemMessage — use resolved command name for allow hints
+    // Verbose help in systemMessage - use resolved command name for allow hints
     const helpLines: string[] = ['To auto-allow, add to ~/.claude/warden.yaml or .claude/warden.yaml:'];
     for (const d of relevant) {
       helpLines.push(`- Allow all \`${d.command}\` → \`/warden:allow ${d.command}\``);

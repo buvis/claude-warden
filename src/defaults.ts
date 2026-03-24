@@ -252,15 +252,15 @@ export const DEFAULT_CONFIG: WardenConfig = {
       { command: 'node', default: 'ask' },
       { command: 'tsx', default: 'ask' },
       { command: 'ts-node', default: 'ask' },
-      // npx / bunx — package runners
+      // npx / bunx - package runners
       pkgRunnerRule('npx'),
       pkgRunnerRule('bunx'),
       pkgRunnerRule('pnpx'),
-      // npm / pnpm / yarn — package managers
+      // npm / pnpm / yarn - package managers
       pkgManagerRule('npm', ['ci', 'search', 'explain', 'prefix', 'root', 'fund', 'doctor', 'diff', 'pkg', 'query', 'shrinkwrap']),
       pkgManagerRule('pnpm', ['store', 'fetch', 'doctor', 'patch']),
       pkgManagerRule('yarn', ['up', 'dlx', 'workspaces']),
-      // bun — runtime + package manager
+      // bun - runtime + package manager
       {
         command: 'bun',
         default: 'ask',

@@ -765,7 +765,7 @@ describe('evaluator', () => {
   });
 
   describe('dangerous alwaysAllow hardening', () => {
-    // find — smart -exec evaluation
+    // find - smart -exec evaluation
     it('allows find basic search', () => expect(eval_('find . -name "*.ts"').decision).toBe('allow'));
     it('allows find -exec with safe command', () => expect(eval_('find . -exec grep -l "foo" {} \\;').decision).toBe('allow'));
     it('allows find -exec rm (few files)', () => expect(eval_('find . -exec rm {} \\;').decision).toBe('allow'));
@@ -794,7 +794,7 @@ describe('evaluator', () => {
     it('allows xargs with bash -c when inner commands are safe', () => expect(eval_("xargs -I {} bash -c 'echo hello && ls'").decision).toBe('allow'));
     it('denies xargs with sh -c when inner command is denied', () => expect(eval_("xargs sh -c 'sudo rm -rf /'").decision).toBe('deny'));
 
-    // uv run — recursive evaluation
+    // uv run - recursive evaluation
     it('asks for uv run python (arbitrary code)', () => expect(eval_('uv run python script.py').decision).toBe('ask'));
     it('denies uv run sudo (alwaysDeny)', () => expect(eval_('uv run sudo rm -rf /').decision).toBe('deny'));
     it('asks for uv run --with pandas python', () => expect(eval_('uv run --with pandas python script.py').decision).toBe('ask'));
@@ -829,7 +829,7 @@ describe('evaluator', () => {
   });
 
   describe('eval/source/. commands', () => {
-    // eval — always deny
+    // eval - always deny
     it('denies eval', () => {
       expect(eval_('eval "echo hello"').decision).toBe('deny');
     });
@@ -838,7 +838,7 @@ describe('evaluator', () => {
       expect(eval_('ls && eval "rm -rf /"').decision).toBe('deny');
     });
 
-    // source — conditional
+    // source - conditional
     it('allows source ~/.bashrc', () => {
       expect(eval_('source ~/.bashrc').decision).toBe('allow');
     });
@@ -863,7 +863,7 @@ describe('evaluator', () => {
       expect(eval_('source').decision).toBe('deny');
     });
 
-    // . (dot command) — same as source
+    // . (dot command) - same as source
     it('allows . ~/.bashrc', () => {
       expect(eval_('. ~/.bashrc').decision).toBe('allow');
     });
@@ -1309,7 +1309,7 @@ describe('evaluator', () => {
     });
 
     it('does not auto-allow chain-resolved command that has rules with dangerous patterns', () => {
-      // rm has argPatterns for -rf — chain resolution must not bypass them
+      // rm has argPatterns for -rf - chain resolution must not bypass them
       const r = eval_('X=/usr/bin/rm && $X -rf /');
       expect(r.decision).not.toBe('allow');
     });
@@ -1332,7 +1332,7 @@ describe('evaluator', () => {
 
     it('asks for rm -rf with mixed chain-local and literal targets', () => {
       const r = eval_('TMPDIR=/tmp/build && rm -rf $TMPDIR /etc');
-      // /etc is a literal, not a chain-local variable — should fall through
+      // /etc is a literal, not a chain-local variable - should fall through
       expect(r.decision).not.toBe('allow');
     });
 
@@ -1351,7 +1351,7 @@ describe('evaluator', () => {
       const r = evalWith('TMPDIR=/tmp/build && rm -rf $TMPDIR', {
         layers: [denyRmLayer, ...DEFAULT_CONFIG.layers],
       });
-      // Not auto-allowed — defers to normal rule evaluation (merged argPatterns → ask)
+      // Not auto-allowed - defers to normal rule evaluation (merged argPatterns → ask)
       expect(r.decision).not.toBe('allow');
     });
 

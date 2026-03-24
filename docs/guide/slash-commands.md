@@ -10,8 +10,8 @@ Allow a previously blocked or flagged command by updating your config.
 
 Usage:
 
-- `/warden:allow npx` — allow all npx commands
-- `/warden:allow npx clawhub` — choose between allowing all npx or just npx clawhub
+- `/warden:allow npx` - allow all npx commands
+- `/warden:allow npx clawhub` - choose between allowing all npx or just npx clawhub
 
 When called with multiple words, you choose:
 
@@ -20,7 +20,7 @@ When called with multiple words, you choose:
 
 Config scope: you choose project (`.claude/warden.yaml`) or user (`~/.claude/warden.yaml`).
 
-The command merges into existing config — appends to `alwaysAllow` or merges `argPatterns` into existing rules without duplicates.
+The command merges into existing config - appends to `alwaysAllow` or merges `argPatterns` into existing rules without duplicates.
 
 ## Feedback messages
 

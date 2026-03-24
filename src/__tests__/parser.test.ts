@@ -417,7 +417,7 @@ describe('regex fallback parser', () => {
 
   it('preserves single-quoted args in fallback', () => {
     const result = parseCommand("gh api repos/org/repo/issues -f body='has $dollar signs'");
-    // bash-parser may or may not handle this — if fallback is used, verify command
+    // bash-parser may or may not handle this - if fallback is used, verify command
     expect(result.parseError).toBe(false);
     expect(result.commands[0].command).toBe('gh');
   });

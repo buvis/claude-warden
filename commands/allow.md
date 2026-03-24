@@ -11,14 +11,14 @@ Parse the argument to extract the command and optional sub-command:
 - If a single word (e.g., `/warden:allow npx`): allow the entire command.
 - If multiple words (e.g., `/warden:allow npx clawhub`): the first word is the command, the second is the sub-command. Ask the user which option they prefer:
 
-  **Option A — Allow all `<command>`**: Adds a rule with `default: allow` for the entire command.
+  **Option A - Allow all `<command>`**: Adds a rule with `default: allow` for the entire command.
   ```yaml
   rules:
     - command: "<command>"
       default: allow
   ```
 
-  **Option B — Allow only `<command> <subcommand>`**: Adds an argPattern rule that only allows the specific sub-command while keeping the default as `ask`.
+  **Option B - Allow only `<command> <subcommand>`**: Adds an argPattern rule that only allows the specific sub-command while keeping the default as `ask`.
   ```yaml
   rules:
     - command: "<command>"

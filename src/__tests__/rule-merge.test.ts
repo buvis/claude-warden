@@ -65,7 +65,7 @@ describe('rule merging across layers', () => {
     expect(r2.decision).toBe('deny');
   });
 
-  it('override: true stops merging — shadows lower layers', () => {
+  it('override: true stops merging - shadows lower layers', () => {
     const userLayer = emptyLayer({
       rules: [{
         command: 'npx',
@@ -159,7 +159,7 @@ describe('rule merging across layers', () => {
   });
 
   it('no regression: single-layer rules still work identically', () => {
-    // Just using DEFAULT_CONFIG — no user layers
+    // Just using DEFAULT_CONFIG - no user layers
     const r1 = evaluate(parseCommand('npx vitest'), DEFAULT_CONFIG);
     expect(r1.decision).toBe('allow');
 
@@ -193,7 +193,7 @@ describe('rule merging across layers', () => {
       rules: [{
         command: 'npx',
         default: 'deny',
-        // No argPatterns — just overriding the default decision
+        // No argPatterns - just overriding the default decision
       }],
     });
 

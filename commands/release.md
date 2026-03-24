@@ -15,7 +15,7 @@ Perform the full release workflow for claude-warden:
    - Breaking changes → major bump
    - If unsure, ask the user which version bump they want (patch/minor/major).
 
-3. **Bump version**: Update `version` in `package.json` (and `.claude-plugin/plugin.json` if it has a version field). Do NOT run `npm version` — just edit the files directly.
+3. **Bump version**: Update `version` in `package.json` (and `.claude-plugin/plugin.json` if it has a version field). Do NOT run `npm version` - just edit the files directly.
 
 4. **Build**: Run `pnpm run build` to produce `dist/index.cjs`.
 
@@ -25,6 +25,6 @@ Perform the full release workflow for claude-warden:
 
 7. **Create GitHub release**: Run `gh release create v<new-version> --title "v<new-version>" --notes "<changelog>"`. Generate the changelog from commits since the last release tag.
 
-8. **Update marketplace**: Edit `~/git/src/github.com/buvis/claude-plugins/.claude-plugin/marketplace.json` — set the warden `version` field to the new version. Commit with `chore: bump warden to v<new-version>` and push.
+8. **Update marketplace**: Edit `~/git/src/github.com/buvis/claude-plugins/.claude-plugin/marketplace.json` - set the warden `version` field to the new version. Commit with `chore: bump warden to v<new-version>` and push.
 
 9. **Report**: Show the user the new version and GitHub release URL.

@@ -16,7 +16,7 @@ notifyOnDeny: true   # default
 
 ### Terminal detection (macOS)
 
-iTerm2, Terminal.app, Alacritty, WezTerm — click notification activates the correct terminal.
+iTerm2, Terminal.app, Alacritty, WezTerm - click notification activates the correct terminal.
 
 Notifications run in background. Failures silently ignored.
 

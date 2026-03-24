@@ -11,20 +11,20 @@ Parse the argument to determine the action:
 
 ### Activate YOLO mode
 
-- `/warden:yolo session` — YOLO for the full session (no expiry)
-- `/warden:yolo 5m` — YOLO for 5 minutes
-- `/warden:yolo 15m` — YOLO for 15 minutes
-- `/warden:yolo 30m` — YOLO for 30 minutes
-- `/warden:yolo <N>m` — YOLO for N minutes (any number)
+- `/warden:yolo session` - YOLO for the full session (no expiry)
+- `/warden:yolo 5m` - YOLO for 5 minutes
+- `/warden:yolo 15m` - YOLO for 15 minutes
+- `/warden:yolo 30m` - YOLO for 30 minutes
+- `/warden:yolo <N>m` - YOLO for N minutes (any number)
 
 ### Deactivate YOLO mode
 
-- `/warden:yolo off` — Turn off YOLO mode immediately
+- `/warden:yolo off` - Turn off YOLO mode immediately
 
 ### No arguments
 
-- `/warden:yolo` — Show the user the available options and ask them to choose:
-  1. Full session — no expiry, lasts until session ends or manually turned off
+- `/warden:yolo` - Show the user the available options and ask them to choose:
+  1. Full session - no expiry, lasts until session ends or manually turned off
   2. 5 minutes
   3. 15 minutes
   4. 30 minutes
@@ -58,14 +58,14 @@ WARDEN_YOLO=true claude < prompts.txt
 WARDEN_YOLO=1 claude < prompts.txt
 ```
 
-Note: Unlike the slash command, `WARDEN_YOLO` bypasses **all** checks including always-deny commands — it short-circuits before any parsing or evaluation.
+Note: Unlike the slash command, `WARDEN_YOLO` bypasses **all** checks including always-deny commands - it short-circuits before any parsing or evaluation.
 
 ## Important
 
-- These echo commands are intercepted by the warden hook — their output in the terminal is not meaningful. The hook's permission decision reason will contain the confirmation message.
-- Always-deny commands (sudo, shutdown, etc.) are **still blocked** even in YOLO mode for safety (slash command only — the env var bypasses all checks).
+- These echo commands are intercepted by the warden hook - their output in the terminal is not meaningful. The hook's permission decision reason will contain the confirmation message.
+- Always-deny commands (sudo, shutdown, etc.) are **still blocked** even in YOLO mode for safety (slash command only - the env var bypasses all checks).
 - YOLO state files are automatically cleaned up when they expire.
-- YOLO mode only affects the current session — other sessions are not impacted.
+- YOLO mode only affects the current session - other sessions are not impacted.
 
 ## After activation
 

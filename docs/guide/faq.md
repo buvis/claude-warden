@@ -2,7 +2,7 @@
 
 ## Warden says "All commands are safe" but I still get a permission prompt
 
-Another plugin's hook is overriding Warden's decision. When multiple PreToolUse hooks run, Claude Code uses "most restrictive wins" — any hook returning `ask` overrides another's `allow`.
+Another plugin's hook is overriding Warden's decision. When multiple PreToolUse hooks run, Claude Code uses "most restrictive wins" - any hook returning `ask` overrides another's `allow`.
 
 Common culprit: the `github-dev` plugin ships a `git_commit_confirm.py` hook that returns ask for every git commit.
 
@@ -26,7 +26,7 @@ Diagnose: check installed plugins for PreToolUse hooks targeting Bash:
 
 Three options:
 
-1. Use `/warden:allow <command>` — interactive config update
+1. Use `/warden:allow <command>` - interactive config update
 2. Add it to `alwaysAllow` in your config manually
 3. Add a rule with `default: allow` for fine-grained control
 
@@ -34,7 +34,7 @@ See [Configuration](configuration.md) for details.
 
 ## Can I use Warden with --dangerously-skip-permissions?
 
-Yes. Warden detects this mode and exits immediately — no overhead.
+Yes. Warden detects this mode and exits immediately - no overhead.
 
 ## Does Warden slow down Claude Code?
 

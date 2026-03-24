@@ -49,7 +49,7 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"},"session_id":"test
 
 ## Releasing
 
-Releases are published via CI when a GitHub release is created — not locally.
+Releases are published via CI when a GitHub release is created - not locally.
 
 ```bash
 pnpm run release           # patch bump

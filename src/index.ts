@@ -31,7 +31,7 @@ async function main() {
   try {
     input = JSON.parse(raw);
   } catch {
-    // Can't parse input — don't interfere
+    // Can't parse input - don't interfere
     process.exit(0);
   }
 
@@ -91,7 +91,7 @@ async function main() {
 
   const config = loadConfig(input.cwd);
 
-  // Check YOLO mode — evaluate once here, reuse result below if deny falls through
+  // Check YOLO mode - evaluate once here, reuse result below if deny falls through
   let yoloActive = false;
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
@@ -101,7 +101,7 @@ async function main() {
 
     // In YOLO mode, only block alwaysDeny commands (unless bypassDeny is set)
     if (result.decision === 'deny' && !yoloState.bypassDeny) {
-      // Fall through to deny handling below — reuse this result
+      // Fall through to deny handling below - reuse this result
       const elapsed = Date.now() - startTime;
       logDecision(config, input, result, elapsed, true);
       if (config.notifyOnDeny) {
@@ -174,7 +174,7 @@ async function main() {
     process.exit(2);
   }
 
-  // decision === 'ask' — provide feedback via systemMessage
+  // decision === 'ask' - provide feedback via systemMessage
   logDecision(config, input, result, elapsed, false);
   if (config.notifyOnAsk) {
     const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;

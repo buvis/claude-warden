@@ -1,5 +1,5 @@
 {
-  "description": "Smart command safety filter — evaluates Bash commands against configurable safety rules",
+  "description": "Smart command safety filter - evaluates Bash commands against configurable safety rules",
   "hooks": {
     "PreToolUse": [
       {

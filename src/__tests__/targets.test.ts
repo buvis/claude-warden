@@ -576,7 +576,7 @@ describe('target policies', () => {
     it('target deny blocks chain-resolved command with no rules', () => {
       // Simulate: RM=/bin/rm && $RM /etc/passwd
       // The $RM resolves to rm (no user rules for it, but defaults exist)
-      // Path policy denies /etc — should block it before chain-resolved auto-allow
+      // Path policy denies /etc - should block it before chain-resolved auto-allow
       const config = structuredClone(DEFAULT_CONFIG);
       config.targetPolicies = [{ type: 'path', path: '/etc', decision: 'deny' }];
       const parsed = parseCommand('RM=/bin/rm && $RM /etc/passwd');

@@ -65,7 +65,7 @@ const HEREDOC_REGEX = /<<-?\s*['"]?\w+['"]?/;
 /**
  * Replace $(cat <<MARKER...MARKER) patterns with a placeholder string.
  * This handles the common idiom of passing multi-line text via heredoc,
- * which is just string interpolation — not arbitrary command execution.
+ * which is just string interpolation - not arbitrary command execution.
  */
 function preprocessCatHeredocs(input: string): string {
   // Match $(cat <<[-]?['"]?MARKER['"]?\n...MARKER\n) patterns
@@ -82,7 +82,7 @@ function preprocessCatHeredocs(input: string): string {
  * and wrap the entire token in double quotes.
  */
 function preprocessPathParentheses(input: string): string {
-  // Split into segments respecting quotes — we only touch unquoted parts
+  // Split into segments respecting quotes - we only touch unquoted parts
   const result: string[] = [];
   let i = 0;
   while (i < input.length) {
@@ -158,7 +158,7 @@ function convertCommand(node: CommandNode, chainAssignments: Map<string, ChainAs
       resolvedFrom = originalCommand;
       originalCommand = resolved;
     } else if (chainAssignments.has(varMatch[1])) {
-      // Dynamic or null value — still mark resolvedFrom so evaluator knows it's chain-local
+      // Dynamic or null value - still mark resolvedFrom so evaluator knows it's chain-local
       resolvedFrom = originalCommand;
     }
   }
@@ -261,14 +261,14 @@ function walkNode(node: AstNode, result: WalkResult): void {
 
       const parsed = convertCommand(cmd, result.chainAssignments);
       if (!parsed) {
-        // Standalone assignment (no command name) — track in chainAssignments
+        // Standalone assignment (no command name) - track in chainAssignments
         for (const a of extractAssignments(cmd)) {
           result.chainAssignments.set(a.name, { value: a.value, isDynamic: a.isDynamic });
         }
         break;
       }
 
-      // Handle sh/bash/zsh -c "..." — recursively parse inner command
+      // Handle sh/bash/zsh -c "..." - recursively parse inner command
       if (
         (parsed.command === 'sh' || parsed.command === 'bash' || parsed.command === 'zsh') &&
         parsed.args.length >= 2 &&
@@ -288,7 +288,7 @@ function walkNode(node: AstNode, result: WalkResult): void {
         (parsed.command === 'sh' || parsed.command === 'bash' || parsed.command === 'zsh') &&
         parsed.args.length >= 1
       ) {
-        // Handle sh/bash/zsh <script> — extract script as the command
+        // Handle sh/bash/zsh <script> - extract script as the command
         const scriptIdx = parsed.args.findIndex(a => !a.startsWith('-'));
         if (scriptIdx !== -1) {
           let scriptPath = parsed.args[scriptIdx];
@@ -305,7 +305,7 @@ function walkNode(node: AstNode, result: WalkResult): void {
             raw: parsed.raw,
           });
         } else {
-          // All args are flags (e.g. bash --version) — keep as-is
+          // All args are flags (e.g. bash --version) - keep as-is
           result.commands.push(parsed);
         }
       } else {
@@ -340,7 +340,7 @@ function walkNode(node: AstNode, result: WalkResult): void {
       break;
     }
 
-    // Complex constructs — flag as subshell for safety
+    // Complex constructs - flag as subshell for safety
     case 'If':
     case 'For':
     case 'While':
@@ -371,7 +371,7 @@ function hasHeredocRedirect(node: CommandNode): boolean {
  */
 /**
  * Check if any top-level Command node in the AST has a heredoc redirect.
- * Skips expansion/commandAST children — heredocs inside $() are handled
+ * Skips expansion/commandAST children - heredocs inside $() are handled
  * correctly by bash-parser and don't cause misparse of body lines.
  */
 function astHasHeredoc(ast: ScriptNode): boolean {
@@ -403,7 +403,7 @@ export function parseCommand(input: string): ParseResult {
     return { commands: [], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: new Map() };
   }
 
-  // Preprocess $(cat <<MARKER...MARKER) patterns — these are just multi-line
+  // Preprocess $(cat <<MARKER...MARKER) patterns - these are just multi-line
   // string interpolation, not arbitrary subshells. Replace with placeholder text
   // so the parser sees clean commands (e.g. `gh pr create --body "__HEREDOC_TEXT__"`).
   input = preprocessCatHeredocs(input);
@@ -429,21 +429,21 @@ export function parseCommand(input: string): ParseResult {
         for (const cmd of cmdAst.commands) {
           walkNode(cmd, result);
         }
-        // Heredocs are complex — flag as hasSubshell so evaluator can decide
+        // Heredocs are complex - flag as hasSubshell so evaluator can decide
         return { commands: result.commands, hasSubshell: true, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
       } catch {
         return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: new Map() };
       }
     }
 
-    // No heredoc nodes — normal AST walking, no false positive
+    // No heredoc nodes - normal AST walking, no false positive
     for (const cmd of ast.commands) {
       walkNode(cmd, result);
     }
 
     return { commands: result.commands, hasSubshell: result.hasSubshell, subshellCommands: result.subshellCommands, parseError: false, chainAssignments: result.chainAssignments };
   } catch {
-    // Parse failure — use regex fallback for heredoc detection
+    // Parse failure - use regex fallback for heredoc detection
     if (HEREDOC_REGEX.test(input)) {
       const firstLine = input.split('\n')[0];
       const cmdPart = firstLine.replace(/<<-?\s*['"]?\w+['"]?.*$/, '').trim();
@@ -467,7 +467,7 @@ export function parseCommand(input: string): ParseResult {
     const pipelineResult = pipelineFallbackParse(input);
     if (pipelineResult) return pipelineResult;
 
-    // General parse failure — try regex fallback to extract at least the command name
+    // General parse failure - try regex fallback to extract at least the command name
     // so the evaluator can still apply rules (e.g. gh is default allow).
     // This handles cases where bash-parser chokes on special characters in arguments
     // (like $ in double-quoted strings that aren't actual expansions).
@@ -557,7 +557,7 @@ function splitOnUnquotedOperators(input: string): { segments: string[]; operator
         i += 2;
         continue;
       }
-      // Bare & (background) — too complex. But skip >&N redirect syntax.
+      // Bare & (background) - too complex. But skip >&N redirect syntax.
       if (ch === '&' && (current.length === 0 || current[current.length - 1] !== '>')) return null;
 
       if (ch === ';') {
@@ -580,7 +580,7 @@ function splitOnUnquotedOperators(input: string): { segments: string[]; operator
   if (!lastSeg) return null;
   segments.push(lastSeg);
 
-  // No operators found — nothing to split
+  // No operators found - nothing to split
   if (operators.length === 0) return null;
 
   return { segments, operators };
@@ -622,7 +622,7 @@ function pipelineFallbackParse(input: string): ParseResult | null {
     allCommands.push(...segResult.commands);
     if (segResult.hasSubshell) hasSubshell = true;
     allSubshellCommands.push(...segResult.subshellCommands);
-    // Merge after resolving — current segment's assignments available to next segments only
+    // Merge after resolving - current segment's assignments available to next segments only
     for (const [k, v] of segResult.chainAssignments) {
       chainAssignments.set(k, v);
     }
@@ -634,7 +634,7 @@ function pipelineFallbackParse(input: string): ParseResult | null {
 /**
  * Regex-based fallback parser for when bash-parser fails.
  * Extracts the command name and arguments from simple single commands.
- * Only handles straightforward cases — returns null for pipes, chains, etc.
+ * Only handles straightforward cases - returns null for pipes, chains, etc.
  */
 function regexFallbackParse(input: string): ParsedCommand | null {
   const trimmed = input.trim();

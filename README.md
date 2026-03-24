@@ -2,11 +2,11 @@
 
 [![GitHub license](https://img.shields.io/github/license/buvis/claude-warden)](https://github.com/buvis/claude-warden/blob/master/LICENSE)
 
-Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands into AST, evaluates each against configurable safety rules, returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
+Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands into AST, evaluates each against configurable safety rules, returns allow/deny/ask decisions - eliminating unnecessary permission prompts while blocking dangerous commands.
 
 ## The problem
 
-Claude Code's permission system is all-or-nothing. Default mode prompts for **every** shell command — even `ls` and `cat`. YOLO mode disables all prompts, which is dangerous. No middle ground.
+Claude Code's permission system is all-or-nothing. Default mode prompts for **every** shell command - even `ls` and `cat`. YOLO mode disables all prompts, which is dangerous. No middle ground.
 
 ## What Warden does
 

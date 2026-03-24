@@ -28,8 +28,8 @@ Within each layer, `alwaysDeny` is checked before `alwaysAllow`. The first layer
 For each command in a pipeline or chain:
 
 1. Global deny patterns (unparseable commands, subshells when `askOnSubshell` is on)
-2. `alwaysDeny` — first layer match wins
-3. `alwaysAllow` — first layer match wins
+2. `alwaysDeny` - first layer match wins
+3. `alwaysAllow` - first layer match wins
 4. Chain-local auto-allow (resolved `$VAR` commands with no matching rules)
 5. Target policies (path, database, endpoint)
 6. Command-specific rules with argPattern matching
@@ -152,7 +152,7 @@ Rules for the same command are **merged** across layers by default:
 If a rule has `override: true`, lower-layer rules for that command are completely ignored (no merging).
 
 ```yaml
-# Project .claude/warden.yaml — override built-in npm rules entirely
+# Project .claude/warden.yaml - override built-in npm rules entirely
 rules:
   - command: npm
     default: allow
@@ -161,7 +161,7 @@ rules:
 
 ### Important: rules match by command name
 
-Rules match the command being executed, **not** its arguments. When Claude runs `python -c "import foo"`, warden looks up rules for `python` — not `bash` or `sh`.
+Rules match the command being executed, **not** its arguments. When Claude runs `python -c "import foo"`, warden looks up rules for `python` - not `bash` or `sh`.
 
 Shell script invocations like `bash script.sh` are evaluated as the script (basename `script.sh`), not as `bash`. Use `alwaysAllow` with glob patterns for script paths.
 
@@ -220,7 +220,7 @@ trustedContextOverrides:
 
 ## Target policies
 
-Evaluate commands by their targets — filesystem paths, database connections, or HTTP endpoints — not just command names.
+Evaluate commands by their targets - filesystem paths, database connections, or HTTP endpoints - not just command names.
 
 ```yaml
 targetPolicies:

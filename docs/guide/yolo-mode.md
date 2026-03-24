@@ -28,9 +28,9 @@ WARDEN_YOLO=1 claude < prompts.txt
 
 ## How it works
 
-- **Session-scoped** — state stored in `/tmp`, keyed by session ID
-- **Slash command** — always-deny commands still blocked
-- **Env var** — bypasses everything (like `--dangerously-skip-permissions`)
+- **Session-scoped** - state stored in `/tmp`, keyed by session ID
+- **Slash command** - always-deny commands still blocked
+- **Env var** - bypasses everything (like `--dangerously-skip-permissions`)
 - **Expired states** auto-cleaned
 
 ## Discovery
