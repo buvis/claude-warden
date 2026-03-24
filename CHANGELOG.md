@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-03-24
+
+### Changed
+- Version jump from 0.2.3 to 3.0.0 to supersede stale upstream v2.3.0 cached by Claude Code plugin system
+
+### Fixed
+- Em dashes replaced with regular dashes in all output messages
+
 ## [0.2.3] - 2026-03-24
 
 ### Fixed
