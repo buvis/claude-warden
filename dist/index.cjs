@@ -18355,7 +18355,7 @@ function walkNode(node, result) {
       }
       break;
     }
-    // Complex constructs — flag as subshell for safety
+    // Complex constructs - flag as subshell for safety
     case "If":
     case "For":
     case "While":
@@ -20736,15 +20736,15 @@ var DEFAULT_CONFIG = {
       { command: "node", default: "ask" },
       { command: "tsx", default: "ask" },
       { command: "ts-node", default: "ask" },
-      // npx / bunx — package runners
+      // npx / bunx - package runners
       pkgRunnerRule("npx"),
       pkgRunnerRule("bunx"),
       pkgRunnerRule("pnpx"),
-      // npm / pnpm / yarn — package managers
+      // npm / pnpm / yarn - package managers
       pkgManagerRule("npm", ["ci", "search", "explain", "prefix", "root", "fund", "doctor", "diff", "pkg", "query", "shrinkwrap"]),
       pkgManagerRule("pnpm", ["store", "fetch", "doctor", "patch"]),
       pkgManagerRule("yarn", ["up", "dlx", "workspaces"]),
-      // bun — runtime + package manager
+      // bun - runtime + package manager
       {
         command: "bun",
         default: "ask",
@@ -21108,7 +21108,7 @@ function warnArgPatternCommandMismatch(rule) {
       for (const lit of literals) {
         if (lit !== rule.command && KNOWN_COMMANDS.has(lit)) {
           process.stderr.write(
-            `[warden] Warning: rule for "${rule.command}" has argPattern matching "${lit}" \u2014 this won't work as expected. Rules are matched by the command being run, not its arguments. If you want to control "${lit}", add a separate rule with command: "${lit}".
+            `[warden] Warning: rule for "${rule.command}" has argPattern matching "${lit}" - this won't work as expected. Rules are matched by the command being run, not its arguments. If you want to control "${lit}", add a separate rule with command: "${lit}".
 `
           );
         }
