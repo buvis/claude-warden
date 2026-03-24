@@ -193,4 +193,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(() => process.exit(0));
+main().catch((err) => {
+  process.stderr.write(`[warden] fatal: ${err?.message ?? err}\n`);
+  process.exit(0);
+});

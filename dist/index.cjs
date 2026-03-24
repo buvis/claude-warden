@@ -21685,7 +21685,11 @@ async function main() {
   process.stdout.write(JSON.stringify(output));
   process.exit(0);
 }
-main().catch(() => process.exit(0));
+main().catch((err) => {
+  process.stderr.write(`[warden] fatal: ${err?.message ?? err}
+`);
+  process.exit(0);
+});
 /*! Bundled license information:
 
 is-number/index.js:
