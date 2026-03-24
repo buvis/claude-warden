@@ -1,6 +1,6 @@
 # Claude Warden
 
-[![GitHub license](https://img.shields.io/github/license/buvis/claude-warden)](https://github.com/buvis/claude-warden/blob/main/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/buvis/claude-warden)](https://github.com/buvis/claude-warden/blob/master/LICENSE)
 
 Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands, evaluates each against configurable safety rules, and returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
 
