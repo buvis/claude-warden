@@ -2,17 +2,10 @@
 
 ## [Unreleased]
 
-## [3.0.1] - 2026-03-24
+## [0.2.4] - 2026-03-24
 
 ### Fixed
-- Crash handler now returns `ask` instead of silently passing through, so broken config or bugs surface as prompts rather than allowing commands unchecked
-
-## [3.0.0] - 2026-03-24
-
-### Changed
-- Version jump from 0.2.3 to 3.0.0 to supersede stale upstream v2.3.0 cached by Claude Code plugin system
-
-### Fixed
+- Crash handler returns `ask` instead of silent pass-through, so broken config surfaces as prompts
 - Em dashes replaced with regular dashes in all output messages
 
 ## [0.2.3] - 2026-03-24
