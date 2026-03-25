@@ -1060,7 +1060,7 @@ describe('evaluator', () => {
     });
 
     it('tilde in command originalCommand matches tilde in config', () => {
-      // When bash-parser preserves ~ in the command, ~/path should still match ~/path config
+      // When parser preserves ~ in the command, ~/path should still match ~/path config
       const layer: ConfigLayer = { alwaysAllow: ['~/bin/my-tool'], alwaysDeny: [], rules: [] };
       const config: WardenConfig = {
         ...structuredClone(DEFAULT_CONFIG),
