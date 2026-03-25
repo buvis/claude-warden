@@ -2,8 +2,13 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-25
+
 ### Changed
 - Replaced bash-parser with [unbash](https://github.com/webpro-nl/unbash) - native support for all shell control flow (while, if, for, case, functions), no fallback parsers needed
+
+### Fixed
+- tsup bundling config referenced removed bash-parser dependency
 
 ## [0.2.4] - 2026-03-24
 
