@@ -7,5 +7,5 @@ export default defineConfig({
   outDir: 'dist',
   clean: true,
   splitting: false,
-  noExternal: ['bash-parser', 'yaml'],
+  noExternal: ['unbash', 'yaml'],
 });
