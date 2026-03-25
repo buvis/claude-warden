@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Replaced bash-parser with [unbash](https://github.com/webpro-nl/unbash) - native support for all shell control flow (while, if, for, case, functions), no fallback parsers needed
+
 ## [0.2.4] - 2026-03-24
 
 ### Fixed
