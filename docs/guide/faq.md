@@ -52,7 +52,7 @@ Yes. Both `warden.yaml` and `warden.json` are supported at both user and project
 
 ## What happens with unparseable commands?
 
-Commands that bash-parser can't handle fall back to a regex-based extractor. If that also fails, the command gets an `ask` decision (prompts for confirmation).
+The parser uses unbash which handles virtually all bash syntax. If a command has parse errors (e.g. unterminated quotes), it gets an `ask` decision (prompts for confirmation).
 
 ## How do I temporarily allow everything?
 

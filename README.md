@@ -10,7 +10,7 @@ Claude Code's permission system is all-or-nothing. Default mode prompts for **ev
 
 ## What Warden does
 
-Hooks into Claude Code's `PreToolUse` event. Parses every command through [bash-parser](https://github.com/vorpaljs/bash-parser), walks the AST to extract individual commands from pipes, chains, and subshells, evaluates each independently.
+Hooks into Claude Code's `PreToolUse` event. Parses every command through [unbash](https://github.com/webpro-nl/unbash), walks the AST to extract individual commands from pipes, chains, and subshells, evaluates each independently.
 
 | Command | Without Warden | With Warden |
 |---------|---------------|-------------|

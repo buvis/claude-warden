@@ -5,7 +5,7 @@
 ```
 stdin (JSON) → index.ts → parser.ts → evaluator.ts → stdout (JSON) / exit code 2
                               ↑              ↑
-                         bash-parser    rules.ts + defaults.ts + targets.ts
+                           unbash     rules.ts + defaults.ts + targets.ts
 ```
 
 ## Modules
@@ -14,17 +14,16 @@ stdin (JSON) → index.ts → parser.ts → evaluator.ts → stdout (JSON) / exi
 Reads hook JSON from stdin, runs parse→evaluate pipeline, outputs decision. Handles YOLO mode activation/deactivation, stdin size limits (1MB), and --dangerously-skip-permissions detection.
 
 ### parser.ts - Command parser
-AST-based shell command parser using bash-parser. State machine that:
+AST-based shell command parser using [unbash](https://github.com/webpro-nl/unbash). Walks the AST to:
 
-- Splits pipes (`|`), chains (`&&`, `||`, `;`)
-- Respects quotes
-- Extracts env prefixes (`VAR=value`)
-- Normalizes command paths to basename
-- Recursively parses `sh -c` / `bash -c` arguments
-- Extracts script paths from `bash/sh/zsh script.sh` invocations
-- Detects subshells (`$()`, backticks) and heredocs
-- Tracks chain-scoped variable assignments (`VAR=value && $VAR`)
-- Falls back to regex parser when bash-parser fails
+- Extract commands from pipes, chains, control flow (while, if, for, case, functions)
+- Extract env prefixes (`VAR=value`)
+- Normalize command paths to basename
+- Recursively parse `sh -c` / `bash -c` arguments
+- Extract script paths from `bash/sh/zsh script.sh` invocations
+- Detect subshells (`$()`, backticks), process substitutions, and heredocs
+- Track chain-scoped variable assignments (`VAR=value && $VAR`)
+- Detect `$(cat <<MARKER)` string interpolation idiom
 
 ### evaluator.ts - Decision engine
 Evaluation hierarchy (first match wins):
