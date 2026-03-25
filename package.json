@@ -47,7 +47,7 @@
     "postpublish": "claude plugin update warden@buvis-plugins 2>/dev/null; echo 'Plugin cache updated'"
   },
   "dependencies": {
-    "bash-parser": "^0.5.0",
+    "unbash": "^2.2.0",
     "yaml": "^2.4.0"
   },
   "devDependencies": {
