@@ -233,7 +233,7 @@ describe('parseCommand', () => {
 
   it('does not flag << inside quoted string args as heredoc', () => {
     // << inside a quoted argument should NOT trigger the heredoc first-line extraction path.
-    // bash-parser correctly handles this as a CommandExpansion inside a Word.
+    // << inside a quoted argument is text, not a heredoc redirect.
     const result = parseCommand('git commit -m "fix: handle <<EOF pattern"');
     expect(result.parseError).toBe(false);
     expect(result.hasSubshell).toBe(false);
@@ -244,7 +244,7 @@ describe('parseCommand', () => {
 
   it('handles $(cat <<EOF) inside quoted args without false heredoc detection', () => {
     // $(cat <<EOF) inside a quoted string is a CommandExpansion (hasSubshell=true),
-    // but should NOT trigger the heredoc first-line extraction fallback.
+    // but should NOT be treated as string interpolation (no proper body).
     const result = parseCommand('git commit -m "fix: handle $(cat <<EOF) heredoc"');
     expect(result.parseError).toBe(false);
     expect(result.hasSubshell).toBe(true); // has CommandExpansion
@@ -372,9 +372,8 @@ describe('chain-local variable tracking', () => {
   });
 });
 
-// Tests for regex fallback parser (see #30)
-describe('regex fallback parser', () => {
-  it('falls back to regex when bash-parser fails on $ in double-quoted args', () => {
+describe('special characters in double-quoted args', () => {
+  it('handles $ in double-quoted args', () => {
     const result = parseCommand('gh api repos/org/repo/pulls/1/comments -f body="regex /^[A-Za-z_][A-Za-z0-9_]*$/" -F in_reply_to=123');
     expect(result.parseError).toBe(false);
     expect(result.commands.length).toBe(1);
@@ -382,7 +381,7 @@ describe('regex fallback parser', () => {
     expect(result.commands[0].args[0]).toBe('api');
   });
 
-  it('handles pipes via pipeline fallback when bash-parser fails', () => {
+  it('handles pipes with $ in args', () => {
     const result = parseCommand('echo "$invalid" | gh api foo');
     expect(result.parseError).toBe(false);
     expect(result.commands).toHaveLength(2);
@@ -390,7 +389,7 @@ describe('regex fallback parser', () => {
     expect(result.commands[1].command).toBe('gh');
   });
 
-  it('handles env prefixes in fallback', () => {
+  it('handles env prefixes with $ in args', () => {
     const result = parseCommand('FOO=bar gh api repos/org/repo/issues -f body="test $value"');
     expect(result.parseError).toBe(false);
     expect(result.commands[0].command).toBe('gh');
@@ -409,20 +408,19 @@ describe('regex fallback parser', () => {
     expect(result.commands[0].command).toBe('gh');
   });
 
-  it('normalizes full path commands in fallback', () => {
+  it('normalizes full path commands with $ in args', () => {
     const result = parseCommand('/usr/bin/gh api repos/org/repo/issues -f body="$test"');
     expect(result.parseError).toBe(false);
     expect(result.commands[0].command).toBe('gh');
   });
 
-  it('preserves single-quoted args in fallback', () => {
+  it('preserves single-quoted args with $ characters', () => {
     const result = parseCommand("gh api repos/org/repo/issues -f body='has $dollar signs'");
-    // bash-parser may or may not handle this - if fallback is used, verify command
     expect(result.parseError).toBe(false);
     expect(result.commands[0].command).toBe('gh');
   });
 
-  it('handles && chains via pipeline fallback when bash-parser fails', () => {
+  it('handles && chains with $ in args', () => {
     const result = parseCommand('echo "$bad" && echo ok');
     expect(result.parseError).toBe(false);
     expect(result.commands).toHaveLength(2);
@@ -430,7 +428,7 @@ describe('regex fallback parser', () => {
     expect(result.commands[1].command).toBe('echo');
   });
 
-  it('handles semicolons via pipeline fallback when bash-parser fails', () => {
+  it('handles semicolons with $ in args', () => {
     const result = parseCommand('echo "$bad"; echo ok');
     expect(result.parseError).toBe(false);
     expect(result.commands).toHaveLength(2);
@@ -439,7 +437,7 @@ describe('regex fallback parser', () => {
   });
 });
 
-describe('bash-parser known limitations (#30)', () => {
+describe('$ in various double-quote positions', () => {
   it('$ followed by / in double quotes (regex anchors)', () => {
     const result = parseCommand('curl -X POST -d "pattern: /^foo$/" http://example.com');
     expect(result.parseError).toBe(false);
@@ -448,7 +446,6 @@ describe('bash-parser known limitations (#30)', () => {
 
   it('$ followed by ] in double quotes (character classes)', () => {
     const result = parseCommand('echo "match [a-z$]"');
-    // bash-parser may handle this or fallback may catch it
     expect(result.parseError).toBe(false);
   });
 
@@ -465,7 +462,7 @@ describe('bash-parser known limitations (#30)', () => {
   });
 });
 
-describe('pipeline fallback parser', () => {
+describe('pipelines and chains with special characters', () => {
   it('parses multi-segment pipe with $ in grep args', () => {
     const result = parseCommand('gh run view 123 2>&1 | grep -v "^$" | grep -i "step\\|fail" | head -20');
     expect(result.parseError).toBe(false);
@@ -525,7 +522,7 @@ describe('pipeline fallback parser', () => {
   });
 
   it('propagates chain assignments across segments for $VAR resolution', () => {
-    // bash-parser fails on "pattern $" but pipeline fallback should resolve $ZDB
+    // Chain assignments should propagate and resolve $ZDB even with special chars
     const result = parseCommand('ZDB=/usr/bin/zdb && $ZDB query "pattern $"');
     expect(result.parseError).toBe(false);
     expect(result.commands).toHaveLength(1);
@@ -552,8 +549,7 @@ describe('pipeline fallback parser', () => {
 
   it('does not split on pipe inside $() command substitution', () => {
     const result = parseCommand('echo $(cat file | head -1) something$');
-    // bash-parser fails on trailing $, but splitter must not split the pipe inside $()
-    // falls through to regex fallback (single command) or parseError
+    // Pipe inside $() must not be treated as a pipeline operator
     if (!result.parseError) {
       expect(result.commands).toHaveLength(1);
       expect(result.commands[0].command).toBe('echo');
