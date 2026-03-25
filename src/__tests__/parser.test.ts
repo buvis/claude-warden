@@ -211,7 +211,7 @@ describe('parseCommand', () => {
   });
 
   it('returns parseError for invalid syntax', () => {
-    const result = parseCommand('if then else fi ;;; <<<');
+    const result = parseCommand('"unterminated');
     expect(result.parseError).toBe(true);
   });
 
