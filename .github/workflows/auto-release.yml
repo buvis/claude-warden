@@ -47,7 +47,7 @@ jobs:
           echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
           echo "CHANGELOG_EOF" >> "$GITHUB_OUTPUT"
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag latest
       - name: Create tag and release
         env:
           GH_TOKEN: ${{ github.token }}
