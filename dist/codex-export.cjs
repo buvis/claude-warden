@@ -18362,15 +18362,64 @@ function walkNode(node, result) {
       }
       break;
     }
-    // Complex constructs - flag as subshell for safety
-    case "If":
-    case "For":
     case "While":
-    case "Until":
-    case "Case":
-    case "Function":
-      result.hasSubshell = true;
+    case "Until": {
+      const loop = node;
+      if (loop.clause?.commands) {
+        for (const cmd of loop.clause.commands) walkNode(cmd, result);
+      }
+      if (loop.do?.commands) {
+        for (const cmd of loop.do.commands) walkNode(cmd, result);
+      }
       break;
+    }
+    case "If": {
+      const walkIf2 = (ifNode) => {
+        if (ifNode.clause?.commands) {
+          for (const cmd of ifNode.clause.commands) walkNode(cmd, result);
+        }
+        if (ifNode.then?.commands) {
+          for (const cmd of ifNode.then.commands) walkNode(cmd, result);
+        }
+        if (ifNode.else) {
+          if (ifNode.else.type === "If") {
+            walkIf2(ifNode.else);
+          } else {
+            const elseBlock = ifNode.else;
+            if (elseBlock.commands) {
+              for (const cmd of elseBlock.commands) walkNode(cmd, result);
+            }
+          }
+        }
+      };
+      walkIf2(node);
+      break;
+    }
+    case "For": {
+      const forNode = node;
+      if (forNode.do?.commands) {
+        for (const cmd of forNode.do.commands) walkNode(cmd, result);
+      }
+      break;
+    }
+    case "Case": {
+      const caseNode = node;
+      if (caseNode.cases) {
+        for (const item of caseNode.cases) {
+          if (item.body?.commands) {
+            for (const cmd of item.body.commands) walkNode(cmd, result);
+          }
+        }
+      }
+      break;
+    }
+    case "Function": {
+      const funcNode = node;
+      if (funcNode.body?.commands) {
+        for (const cmd of funcNode.body.commands) walkNode(cmd, result);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -18448,6 +18497,8 @@ function parseCommand(input) {
         return { commands: [], hasSubshell: true, subshellCommands: [], parseError: true, chainAssignments: /* @__PURE__ */ new Map() };
       }
     }
+    const compoundResult = compoundCommandFallback(input);
+    if (compoundResult) return compoundResult;
     const pipelineResult = pipelineFallbackParse(input);
     if (pipelineResult) return pipelineResult;
     const fallback = regexFallbackParse(input);
@@ -18587,6 +18638,297 @@ function pipelineFallbackParse(input) {
     }
   }
   return { commands: allCommands, hasSubshell, subshellCommands: allSubshellCommands, parseError: false, chainAssignments };
+}
+var SHELL_KEYWORDS = /* @__PURE__ */ new Set(["do", "done", "then", "else", "elif", "fi", "esac", "in", ";;"]);
+var COMPOUND_STARTERS = /\b(while|until|if|for|case)\b/;
+function compoundCommandFallback(input) {
+  if (!COMPOUND_STARTERS.test(input)) return null;
+  const groups = extractCommandGroups(input);
+  if (!groups) return null;
+  const allCommands = [];
+  let hasSubshell = false;
+  const allSubshellCommands = [];
+  const chainAssignments = /* @__PURE__ */ new Map();
+  for (const group of groups) {
+    const groupResult = parseCommand(group);
+    if (groupResult.parseError) return null;
+    allCommands.push(...groupResult.commands);
+    if (groupResult.hasSubshell) hasSubshell = true;
+    allSubshellCommands.push(...groupResult.subshellCommands);
+    for (const [k, v] of groupResult.chainAssignments) {
+      chainAssignments.set(k, v);
+    }
+  }
+  return { commands: allCommands, hasSubshell, subshellCommands: allSubshellCommands, parseError: false, chainAssignments };
+}
+function extractCommandGroups(input) {
+  const tokens = shellTokenize(input);
+  if (!tokens) return null;
+  const groups = [];
+  const result = walkTokens(tokens, 0, groups);
+  if (!result.ok) return null;
+  return groups.length > 0 ? groups : null;
+}
+function walkTokens(tokens, start, groups) {
+  let i = start;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    if (tok === "while" || tok === "until") {
+      const r = walkWhileUntil(tokens, i, groups);
+      if (!r.ok) return r;
+      i = r.pos;
+    } else if (tok === "if") {
+      const r = walkIf(tokens, i, groups);
+      if (!r.ok) return r;
+      i = r.pos;
+    } else if (tok === "for") {
+      const r = walkFor(tokens, i, groups);
+      if (!r.ok) return r;
+      i = r.pos;
+    } else if (tok === "case") {
+      const r = walkCase(tokens, i, groups);
+      if (!r.ok) return r;
+      i = r.pos;
+    } else if (isCommandPosition(tokens, i) && SHELL_KEYWORDS.has(tok)) {
+      return { ok: false, pos: i };
+    } else if (tok === ";" || tok === "&&" || tok === "||") {
+      i++;
+    } else {
+      const cmdTokens = [];
+      while (i < tokens.length && tokens[i] !== ";" && tokens[i] !== "&&" && tokens[i] !== "||") {
+        const atCmdPos = isCommandPosition(tokens, i);
+        if (atCmdPos && (SHELL_KEYWORDS.has(tokens[i]) || COMPOUND_STARTERS.test(tokens[i]))) break;
+        cmdTokens.push(tokens[i]);
+        i++;
+      }
+      if (cmdTokens.length > 0) {
+        groups.push(cmdTokens.join(" "));
+      }
+    }
+  }
+  return { ok: true, pos: i };
+}
+function walkWhileUntil(tokens, start, groups) {
+  let i = start + 1;
+  const cond = collectUntil(tokens, i, "do");
+  if (!cond) return { ok: false, pos: i };
+  i = cond.end + 1;
+  const body = collectCompoundBody(tokens, i, "done");
+  if (!body) return { ok: false, pos: i };
+  i = body.end + 1;
+  const condResult = walkTokens(cond.tokens, 0, groups);
+  if (!condResult.ok) return condResult;
+  const bodyResult = walkTokens(body.tokens, 0, groups);
+  if (!bodyResult.ok) return bodyResult;
+  return { ok: true, pos: i };
+}
+function walkIf(tokens, start, groups) {
+  let i = start + 1;
+  const cond = collectUntil(tokens, i, "then");
+  if (!cond) return { ok: false, pos: i };
+  i = cond.end + 1;
+  const condResult = walkTokens(cond.tokens, 0, groups);
+  if (!condResult.ok) return condResult;
+  const body = collectCompoundBodyMultiEnd(tokens, i, ["elif", "else", "fi"]);
+  if (!body) return { ok: false, pos: i };
+  const bodyResult = walkTokens(body.tokens, 0, groups);
+  if (!bodyResult.ok) return bodyResult;
+  i = body.end;
+  while (i < tokens.length && tokens[i] === "elif") {
+    i++;
+    const elifCond = collectUntil(tokens, i, "then");
+    if (!elifCond) return { ok: false, pos: i };
+    i = elifCond.end + 1;
+    const elifCondResult = walkTokens(elifCond.tokens, 0, groups);
+    if (!elifCondResult.ok) return elifCondResult;
+    const elifBody = collectCompoundBodyMultiEnd(tokens, i, ["elif", "else", "fi"]);
+    if (!elifBody) return { ok: false, pos: i };
+    const elifBodyResult = walkTokens(elifBody.tokens, 0, groups);
+    if (!elifBodyResult.ok) return elifBodyResult;
+    i = elifBody.end;
+  }
+  if (i < tokens.length && tokens[i] === "else") {
+    i++;
+    const elseBody = collectCompoundBody(tokens, i, "fi");
+    if (!elseBody) return { ok: false, pos: i };
+    const elseBodyResult = walkTokens(elseBody.tokens, 0, groups);
+    if (!elseBodyResult.ok) return elseBodyResult;
+    i = elseBody.end;
+  }
+  if (i < tokens.length && tokens[i] === "fi") {
+    i++;
+  } else {
+    return { ok: false, pos: i };
+  }
+  return { ok: true, pos: i };
+}
+function walkFor(tokens, start, groups) {
+  let i = start + 1;
+  while (i < tokens.length && tokens[i] !== "do" && tokens[i] !== ";") {
+    i++;
+  }
+  if (i < tokens.length && tokens[i] === ";") i++;
+  if (i >= tokens.length || tokens[i] !== "do") return { ok: false, pos: i };
+  i++;
+  const body = collectCompoundBody(tokens, i, "done");
+  if (!body) return { ok: false, pos: i };
+  const bodyResult = walkTokens(body.tokens, 0, groups);
+  if (!bodyResult.ok) return bodyResult;
+  i = body.end + 1;
+  return { ok: true, pos: i };
+}
+function walkCase(tokens, start, groups) {
+  let i = start + 1;
+  while (i < tokens.length && tokens[i] !== "in") i++;
+  if (i >= tokens.length) return { ok: false, pos: i };
+  i++;
+  while (i < tokens.length && tokens[i] !== "esac") {
+    while (i < tokens.length && !tokens[i].endsWith(")") && tokens[i] !== "esac") i++;
+    if (i >= tokens.length || tokens[i] === "esac") break;
+    i++;
+    const bodyTokens = [];
+    while (i < tokens.length && tokens[i] !== ";;" && tokens[i] !== "esac") {
+      bodyTokens.push(tokens[i]);
+      i++;
+    }
+    if (bodyTokens.length > 0) {
+      const bodyResult = walkTokens(bodyTokens, 0, groups);
+      if (!bodyResult.ok) return bodyResult;
+    }
+    if (i < tokens.length && tokens[i] === ";;") i++;
+  }
+  if (i < tokens.length && tokens[i] === "esac") i++;
+  return { ok: true, pos: i };
+}
+function isCommandPosition(tokens, i) {
+  if (i === 0) return true;
+  const prev = tokens[i - 1];
+  if (prev === ";" || prev === "&&" || prev === "||" || prev === "|" || prev === ";;") return true;
+  if (prev === "do" || prev === "then" || prev === "else") return true;
+  return false;
+}
+function collectCompoundBodyMultiEnd(tokens, start, endKeywords) {
+  const collected = [];
+  let depth = 0;
+  let i = start;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    const atCmdPos = isCommandPosition(tokens, i);
+    if (atCmdPos && depth === 0 && endKeywords.includes(tok)) {
+      return { tokens: collected, end: i };
+    }
+    if (atCmdPos) {
+      if (tok === "while" || tok === "until" || tok === "for" || tok === "if" || tok === "case") {
+        depth++;
+      } else if (tok === "done" || tok === "fi" || tok === "esac") {
+        depth--;
+      }
+    }
+    collected.push(tok);
+    i++;
+  }
+  return null;
+}
+function collectCompoundBody(tokens, start, endKeyword) {
+  return collectCompoundBodyMultiEnd(tokens, start, [endKeyword]);
+}
+function collectUntil(tokens, start, keyword) {
+  const collected = [];
+  let i = start;
+  let depth = 0;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    const atCmdPos = isCommandPosition(tokens, i);
+    if (atCmdPos && depth === 0 && tok === keyword) {
+      return { tokens: collected, end: i };
+    }
+    if (atCmdPos) {
+      if (tok === "while" || tok === "until" || tok === "for" || tok === "if" || tok === "case") depth++;
+      if (tok === "done" || tok === "fi" || tok === "esac") depth--;
+    }
+    collected.push(tok);
+    i++;
+  }
+  return null;
+}
+function shellTokenize(input) {
+  const tokens = [];
+  let current = "";
+  let inSingle = false;
+  let inDouble = false;
+  let i = 0;
+  const flush = () => {
+    if (current) {
+      tokens.push(current);
+      current = "";
+    }
+  };
+  while (i < input.length) {
+    const ch = input[i];
+    if (ch === "\\" && !inSingle) {
+      current += ch;
+      if (i + 1 < input.length) {
+        current += input[i + 1];
+        i += 2;
+      } else {
+        i++;
+      }
+      continue;
+    }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (!inSingle && !inDouble) {
+      if (ch === ";" && i + 1 < input.length && input[i + 1] === ";") {
+        flush();
+        tokens.push(";;");
+        i += 2;
+        continue;
+      }
+      if (ch === ";") {
+        flush();
+        tokens.push(";");
+        i++;
+        continue;
+      }
+      if (ch === "&" && i + 1 < input.length && input[i + 1] === "&") {
+        flush();
+        tokens.push("&&");
+        i += 2;
+        continue;
+      }
+      if (ch === "|" && i + 1 < input.length && input[i + 1] === "|") {
+        flush();
+        tokens.push("||");
+        i += 2;
+        continue;
+      }
+      if (ch === "|") {
+        flush();
+        tokens.push("|");
+        i++;
+        continue;
+      }
+      if (/\s/.test(ch)) {
+        flush();
+        i++;
+        continue;
+      }
+    }
+    current += ch;
+    i++;
+  }
+  flush();
+  return tokens.length > 0 ? tokens : null;
 }
 function regexFallbackParse(input) {
   const trimmed = input.trim();

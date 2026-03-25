@@ -214,6 +214,28 @@ describe('evaluator', () => {
     });
   });
 
+  describe('shell control flow', () => {
+    it('allows while loop with safe commands', () => {
+      expect(eval_('while ps -p 22396 > /dev/null 2>&1; do sleep 5; done; echo "DONE"').decision).toBe('allow');
+    });
+
+    it('allows if-then-else with safe commands', () => {
+      expect(eval_('if test -f foo.txt; then cat foo.txt; else echo missing; fi').decision).toBe('allow');
+    });
+
+    it('allows for loop with safe commands', () => {
+      expect(eval_('for f in a b c; do echo $f; done').decision).toBe('allow');
+    });
+
+    it('denies while loop containing dangerous command', () => {
+      expect(eval_('while true; do sudo rm -rf /; done').decision).toBe('deny');
+    });
+
+    it('asks for control flow with unknown command', () => {
+      expect(eval_('while true; do unknown-sketchy-tool; done').decision).toBe('ask');
+    });
+  });
+
   describe('edge cases', () => {
     it('allows empty command', () => {
       expect(eval_('').decision).toBe('allow');

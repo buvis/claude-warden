@@ -568,3 +568,68 @@ describe('pipeline fallback parser', () => {
     }
   });
 });
+
+describe('shell control flow constructs', () => {
+  it('extracts commands from while loop', () => {
+    const result = parseCommand('while ps -p 22396 > /dev/null 2>&1; do sleep 5; done; echo "DONE"');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['ps', 'sleep', 'echo']));
+  });
+
+  it('extracts commands from if-then-else', () => {
+    const result = parseCommand('if test -f foo.txt; then cat foo.txt; else echo missing; fi');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['test', 'cat', 'echo']));
+  });
+
+  it('extracts commands from for loop', () => {
+    const result = parseCommand('for f in a b c; do echo $f; done');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toContain('echo');
+  });
+
+  it('extracts commands from until loop', () => {
+    const result = parseCommand('until test -f /tmp/ready; do sleep 1; done');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['test', 'sleep']));
+  });
+
+  it('extracts commands from case statement', () => {
+    const result = parseCommand('case $x in a) echo one;; b) echo two;; esac');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toContain('echo');
+  });
+
+  it('extracts commands from nested if inside while', () => {
+    const result = parseCommand('while true; do if test -f done; then break; fi; sleep 1; done');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['true', 'test', 'sleep']));
+  });
+
+  it('extracts commands from nested for inside if', () => {
+    const result = parseCommand('if test -d src; then for f in a b; do echo $f; done; fi');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['test', 'echo']));
+  });
+
+  it('extracts commands from while inside while', () => {
+    const result = parseCommand('while true; do while false; do echo inner; done; echo outer; done');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['true', 'false', 'echo']));
+  });
+
+  it('extracts commands from if-elif-else', () => {
+    const result = parseCommand('if test -f a; then echo a; elif test -f b; then echo b; else echo c; fi');
+    expect(result.parseError).toBe(false);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['test', 'echo']));
+  });
+});
