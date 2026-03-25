@@ -40,6 +40,11 @@ unbash types map to the same `ParsedCommand` output:
 | `Subshell` | Set `hasSubshell = true`, walk `body.commands` |
 | `BraceGroup` | Walk `body.commands` |
 | `CompoundList` | Walk `commands` (each is a Statement) |
+| `Select` | Walk `body.commands` (same structure as `For`) |
+| `Coproc` | Set `hasSubshell = true`, walk inner command |
+| `ArithmeticFor` | Walk `body.commands` |
+| `TestCommand` | No commands to extract (test expressions, not command execution) |
+| `ArithmeticCommand` | No commands to extract (arithmetic, not command execution) |
 
 Command substitution in Word parts: unbash produces a full recursive `Script` AST in `CommandExpansionPart.script`. Walk it and add to `subshellCommands`.
 
