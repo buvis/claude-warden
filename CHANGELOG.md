@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-28
+
+### Added
+- `/warden:audit` skill - analyzes audit log for misclassified decisions (dangerous allows, safe denies)
+- `.claude` directory included in npm package so skills ship with plugin
+
 ## [0.3.0] - 2026-03-25
 
 ### Changed
