@@ -164,7 +164,13 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
     }
   }
 
-  // 1d. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
+  // 1d. Temp directory rm auto-allow: rm -rf in chain with cd to temp dir.
+  if (command === 'rm' && cmd.effectiveCwd) {
+    const tempResult = evaluateRmTempDir(cmd, config);
+    if (tempResult) return detail(tempResult);
+  }
+
+  // 1d.2. Chain-local rm cleanup: rm -rf $VAR where VAR is chain-assigned.
   // Only upgrades ask→allow - if rules would deny, respect that.
   // Resolves variables for target policy checking.
   if (command === 'rm' && chainAssignments?.size) {
@@ -248,6 +254,44 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
 
   // 4. Default
   return { command, args, decision: config.defaultDecision, reason: 'unknown command', matchedRule: 'default' };
+}
+
+function isTempDir(path: string): boolean {
+  if (path === '/tmp' || path.startsWith('/tmp/')) return true;
+  if (path === '/var/tmp' || path.startsWith('/var/tmp/')) return true;
+  const envTmpdir = process.env.TMPDIR;
+  if (envTmpdir) {
+    const normalized = envTmpdir.endsWith('/') ? envTmpdir : envTmpdir + '/';
+    if (path === envTmpdir || path.startsWith(normalized)) return true;
+  }
+  return false;
+}
+
+function evaluateRmTempDir(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail | null {
+  const { command, args } = cmd;
+  const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
+  if (!hasRecursive) return null;
+  if (!cmd.effectiveCwd || !isTempDir(cmd.effectiveCwd)) return null;
+
+  const targets = args.filter(a => !a.startsWith('-'));
+  if (targets.length === 0) return null;
+
+  // All targets must be relative and without traversal
+  for (const t of targets) {
+    if (t.startsWith('/')) return null;
+    if (t.includes('..')) return null;
+  }
+
+  // Respect user rules: if any layer has rm rule with default deny, don't auto-allow
+  for (const layer of config.layers) {
+    const rule = layer.rules.find(r => commandMatchesName(cmd, r.command));
+    if (rule) {
+      if (rule.default === 'deny') return null;
+      break;
+    }
+  }
+
+  return { command, args, decision: 'allow', reason: `temp directory cleanup (${cmd.effectiveCwd})`, matchedRule: 'tempDirRm' };
 }
 
 /** Match $VAR, ${VAR}, "$VAR", "${VAR}" - with optional surrounding quotes. */
