@@ -1510,6 +1510,26 @@ describe('evaluator', () => {
       });
       expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(false);
     });
+
+    it('respects user argPattern deny for rm -rf in temp dir', () => {
+      const argDenyLayer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{
+          command: 'rm',
+          default: 'ask',
+          argPatterns: [{
+            description: 'deny recursive force',
+            decision: 'deny',
+            match: { argsMatch: ['-rf'] },
+          }],
+        }],
+      };
+      const r = evalWith('cd /tmp && rm -rf foo', {
+        layers: [argDenyLayer, ...DEFAULT_CONFIG.layers],
+      });
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(false);
+    });
   });
 });
 

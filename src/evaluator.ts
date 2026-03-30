@@ -282,11 +282,14 @@ function evaluateRmTempDir(cmd: ParsedCommand, config: WardenConfig): CommandEva
     if (t.includes('..')) return null;
   }
 
-  // Respect user rules: if any layer has rm rule with default deny, don't auto-allow
+  // Respect user rules: if any layer has rm rule with default deny or
+  // argPattern-based deny, don't auto-allow.
   for (const layer of config.layers) {
     const rule = layer.rules.find(r => commandMatchesName(cmd, r.command));
     if (rule) {
       if (rule.default === 'deny') return null;
+      const ruleResult = evaluateRule(cmd, rule);
+      if (ruleResult.decision === 'deny') return null;
       break;
     }
   }
