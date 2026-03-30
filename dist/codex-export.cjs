@@ -11153,6 +11153,31 @@ function convertCommand(cmd, chainAssignments) {
   if (resolvedFrom) result.resolvedFrom = resolvedFrom;
   return result;
 }
+function updateEffectiveCwd(cdCmd, result) {
+  const target = cdCmd.args[0];
+  if (!target || target === "-") {
+    result.effectiveCwd = void 0;
+    return;
+  }
+  let resolved = target;
+  const varMatch = target.match(VAR_REF_REGEX);
+  if (varMatch) {
+    const assignment = result.chainAssignments.get(varMatch[1]);
+    if (assignment && !assignment.isDynamic && assignment.value !== null) {
+      resolved = assignment.value;
+    } else {
+      result.effectiveCwd = void 0;
+      return;
+    }
+  }
+  if (resolved.startsWith("/")) {
+    result.effectiveCwd = resolved;
+  } else if (result.effectiveCwd) {
+    result.effectiveCwd = (0, import_path.resolve)(result.effectiveCwd, resolved);
+  } else {
+    result.effectiveCwd = void 0;
+  }
+}
 function walkCompoundList(list, result) {
   for (const stmt of list.commands) {
     walkNode(stmt, result);
@@ -11238,7 +11263,24 @@ function walkNode(node, result) {
     }
     case "AndOr": {
       const andOr = node;
-      for (const cmd of andOr.commands) walkNode(cmd, result);
+      const savedCwd = result.effectiveCwd;
+      result.effectiveCwd = void 0;
+      for (const cmd of andOr.commands) {
+        const before = result.commands.length;
+        walkNode(cmd, result);
+        for (let i = before; i < result.commands.length; i++) {
+          if (result.effectiveCwd) {
+            result.commands[i].effectiveCwd = result.effectiveCwd;
+          }
+        }
+        for (let i = before; i < result.commands.length; i++) {
+          const pc = result.commands[i];
+          if (pc.command === "cd") {
+            updateEffectiveCwd(pc, result);
+          }
+        }
+      }
+      result.effectiveCwd = savedCwd;
       break;
     }
     case "While": {
@@ -11865,10 +11907,14 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
       }
     }
   }
-  if (cmd.originalPath && !cmd.originalPath.startsWith("/")) {
+  if (cmd.originalPath && !cmd.originalPath.startsWith("/") && !cmd.originalPath.startsWith("~/")) {
     if (!collectMergedRule(cmd, config)) {
       return detail({ command, args, decision: "allow", reason: `local binary (${cmd.originalPath})`, matchedRule: "localBinary" });
     }
+  }
+  if (command === "rm" && cmd.effectiveCwd) {
+    const tempResult = evaluateRmTempDir(cmd, config);
+    if (tempResult) return detail(tempResult);
   }
   if (command === "rm" && chainAssignments?.size) {
     const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
@@ -11941,6 +11987,38 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
     return evaluateRule(cmd, mergedRule);
   }
   return { command, args, decision: config.defaultDecision, reason: "unknown command", matchedRule: "default" };
+}
+function isTempDir(path) {
+  if (path === "/tmp" || path.startsWith("/tmp/")) return true;
+  if (path === "/var/tmp" || path.startsWith("/var/tmp/")) return true;
+  const envTmpdir = process.env.TMPDIR;
+  if (envTmpdir) {
+    const normalized = envTmpdir.endsWith("/") ? envTmpdir : envTmpdir + "/";
+    if (path === envTmpdir || path.startsWith(normalized)) return true;
+  }
+  return false;
+}
+function evaluateRmTempDir(cmd, config) {
+  const { command, args } = cmd;
+  const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
+  if (!hasRecursive) return null;
+  if (!cmd.effectiveCwd || !isTempDir(cmd.effectiveCwd)) return null;
+  const targets = args.filter((a) => !a.startsWith("-"));
+  if (targets.length === 0) return null;
+  for (const t of targets) {
+    if (t.startsWith("/")) return null;
+    if (t.includes("..")) return null;
+  }
+  for (const layer of config.layers) {
+    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
+    if (rule) {
+      if (rule.default === "deny") return null;
+      const ruleResult = evaluateRule(cmd, rule);
+      if (ruleResult.decision === "deny") return null;
+      break;
+    }
+  }
+  return { command, args, decision: "allow", reason: `temp directory cleanup (${cmd.effectiveCwd})`, matchedRule: "tempDirRm" };
 }
 var VAR_REF_REGEX2 = /^"?\$\{?(\w+)\}?"?$/;
 function extractVarName(text) {
