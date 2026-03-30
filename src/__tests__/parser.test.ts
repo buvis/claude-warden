@@ -629,3 +629,69 @@ describe('shell control flow constructs', () => {
     expect(result.commands.map(c => c.command)).toEqual(expect.arrayContaining(['test', 'echo']));
   });
 });
+
+describe('chain cwd tracking', () => {
+  it('stamps effectiveCwd from cd /absolute in chain', () => {
+    const result = parseCommand('cd /tmp && ls');
+    expect(result.parseError).toBe(false);
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBe('/tmp');
+  });
+
+  it('tracks nested cd in chain', () => {
+    const result = parseCommand('cd /tmp && mkdir test && cd test && rm -rf .git');
+    expect(result.parseError).toBe(false);
+    const rm = result.commands.find(c => c.command === 'rm');
+    expect(rm?.effectiveCwd).toBe('/tmp/test');
+  });
+
+  it('does not set effectiveCwd for cd with no prior absolute base', () => {
+    const result = parseCommand('cd relative && ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBeUndefined();
+  });
+
+  it('resolves chain-assigned variable in cd', () => {
+    const result = parseCommand('DIR=/tmp/build && cd $DIR && ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBe('/tmp/build');
+  });
+
+  it('resets effectiveCwd on cd with no args', () => {
+    const result = parseCommand('cd /tmp && cd && ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBeUndefined();
+  });
+
+  it('resets effectiveCwd on cd -', () => {
+    const result = parseCommand('cd /tmp && cd - && ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBeUndefined();
+  });
+
+  it('does not set effectiveCwd before first cd in chain', () => {
+    const result = parseCommand('ls && cd /tmp && rm foo');
+    const ls = result.commands.find(c => c.command === 'ls');
+    const rm = result.commands.find(c => c.command === 'rm');
+    expect(ls?.effectiveCwd).toBeUndefined();
+    expect(rm?.effectiveCwd).toBe('/tmp');
+  });
+
+  it('does not propagate effectiveCwd across pipeline', () => {
+    const result = parseCommand('cd /foo | ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBeUndefined();
+  });
+
+  it('does not propagate effectiveCwd across separate statements', () => {
+    const result = parseCommand('cd /tmp; ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBeUndefined();
+  });
+
+  it('resolves relative cd when base is known', () => {
+    const result = parseCommand('cd /tmp && cd subdir && ls');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls?.effectiveCwd).toBe('/tmp/subdir');
+  });
+});
