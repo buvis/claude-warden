@@ -4,6 +4,7 @@ export interface ParsedCommand {
   args: string[];
   envPrefixes: string[];
   raw: string;
+  originalPath?: string;
   resolvedFrom?: string;
 }
 

@@ -189,6 +189,7 @@ function convertCommand(
   const raw = rawParts.join(' ');
 
   const result: ParsedCommand = { command, originalCommand, args, envPrefixes, raw };
+  if (originalCommand.includes('/')) result.originalPath = originalCommand;
   if (resolvedFrom) result.resolvedFrom = resolvedFrom;
   return result;
 }
@@ -279,13 +280,15 @@ function walkNode(node: Node, result: WalkResult): void {
             ? basename(scriptPath)
             : scriptPath;
           const scriptArgs = parsed.args.slice(scriptIdx + 1);
-          result.commands.push({
+          const scriptCmd: ParsedCommand = {
             command: scriptCommand,
             originalCommand: scriptPath,
             args: scriptArgs,
             envPrefixes: parsed.envPrefixes,
             raw: parsed.raw,
-          });
+          };
+          if (scriptPath.includes('/')) scriptCmd.originalPath = scriptPath;
+          result.commands.push(scriptCmd);
         } else {
           result.commands.push(parsed);
         }
