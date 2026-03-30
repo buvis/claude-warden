@@ -1403,6 +1403,68 @@ describe('evaluator', () => {
       }
     });
   });
+
+  describe('temp directory rm auto-allow', () => {
+    it('allows rm -rf in /tmp via chain cd', () => {
+      const r = eval_('cd /tmp && rm -rf foo');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(true);
+    });
+
+    it('allows rm -rf in nested temp dir', () => {
+      const r = eval_('cd /tmp && mkdir test && cd test && rm -rf .git');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(true);
+    });
+
+    it('asks for rm -rf with traversal in temp dir', () => {
+      const r = eval_('cd /tmp && rm -rf ../etc');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.decision).not.toBe('allow');
+    });
+
+    it('asks for rm -rf with absolute target in temp dir chain', () => {
+      const r = eval_('cd /tmp && rm -rf /home/user');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.decision).not.toBe('allow');
+    });
+
+    it('asks for rm -rf in non-temp dir', () => {
+      const r = eval_('cd /home && rm -rf foo');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.matchedRule).not.toBe('tempDirRm');
+    });
+
+    it('allows rm -rf in /var/tmp', () => {
+      const r = eval_('cd /var/tmp && rm -rf build');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(true);
+    });
+
+    it('allows rm -rf when chain-assigned var resolves to temp dir', () => {
+      const r = eval_('TMPDIR=/tmp/build && cd $TMPDIR && rm -rf foo');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(true);
+    });
+
+    it('asks for rm -rf without cd in chain (no effectiveCwd)', () => {
+      const r = eval_('rm -rf foo');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.matchedRule).not.toBe('tempDirRm');
+    });
+
+    it('respects user deny rule for rm in temp dir', () => {
+      const denyRmLayer: ConfigLayer = {
+        alwaysAllow: [],
+        alwaysDeny: [],
+        rules: [{ command: 'rm', default: 'deny' }],
+      };
+      const r = evalWith('cd /tmp && rm -rf foo', {
+        layers: [denyRmLayer, ...DEFAULT_CONFIG.layers],
+      });
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(false);
+    });
+  });
 });
 
 // ─── Script safety scanning integration tests ───
