@@ -1453,6 +1453,52 @@ describe('evaluator', () => {
       expect(rmDetail?.matchedRule).not.toBe('tempDirRm');
     });
 
+    it('does not auto-allow non-recursive rm in temp dir', () => {
+      const r = eval_('cd /tmp && rm foo');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.matchedRule).not.toBe('tempDirRm');
+    });
+
+    it('allows rm -rf when process.env.TMPDIR points to temp dir', () => {
+      const original = process.env.TMPDIR;
+      try {
+        process.env.TMPDIR = '/custom/tmp/dir';
+        const r = eval_('cd /custom/tmp/dir && rm -rf foo');
+        expect(r.decision).toBe('allow');
+        expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(true);
+      } finally {
+        if (original === undefined) {
+          delete process.env.TMPDIR;
+        } else {
+          process.env.TMPDIR = original;
+        }
+      }
+    });
+
+    it('includes temp directory cleanup in reason when allowed', () => {
+      const r = eval_('cd /tmp && rm -rf foo');
+      const rmDetail = r.details.find(d => d.matchedRule === 'tempDirRm');
+      expect(rmDetail?.reason).toContain('temp directory cleanup');
+    });
+
+    it('does not auto-allow rm -rf with mixed relative and absolute targets', () => {
+      const r = eval_('cd /tmp && rm -rf foo /etc/passwd');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.matchedRule).not.toBe('tempDirRm');
+    });
+
+    it('allows rm -rf with multiple relative targets in temp dir', () => {
+      const r = eval_('cd /tmp && rm -rf foo bar baz');
+      expect(r.decision).toBe('allow');
+      expect(r.details.some(d => d.matchedRule === 'tempDirRm')).toBe(true);
+    });
+
+    it('asks for rm -rf with hidden traversal in target', () => {
+      const r = eval_('cd /tmp && rm -rf foo/../../../etc');
+      const rmDetail = r.details.find(d => d.command === 'rm');
+      expect(rmDetail?.matchedRule).not.toBe('tempDirRm');
+    });
+
     it('respects user deny rule for rm in temp dir', () => {
       const denyRmLayer: ConfigLayer = {
         alwaysAllow: [],
