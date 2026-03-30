@@ -6,6 +6,7 @@ export interface ParsedCommand {
   raw: string;
   originalPath?: string;
   resolvedFrom?: string;
+  effectiveCwd?: string;
 }
 
 export interface ChainAssignment {
