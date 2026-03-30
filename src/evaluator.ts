@@ -141,8 +141,8 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   // 1c. Chain-resolved command auto-allow: if command was resolved from a static
   // chain-local variable, didn't hit alwaysDeny/alwaysAllow/targetPolicies,
   // AND has no matching rules (which may contain deny/ask patterns for dangerous args),
-  // auto-allow it.
-  if (cmd.resolvedFrom && chainAssignments) {
+  // auto-allow it. Never overrides defaultDecision: 'deny'.
+  if (cmd.resolvedFrom && chainAssignments && config.defaultDecision !== 'deny') {
     const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
     if (varMatch) {
       const assignment = chainAssignments.get(varMatch[1]);
@@ -157,8 +157,8 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
 
   // 1c.5. Local binary auto-allow: relative-path commands (e.g. target/debug/foo,
   // ./build/bar) are project-local builds, not system commands. Auto-allow if no
-  // user rules exist for the basename.
-  if (cmd.originalPath && !cmd.originalPath.startsWith('/') && !cmd.originalPath.startsWith('~/')) {
+  // user rules exist for the basename. Never overrides defaultDecision: 'deny'.
+  if (cmd.originalPath && !cmd.originalPath.startsWith('/') && !cmd.originalPath.startsWith('~/') && config.defaultDecision !== 'deny') {
     if (!collectMergedRule(cmd, config)) {
       return detail({ command, args, decision: 'allow', reason: `local binary (${cmd.originalPath})`, matchedRule: 'localBinary' });
     }
@@ -269,6 +269,7 @@ function isTempDir(path: string): boolean {
 
 function evaluateRmTempDir(cmd: ParsedCommand, config: WardenConfig): CommandEvalDetail | null {
   const { command, args } = cmd;
+  if (config.defaultDecision === 'deny') return null;
   const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
   if (!hasRecursive) return null;
   if (!cmd.effectiveCwd || !isTempDir(cmd.effectiveCwd)) return null;
@@ -307,6 +308,7 @@ function extractVarName(text: string): string | null {
 
 function evaluateRmChainLocal(cmd: ParsedCommand, chainAssignments: Map<string, ChainAssignment>, config: WardenConfig, cwd?: string): CommandEvalDetail | null {
   const { command, args } = cmd;
+  if (config.defaultDecision === 'deny') return null;
   // Only handle recursive rm (the dangerous pattern)
   const hasRecursive = args.some(a => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
   if (!hasRecursive) return null;

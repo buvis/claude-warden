@@ -51,13 +51,14 @@ Releases are done remotely by creating a GitHub release (not by publishing local
 
 ## Safety invariant for auto-allow features
 
-The evaluator has features that auto-allow commands without user prompts (chain-local variable resolution, chain-local rm cleanup, trusted remote contexts). These must never override user-configured restrictions:
+The evaluator has features that auto-allow commands without user prompts (chain-local variable resolution, local binary detection, chain-local rm cleanup, temp-dir rm cleanup, trusted remote contexts). These must never override user-configured restrictions:
 
 1. `alwaysDeny` is always checked first - no auto-allow can bypass it
-2. Auto-allow for chain-resolved commands (`$VAR` → binary) only fires when the resolved command has **no matching rules**. If rules exist (which may contain deny/ask patterns for dangerous args), normal rule evaluation runs instead.
-3. Chain-local rm cleanup (`rm -rf $VAR` where VAR is chain-assigned) checks rules before allowing - if any layer's rule for `rm` has `default: deny` or an argPattern that denies the specific invocation, the handler defers to normal evaluation.
+2. `config.defaultDecision === 'deny'` disables all auto-allow paths (chainResolved, localBinary, tempDirRm, chainLocalRm)
+3. Auto-allow for chain-resolved commands (`$VAR` → binary) only fires when the resolved command has **no matching rules**. If rules exist (which may contain deny/ask patterns for dangerous args), normal rule evaluation runs instead.
+4. Chain-local rm cleanup (`rm -rf $VAR` where VAR is chain-assigned) and temp-dir rm cleanup check rules before allowing - if any layer's rule for `rm` has `default: deny` or an argPattern that denies the specific invocation, the handler defers to normal evaluation.
 
-When adding new auto-allow logic, always check both `alwaysDeny` AND user rules before returning allow. The principle: auto-allow only upgrades the default "ask" for unknown commands - it never downgrades a user's explicit deny or rule-based restriction.
+When adding new auto-allow logic, always check `alwaysDeny`, `config.defaultDecision`, AND user rules before returning allow. The principle: auto-allow only upgrades the default "ask" for unknown commands - it never downgrades a user's explicit deny or rule-based restriction.
 
 ## Plugin Structure
 

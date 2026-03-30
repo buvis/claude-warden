@@ -1881,4 +1881,35 @@ describe('script safety scanning', () => {
       expect(r.details[0].matchedRule).toBe('default');
     });
   });
+
+  describe('defaultDecision deny blocks all auto-allow paths', () => {
+    function evalDenyDefault(cmd: string) {
+      return evalWith(cmd, { defaultDecision: 'deny' as const });
+    }
+
+    it('blocks chain-resolved auto-allow when defaultDecision is deny', () => {
+      const r = evalDenyDefault('BIN=/usr/local/bin/foo && $BIN --help');
+      const detail = r.details.find(d => d.command === 'foo');
+      expect(detail?.matchedRule).not.toBe('chainResolved');
+      expect(detail?.decision).toBe('deny');
+    });
+
+    it('blocks local binary auto-allow when defaultDecision is deny', () => {
+      const r = evalDenyDefault('target/debug/foo --init');
+      expect(r.decision).toBe('deny');
+      expect(r.details[0].matchedRule).not.toBe('localBinary');
+    });
+
+    it('blocks temp dir rm auto-allow when defaultDecision is deny', () => {
+      const r = evalDenyDefault('cd /tmp && rm -rf foo');
+      const rm = r.details.find(d => d.command === 'rm');
+      expect(rm?.matchedRule).not.toBe('tempDirRm');
+    });
+
+    it('blocks chain-local rm auto-allow when defaultDecision is deny', () => {
+      const r = evalDenyDefault('DIR=build && rm -rf $DIR');
+      const rm = r.details.find(d => d.command === 'rm');
+      expect(rm?.matchedRule).not.toBe('chainLocalRm');
+    });
+  });
 });
