@@ -7,7 +7,7 @@ import type {
   Select, Coproc, ArithmeticFor,
   Word, CommandExpansionPart, Redirect,
 } from 'unbash';
-import { basename } from 'path';
+import { basename, resolve } from 'path';
 import { homedir } from 'os';
 import type { ParsedCommand, ParseResult, ChainAssignment } from './types';
 
@@ -16,6 +16,7 @@ interface WalkResult {
   hasSubshell: boolean;
   subshellCommands: string[];
   chainAssignments: Map<string, ChainAssignment>;
+  effectiveCwd?: string;
 }
 
 const VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
@@ -194,6 +195,35 @@ function convertCommand(
   return result;
 }
 
+function updateEffectiveCwd(cdCmd: ParsedCommand, result: WalkResult): void {
+  const target = cdCmd.args[0];
+  if (!target || target === '-') {
+    result.effectiveCwd = undefined;
+    return;
+  }
+
+  // Try resolving $VAR
+  let resolved = target;
+  const varMatch = target.match(VAR_REF_REGEX);
+  if (varMatch) {
+    const assignment = result.chainAssignments.get(varMatch[1]);
+    if (assignment && !assignment.isDynamic && assignment.value !== null) {
+      resolved = assignment.value;
+    } else {
+      result.effectiveCwd = undefined;
+      return;
+    }
+  }
+
+  if (resolved.startsWith('/')) {
+    result.effectiveCwd = resolved;
+  } else if (result.effectiveCwd) {
+    result.effectiveCwd = resolve(result.effectiveCwd, resolved);
+  } else {
+    result.effectiveCwd = undefined;
+  }
+}
+
 function walkCompoundList(list: CompoundList, result: WalkResult): void {
   for (const stmt of list.commands) {
     walkNode(stmt, result);
@@ -306,7 +336,26 @@ function walkNode(node: Node, result: WalkResult): void {
 
     case 'AndOr': {
       const andOr = node as AndOr;
-      for (const cmd of andOr.commands) walkNode(cmd, result);
+      const savedCwd = result.effectiveCwd;
+      result.effectiveCwd = undefined;
+      for (const cmd of andOr.commands) {
+        const before = result.commands.length;
+        walkNode(cmd, result);
+        // Stamp newly added commands with current effectiveCwd
+        for (let i = before; i < result.commands.length; i++) {
+          if (result.effectiveCwd) {
+            result.commands[i].effectiveCwd = result.effectiveCwd;
+          }
+        }
+        // Check if any newly added command is cd - update effectiveCwd
+        for (let i = before; i < result.commands.length; i++) {
+          const pc = result.commands[i];
+          if (pc.command === 'cd') {
+            updateEffectiveCwd(pc, result);
+          }
+        }
+      }
+      result.effectiveCwd = savedCwd;
       break;
     }
 
