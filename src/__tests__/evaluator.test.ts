@@ -1746,5 +1746,11 @@ describe('script safety scanning', () => {
       expect(r.decision).toBe('ask');
       expect(r.details[0].matchedRule).toBe('default');
     });
+
+    it('does not auto-allow tilde path binary', () => {
+      const r = eval_('~/bin/foo --bar');
+      expect(r.decision).toBe('ask');
+      expect(r.details[0].matchedRule).toBe('default');
+    });
   });
 });

@@ -158,7 +158,7 @@ function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number
   // 1c.5. Local binary auto-allow: relative-path commands (e.g. target/debug/foo,
   // ./build/bar) are project-local builds, not system commands. Auto-allow if no
   // user rules exist for the basename.
-  if (cmd.originalPath && !cmd.originalPath.startsWith('/')) {
+  if (cmd.originalPath && !cmd.originalPath.startsWith('/') && !cmd.originalPath.startsWith('~/')) {
     if (!collectMergedRule(cmd, config)) {
       return detail({ command, args, decision: 'allow', reason: `local binary (${cmd.originalPath})`, matchedRule: 'localBinary' });
     }
