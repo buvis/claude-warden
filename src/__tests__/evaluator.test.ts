@@ -1693,4 +1693,58 @@ describe('script safety scanning', () => {
       expect(r.reason).toContain('dangerous');
     });
   });
+
+  describe('local binary auto-allow', () => {
+    it('auto-allows relative path binary with no rules', () => {
+      const r = eval_('target/debug/foo --init');
+      expect(r.decision).toBe('allow');
+      expect(r.details[0].matchedRule).toBe('localBinary');
+      expect(r.details[0].reason).toContain('local binary');
+      expect(r.details[0].reason).toContain('target/debug/foo');
+    });
+
+    it('auto-allows dot-slash binary with no rules', () => {
+      const r = eval_('./build/bar');
+      expect(r.decision).toBe('allow');
+      expect(r.details[0].matchedRule).toBe('localBinary');
+    });
+
+    it('does not auto-allow absolute path binary', () => {
+      const r = eval_('/usr/bin/foo');
+      expect(r.decision).toBe('ask');
+      expect(r.details[0].matchedRule).toBe('default');
+    });
+
+    it('denies relative path binary in alwaysDeny', () => {
+      const r = evalWith('target/debug/sudo args', {
+        layers: [{ alwaysAllow: [], alwaysDeny: ['sudo'], rules: [] }],
+      });
+      expect(r.decision).toBe('deny');
+      expect(r.details[0].matchedRule).toBe('alwaysDeny');
+    });
+
+    it('respects user rules for basename over auto-allow', () => {
+      const r = evalWith('target/debug/git push --force', {
+        layers: [{
+          alwaysAllow: [],
+          alwaysDeny: [],
+          rules: [{ command: 'git', default: 'allow', argPatterns: [{ match: { argsMatch: ['--force'] }, decision: 'deny', reason: 'force push' }] }],
+        }],
+      });
+      expect(r.decision).toBe('deny');
+      expect(r.details[0].matchedRule).not.toBe('localBinary');
+    });
+
+    it('auto-allows node_modules/.bin binary with no rules', () => {
+      const r = eval_('node_modules/.bin/prettier --write .');
+      expect(r.decision).toBe('allow');
+      expect(r.details[0].matchedRule).toBe('localBinary');
+    });
+
+    it('asks for plain command with no path', () => {
+      const r = eval_('foo --bar');
+      expect(r.decision).toBe('ask');
+      expect(r.details[0].matchedRule).toBe('default');
+    });
+  });
 });
