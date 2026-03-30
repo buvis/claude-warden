@@ -341,9 +341,12 @@ function walkNode(node: Node, result: WalkResult): void {
       for (const cmd of andOr.commands) {
         const before = result.commands.length;
         walkNode(cmd, result);
-        // Stamp newly added commands with current effectiveCwd
+        // Stamp newly added commands with current effectiveCwd.
+        // Skip commands that already have effectiveCwd from inner recursive
+        // parsing (e.g. sh -c "cd /home && rm foo" should keep /home, not
+        // get overwritten by the outer chain's cwd).
         for (let i = before; i < result.commands.length; i++) {
-          if (result.effectiveCwd) {
+          if (result.effectiveCwd && !result.commands[i].effectiveCwd) {
             result.commands[i].effectiveCwd = result.effectiveCwd;
           }
         }

@@ -694,4 +694,25 @@ describe('chain cwd tracking', () => {
     const ls = result.commands.find(c => c.command === 'ls');
     expect(ls?.effectiveCwd).toBe('/tmp/subdir');
   });
+
+  it('preserves inner sh -c effectiveCwd over outer chain cwd', () => {
+    const result = parseCommand('cd /tmp && bash -c "cd /home && rm -rf foo"');
+    const rm = result.commands.find(c => c.command === 'rm');
+    expect(rm?.effectiveCwd).toBe('/home');
+  });
+
+  it('inherits outer cwd when inner sh -c has no cd', () => {
+    const result = parseCommand('cd /tmp && bash -c "rm -rf foo"');
+    const rm = result.commands.find(c => c.command === 'rm');
+    expect(rm?.effectiveCwd).toBe('/tmp');
+  });
+
+  it('preserves multiple inner cwd changes in sh -c', () => {
+    const result = parseCommand('cd /tmp && bash -c "cd /home && ls && cd /var && rm -rf foo"');
+    const cmds = result.commands.filter(c => c.command !== 'cd' && c.command !== 'bash');
+    const ls = cmds.find(c => c.command === 'ls');
+    const rm = cmds.find(c => c.command === 'rm');
+    expect(ls?.effectiveCwd).toBe('/home');
+    expect(rm?.effectiveCwd).toBe('/var');
+  });
 });
