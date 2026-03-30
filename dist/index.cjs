@@ -11142,6 +11142,7 @@ function convertCommand(cmd, chainAssignments) {
   const rawParts = [...envPrefixes, cmd.name.value, ...args];
   const raw = rawParts.join(" ");
   const result = { command, originalCommand, args, envPrefixes, raw };
+  if (originalCommand.includes("/")) result.originalPath = originalCommand;
   if (resolvedFrom) result.resolvedFrom = resolvedFrom;
   return result;
 }
@@ -11206,13 +11207,15 @@ function walkNode(node, result) {
           }
           const scriptCommand = scriptPath.includes("/") ? (0, import_path.basename)(scriptPath) : scriptPath;
           const scriptArgs = parsed.args.slice(scriptIdx + 1);
-          result.commands.push({
+          const scriptCmd = {
             command: scriptCommand,
             originalCommand: scriptPath,
             args: scriptArgs,
             envPrefixes: parsed.envPrefixes,
             raw: parsed.raw
-          });
+          };
+          if (scriptPath.includes("/")) scriptCmd.originalPath = scriptPath;
+          result.commands.push(scriptCmd);
         } else {
           result.commands.push(parsed);
         }
@@ -11856,6 +11859,11 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
           return detail({ command, args, decision: "allow", reason: `chain-local binary (${assignment.value})`, matchedRule: "chainResolved" });
         }
       }
+    }
+  }
+  if (cmd.originalPath && !cmd.originalPath.startsWith("/")) {
+    if (!collectMergedRule(cmd, config)) {
+      return detail({ command, args, decision: "allow", reason: `local binary (${cmd.originalPath})`, matchedRule: "localBinary" });
     }
   }
   if (command === "rm" && chainAssignments?.size) {

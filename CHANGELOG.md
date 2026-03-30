@@ -2,8 +2,13 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-30
+
 ### Added
 - Auto-allow local project binaries invoked via relative paths (e.g. `target/debug/foo`, `./build/bar`, `node_modules/.bin/prettier`)
+
+### Fixed
+- `/warden:audit` now available globally (moved from project skill to plugin command)
 
 ## [0.4.0] - 2026-03-28
 
