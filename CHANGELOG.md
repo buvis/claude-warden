@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Auto-allow local project binaries invoked via relative paths (e.g. `target/debug/foo`, `./build/bar`, `node_modules/.bin/prettier`)
+
 ## [0.4.0] - 2026-03-28
 
 ### Added
