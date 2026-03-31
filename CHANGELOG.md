@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-03-31
+
+### Fixed
+- Heredocs no longer trigger permission prompts - heredoc body is stdin data, not executable code
+
 ## [0.6.0] - 2026-03-31
 
 ### Added
