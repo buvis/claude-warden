@@ -23,9 +23,7 @@ pnpm version "$BUMP" --no-git-tag-version
 VERSION=$(jq -r .version package.json)
 DATE=$(date +%Y-%m-%d)
 
-sed -i '' "s/^## \[Unreleased\]/## [Unreleased]\\
-\\
-## [$VERSION] - $DATE/" CHANGELOG.md
+perl -i -pe "s/^## \\[Unreleased\\]/## [Unreleased]\\n\\n## [$VERSION] - $DATE/" CHANGELOG.md
 
 pnpm run sync-plugin-version
 pnpm run build
