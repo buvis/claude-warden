@@ -1,6 +1,6 @@
 # FAQ
 
-## Warden says "All commands are safe" but I still get a permission prompt
+## Warden says "ok" but I still get a permission prompt
 
 Another plugin's hook is overriding Warden's decision. When multiple PreToolUse hooks run, Claude Code uses "most restrictive wins" - any hook returning `ask` overrides another's `allow`.
 
@@ -9,7 +9,7 @@ Common culprit: the `github-dev` plugin ships a `git_commit_confirm.py` hook tha
 You'll see:
 ```
 Hook PreToolUse:Bash requires confirmation for this command:
-[warden] All commands are safe
+[warden] ok
 ```
 
 Fix: uninstall the conflicting plugin:

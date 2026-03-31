@@ -34,12 +34,14 @@ Evaluation hierarchy (first match wins):
 4. Layer-scoped alwaysDeny/alwaysAllow (project > user > default)
 5. Target policies (path, database, endpoint)
 6. Chain-local variable resolution (auto-allow if no rules match)
-7. Chain-local rm cleanup
-8. Remote command whitelisting (SSH, Docker, kubectl, Sprite, Fly)
-9. Package runner subcommand evaluation (npx, bunx, pnpx, uv run)
-10. Script safety scanning (Python, Node, Perl)
-11. Command rules with argPattern matching
-12. Default decision (`config.defaultDecision`)
+7. Local binary auto-allow (relative-path commands like `./build/foo`)
+8. Temp directory rm auto-allow (`rm -rf` after `cd /tmp` in chain)
+9. Chain-local rm cleanup
+10. Remote command whitelisting (SSH, Docker, kubectl, Sprite, Fly)
+11. Package runner subcommand evaluation (npx, bunx, pnpx, uv run)
+12. Script safety scanning (Python, Node, Perl)
+13. Command rules with argPattern matching
+14. Default decision (`config.defaultDecision`)
 
 For pipelines/chains: any deny → deny, any ask → ask, all allow → allow.
 
@@ -72,6 +74,9 @@ Language-specific pattern detection for Python, TypeScript/JavaScript, and Perl.
 
 ### codex-export.ts - Codex rules export
 Converts Warden config to Codex CLI `.rules` format (Starlark `prefix_rule` statements).
+
+### codex.ts - Codex rule evaluation bridge
+Evaluates each candidate command (from alwaysAllow, alwaysDeny, and rules across all layers) through Warden's pipeline, producing decision records used by `codex-export.ts` to generate Starlark rules.
 
 ## Plugin structure
 

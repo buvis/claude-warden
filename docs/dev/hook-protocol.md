@@ -32,7 +32,7 @@ stdout JSON:
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "allow",
-    "permissionDecisionReason": "[warden] All commands are safe"
+    "permissionDecisionReason": "[warden] ok"
   }
 }
 ```

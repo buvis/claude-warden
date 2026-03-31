@@ -57,4 +57,10 @@ pnpm run release:minor     # minor bump
 pnpm run release:major     # major bump
 ```
 
-This bumps the version, updates the changelog, commits, pushes, and creates a GitHub release. The CI workflow handles npm publishing.
+This bumps the version, updates the changelog, commits, pushes, and updates the marketplace. Then create a GitHub release manually:
+
+```bash
+gh release create vX.Y.Z --target master --title "vX.Y.Z" --notes "..."
+```
+
+CI publishes to npm when the release is created.

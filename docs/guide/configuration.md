@@ -30,10 +30,18 @@ For each command in a pipeline or chain:
 1. Global deny patterns (unparseable commands, subshells when `askOnSubshell` is on)
 2. `alwaysDeny` - first layer match wins
 3. `alwaysAllow` - first layer match wins
-4. Chain-local auto-allow (resolved `$VAR` commands with no matching rules)
-5. Target policies (path, database, endpoint)
-6. Command-specific rules with argPattern matching
-7. `defaultDecision` (fallback for unknown commands)
+4. Target policies (path, database, endpoint)
+5. Chain-local auto-allow (resolved `$VAR` commands with no matching rules)
+6. Local binary auto-allow (relative-path commands like `./build/foo`)
+7. Temp directory rm auto-allow (`rm -rf` after `cd /tmp` in a chain)
+8. Chain-local rm cleanup (`rm -rf $VAR` where VAR is chain-assigned)
+9. Remote command evaluation (SSH, Docker, kubectl, Sprite, Fly)
+10. Package runner evaluation (npx/bunx/pnpx subcommand, uv run)
+11. Script safety scanning (Python, Node, Perl content analysis)
+12. Command-specific rules with argPattern matching
+13. `defaultDecision` (fallback for unknown commands)
+
+Steps 5-8 are automatic safety upgrades - they convert the default "ask" to "allow" for commands that can be verified as safe. All four are disabled when `defaultDecision: deny` and none can override `alwaysDeny` or user-configured restrictions.
 
 For pipelines and chains, per-command results are combined: any deny makes the whole chain deny, any ask makes it ask, all allow makes it allow.
 

@@ -88,21 +88,9 @@ These commands run without prompts. They are read-only or safe by nature.
 
 `cd` `pushd` `popd` `dirs` `hash` `alias` `set` `unset`
 
-### File management
-
-`mkdir` `touch` `cp` `mv` `ln`
-
-### Build tools
-
-`make` `cmake` `tsc` `turbo` `nx` `lerna`
-
-### Languages and compilers
-
-`rustup` `swift` `swiftc` `zig` `javac` `pip` `pip3` `brew`
-
 ### Other
 
-`sleep` `wait` `time` `md5` `md5sum` `sha256sum` `shasum` `cksum` `base64` `watch` `timeout` `nohup` `nice` `iconv` `locale` `localedef` `numfmt` `factor` `bc` `dc` `curl` `wget`
+`sleep` `wait` `time` `md5` `md5sum` `sha256sum` `shasum` `cksum` `base64` `watch` `timeout` `nohup` `nice` `iconv` `locale` `localedef` `numfmt` `factor` `bc` `dc`
 
 ## Always Denied
 
@@ -160,6 +148,12 @@ These commands have argument-aware rules. The **default** column shows what happ
 | `chmod` | ask | **deny**: `-R 777` |
 | `chown` | ask | -- |
 
+### File management
+
+| Command | Default | Conditions |
+|---|---|---|
+| `mkdir` `touch` `cp` `mv` `ln` | allow | -- |
+
 ### Text and file tools
 
 | Command | Default | Conditions |
@@ -188,7 +182,12 @@ These commands have argument-aware rules. The **default** column shows what happ
 | `cargo` | allow | **ask**: publish, login, logout, owner, yank |
 | `go` | allow | **ask**: `generate` |
 | `dotnet` | allow | **ask**: publish, nuget |
-| `swift` | allow | -- |
+| `swift` `swiftc` | allow | -- |
+| `make` `cmake` | allow | -- |
+| `rustup` | allow | -- |
+| `tsc` `turbo` `nx` `lerna` | allow | -- |
+| `javac` | allow | -- |
+| `zig` | allow | -- |
 
 ### Docker and Kubernetes
 
