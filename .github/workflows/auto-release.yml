@@ -54,6 +54,10 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
         run: |
-          git tag "$VERSION"
-          git push origin "$VERSION"
-          gh release create "$VERSION" --title "$VERSION" --notes "$RELEASE_NOTES"
+          if ! git rev-parse "$VERSION" >/dev/null 2>&1; then
+            git tag "$VERSION"
+            git push origin "$VERSION"
+          fi
+          if ! gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release create "$VERSION" --title "$VERSION" --notes "$RELEASE_NOTES"
+          fi
