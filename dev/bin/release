@@ -2,13 +2,18 @@
 set -euo pipefail
 
 BUMP="${1:-patch}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+MARKETPLACE_ROOT="$(cd "$REPO_ROOT/../claude-plugins" 2>/dev/null && pwd)"
+MARKETPLACE="$MARKETPLACE_ROOT/.claude-plugin/marketplace.json"
 
 case "$BUMP" in
   patch|minor|major) ;;
   *) echo "Usage: $0 [patch|minor|major] (default: patch)" && exit 1 ;;
 esac
 
-# Validate changelog before bumping version
+# --- Preflight checks ---
+
 if ! grep -q '## \[Unreleased\]' CHANGELOG.md; then
   echo "Error: no [Unreleased] section in CHANGELOG.md" >&2
   exit 1
@@ -19,6 +24,34 @@ if ! echo "$UNRELEASED" | grep -q '^### '; then
   exit 1
 fi
 
+if [ ! -f "$MARKETPLACE" ]; then
+  echo "Error: marketplace not found at $MARKETPLACE" >&2
+  exit 1
+fi
+if [ -n "$(git -C "$MARKETPLACE_ROOT" status --porcelain)" ]; then
+  echo "Error: marketplace repo has uncommitted changes" >&2
+  exit 1
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Error: working tree has uncommitted changes" >&2
+  exit 1
+fi
+
+for cmd in jq perl pnpm; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "Error: $cmd not found" >&2
+    exit 1
+  fi
+done
+
+if ! pnpm run test --silent; then
+  echo "Error: tests fail before release" >&2
+  exit 1
+fi
+
+# --- Release ---
+
 pnpm version "$BUMP" --no-git-tag-version
 VERSION=$(jq -r .version package.json)
 DATE=$(date +%Y-%m-%d)
@@ -27,19 +60,15 @@ perl -i -pe "s/^## \\[Unreleased\\]/## [Unreleased]\\n\\n## [$VERSION] - $DATE/"
 
 pnpm run sync-plugin-version
 pnpm run build
-pnpm run test
 
 git add -A
 git commit -m "chore: release v$VERSION"
 git push
 
-MARKETPLACE="$HOME/git/src/github.com/buvis/claude-plugins/.claude-plugin/marketplace.json"
-if [ -f "$MARKETPLACE" ]; then
-  perl -i -pe "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MARKETPLACE"
-  git -C "$(dirname "$MARKETPLACE")/.." add .claude-plugin/marketplace.json
-  git -C "$(dirname "$MARKETPLACE")/.." commit -m "chore: bump warden to v$VERSION"
-  git -C "$(dirname "$MARKETPLACE")/.." push
-  echo "Marketplace updated to v$VERSION"
-fi
+perl -i -pe "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MARKETPLACE"
+git -C "$MARKETPLACE_ROOT" add .claude-plugin/marketplace.json
+git -C "$MARKETPLACE_ROOT" commit -m "chore: bump warden to v$VERSION"
+git -C "$MARKETPLACE_ROOT" push
+echo "Marketplace updated to v$VERSION"
 
 echo "Released v$VERSION"
