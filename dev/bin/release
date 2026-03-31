@@ -8,20 +8,21 @@ case "$BUMP" in
   *) echo "Usage: $0 [patch|minor|major] (default: patch)" && exit 1 ;;
 esac
 
-pnpm version "$BUMP" --no-git-tag-version
-VERSION=$(jq -r .version package.json)
-DATE=$(date +%Y-%m-%d)
-
-# Move [Unreleased] entries to new version heading
+# Validate changelog before bumping version
 if ! grep -q '## \[Unreleased\]' CHANGELOG.md; then
   echo "Error: no [Unreleased] section in CHANGELOG.md" >&2
   exit 1
 fi
 UNRELEASED=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md)
-if [ -z "$(echo "$UNRELEASED" | tr -d '[:space:]')" ]; then
-  echo "Error: [Unreleased] section is empty - add changelog entries before releasing" >&2
+if ! echo "$UNRELEASED" | grep -q '^### '; then
+  echo "Error: [Unreleased] section has no entries - add changelog entries before releasing" >&2
   exit 1
 fi
+
+pnpm version "$BUMP" --no-git-tag-version
+VERSION=$(jq -r .version package.json)
+DATE=$(date +%Y-%m-%d)
+
 sed -i '' "s/^## \[Unreleased\]/## [Unreleased]\\
 \\
 ## [$VERSION] - $DATE/" CHANGELOG.md
