@@ -11262,7 +11262,7 @@ function walkNode(node, result) {
         const before = result.commands.length;
         walkNode(cmd, result);
         for (let i = before; i < result.commands.length; i++) {
-          if (result.effectiveCwd) {
+          if (result.effectiveCwd && !result.commands[i].effectiveCwd) {
             result.commands[i].effectiveCwd = result.effectiveCwd;
           }
         }
@@ -11892,7 +11892,7 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
     const targetResult = evaluateTargetPolicies(cmd, cwd, config);
     if (targetResult) return detail(targetResult);
   }
-  if (cmd.resolvedFrom && chainAssignments) {
+  if (cmd.resolvedFrom && chainAssignments && config.defaultDecision !== "deny") {
     const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
     if (varMatch) {
       const assignment = chainAssignments.get(varMatch[1]);
@@ -11903,7 +11903,7 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
       }
     }
   }
-  if (cmd.originalPath && !cmd.originalPath.startsWith("/") && !cmd.originalPath.startsWith("~/")) {
+  if (cmd.originalPath && !cmd.originalPath.startsWith("/") && !cmd.originalPath.startsWith("~/") && config.defaultDecision !== "deny") {
     if (!collectMergedRule(cmd, config)) {
       return detail({ command, args, decision: "allow", reason: `local binary (${cmd.originalPath})`, matchedRule: "localBinary" });
     }
@@ -11996,6 +11996,7 @@ function isTempDir(path) {
 }
 function evaluateRmTempDir(cmd, config) {
   const { command, args } = cmd;
+  if (config.defaultDecision === "deny") return null;
   const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
   if (!hasRecursive) return null;
   if (!cmd.effectiveCwd || !isTempDir(cmd.effectiveCwd)) return null;
@@ -12023,6 +12024,7 @@ function extractVarName(text) {
 }
 function evaluateRmChainLocal(cmd, chainAssignments, config, cwd) {
   const { command, args } = cmd;
+  if (config.defaultDecision === "deny") return null;
   const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
   if (!hasRecursive) return null;
   const targets = args.filter((a) => !a.startsWith("-"));

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-31
+
 ### Added
 - Auto-allow `rm -rf` in temp directories when `cd /tmp` (or `/var/tmp`, `$TMPDIR`) precedes it in a chain
 
