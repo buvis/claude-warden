@@ -35,7 +35,7 @@ git push
 
 MARKETPLACE="$HOME/git/src/github.com/buvis/claude-plugins/.claude-plugin/marketplace.json"
 if [ -f "$MARKETPLACE" ]; then
-  sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MARKETPLACE"
+  perl -i -pe "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MARKETPLACE"
   git -C "$(dirname "$MARKETPLACE")/.." add .claude-plugin/marketplace.json
   git -C "$(dirname "$MARKETPLACE")/.." commit -m "chore: bump warden to v$VERSION"
   git -C "$(dirname "$MARKETPLACE")/.." push
