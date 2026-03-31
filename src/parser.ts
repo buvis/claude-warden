@@ -139,11 +139,6 @@ function collectExpansionsFromWord(word: Word, result: WalkResult): void {
   }
 }
 
-/** Check if any redirect is a heredoc. */
-function hasHeredocRedirect(redirects: Redirect[]): boolean {
-  return redirects.some(r => r.operator === '<<' || r.operator === '<<-');
-}
-
 /** Extract chain assignments from a Command with no name (standalone VAR=value). */
 function extractAssignments(
   cmd: UnbashCommand,
@@ -246,9 +241,6 @@ function walkNode(node: Node, result: WalkResult): void {
   switch (node.type) {
     case 'Statement': {
       const stmt = node as Statement;
-      if (hasHeredocRedirect(stmt.redirects)) {
-        result.hasSubshell = true;
-      }
       walkNode(stmt.command, result);
       break;
     }
@@ -259,11 +251,6 @@ function walkNode(node: Node, result: WalkResult): void {
       // Collect command expansions from name and suffix words
       if (cmd.name) collectExpansionsFromWord(cmd.name, result);
       for (const s of cmd.suffix) collectExpansionsFromWord(s, result);
-
-      // Check for heredoc redirects
-      if (hasHeredocRedirect(cmd.redirects)) {
-        result.hasSubshell = true;
-      }
 
       const parsed = convertCommand(cmd, result.chainAssignments);
       if (!parsed) {

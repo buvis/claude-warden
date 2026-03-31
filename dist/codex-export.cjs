@@ -11116,9 +11116,6 @@ function collectExpansionsFromWord(word, result) {
     }
   }
 }
-function hasHeredocRedirect(redirects) {
-  return redirects.some((r) => r.operator === "<<" || r.operator === "<<-");
-}
 function extractAssignments(cmd) {
   const assignments = [];
   for (const p of cmd.prefix) {
@@ -11198,9 +11195,6 @@ function walkNode(node, result) {
   switch (node.type) {
     case "Statement": {
       const stmt = node;
-      if (hasHeredocRedirect(stmt.redirects)) {
-        result.hasSubshell = true;
-      }
       walkNode(stmt.command, result);
       break;
     }
@@ -11208,9 +11202,6 @@ function walkNode(node, result) {
       const cmd = node;
       if (cmd.name) collectExpansionsFromWord(cmd.name, result);
       for (const s of cmd.suffix) collectExpansionsFromWord(s, result);
-      if (hasHeredocRedirect(cmd.redirects)) {
-        result.hasSubshell = true;
-      }
       const parsed = convertCommand(cmd, result.chainAssignments);
       if (!parsed) {
         for (const a of extractAssignments(cmd)) {
