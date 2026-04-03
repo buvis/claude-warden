@@ -3,7 +3,7 @@ description: Use when user wants to review warden audit log for misclassified de
 user_invocable: true
 ---
 
-# Audit Warden Decisions
+# Review Warden Decisions
 
 Analyze `~/.claude/warden-audit.jsonl` to find misclassified command decisions: dangerous commands allowed, safe commands denied/asked.
 
