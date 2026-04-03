@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-04-03
+
 ### Changed
 
 - Renamed `/warden:audit` command to `/warden:review-decisions`
