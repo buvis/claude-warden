@@ -6,7 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/banyudu/claude-warden)](https://github.com/banyudu/claude-warden/stargazers)
 [![CI](https://img.shields.io/github/actions/workflow/status/banyudu/claude-warden/ci.yml?label=CI)](https://github.com/banyudu/claude-warden/actions)
 
-Smart command safety filter for [Claude Code](https://claude.ai/code). Parses shell commands, evaluates each against configurable safety rules, and returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
+Smart command safety filter for [Claude Code](https://claude.ai/code), [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/customize-copilot-cli/use-hooks), and other AI coding agents. Parses shell commands, evaluates each against configurable safety rules, and returns allow/deny/ask decisions — eliminating unnecessary permission prompts while blocking dangerous commands.
 
 ## The problem
 
@@ -124,6 +124,49 @@ Example:
 ```bash
 node dist/codex-export.cjs --cwd . --out .codex/rules/warden.rules
 ```
+
+## GitHub Copilot CLI
+
+Warden supports GitHub Copilot CLI's [preToolUse hook](https://docs.github.com/en/copilot/reference/hooks-configuration) natively.
+
+### Setup
+
+1. Install Warden in your project:
+
+```bash
+npm install claude-warden
+```
+
+2. Copy the hook config to your repo:
+
+```bash
+cp node_modules/claude-warden/.github/hooks/warden.json .github/hooks/warden.json
+```
+
+3. Commit `.github/hooks/warden.json` to your default branch. Copilot CLI loads hooks from your current working directory automatically.
+
+That's it. Copilot CLI will now evaluate bash commands through Warden's rule engine before execution.
+
+### How it works
+
+Copilot CLI sends a `preToolUse` event with `{"toolName": "bash", "toolArgs": "{\"command\": \"...\"}"}` on stdin. Warden's Copilot adapter (`dist/copilot.cjs`) parses this, runs the command through the same AST-based evaluation pipeline used for Claude Code, and returns `{"permissionDecision": "allow|deny|ask", "permissionDecisionReason": "..."}` on stdout.
+
+The same `~/.claude/warden.yaml` and `.claude/warden.yaml` config files are used for both Claude Code and Copilot CLI.
+
+## Generic CLI
+
+Warden also provides a standalone CLI for use with any tool or shell script:
+
+```bash
+npx claude-warden eval "ls -la"                    # → allow
+npx claude-warden eval "shutdown -h now"            # → deny (exit code 2)
+npx claude-warden eval --json "git push --force"    # → JSON output
+npx claude-warden eval --cwd /path/to/project "rm -rf dist"
+```
+
+Exit codes: `0` = allow, `1` = ask, `2` = deny.
+
+Use `--json` for machine-readable output suitable for scripting.
 
 ## Configure
 

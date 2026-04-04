@@ -49,7 +49,7 @@ describe('bypassPermissions mode', () => {
 
     // Verify the check comes BEFORE parseCommand
     const skipIndex = indexSrc.indexOf("permission_mode === 'bypassPermissions'");
-    const parseIndex = indexSrc.indexOf('parseCommand(command)');
+    const parseIndex = indexSrc.indexOf('wardenEvalWithConfig(command');
     expect(skipIndex).toBeLessThan(parseIndex);
   });
 });
@@ -74,7 +74,7 @@ describe('WARDEN_YOLO env var', () => {
       'utf-8',
     );
     const yoloIndex = indexSrc.indexOf("process.env.WARDEN_YOLO");
-    const parseIndex = indexSrc.indexOf('parseCommand(command)');
+    const parseIndex = indexSrc.indexOf('wardenEvalWithConfig(command');
     expect(yoloIndex).toBeGreaterThan(-1);
     expect(yoloIndex).toBeLessThan(parseIndex);
   });

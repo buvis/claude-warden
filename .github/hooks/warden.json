@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "node node_modules/claude-warden/dist/copilot.cjs",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}

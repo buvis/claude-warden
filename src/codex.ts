@@ -1,5 +1,4 @@
-import { evaluate } from './evaluator';
-import { parseCommand } from './parser';
+import { wardenEvalWithConfig } from './core';
 import type { Decision, WardenConfig } from './types';
 
 export interface CodexRuleRecord {
@@ -36,7 +35,7 @@ function collectCandidateCommands(config: WardenConfig): string[] {
 export function buildCodexRuleRecords(config: WardenConfig): CodexRuleRecord[] {
   const records: CodexRuleRecord[] = [];
   for (const command of collectCandidateCommands(config)) {
-    const result = evaluate(parseCommand(command), config);
+    const result = wardenEvalWithConfig(command, config);
     records.push({
       command,
       decision: result.decision,

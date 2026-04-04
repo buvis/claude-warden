@@ -3988,12 +3988,12 @@ var require_lib = __commonJS({
         }
         return code;
       };
-      Tokenizer2.prototype.readString = function readString(quote2) {
+      Tokenizer2.prototype.readString = function readString(quote) {
         var out = "", chunkStart = ++this.state.pos;
         for (; ; ) {
           if (this.state.pos >= this.input.length) this.raise(this.state.start, "Unterminated string constant");
           var ch = this.input.charCodeAt(this.state.pos);
-          if (ch === quote2) break;
+          if (ch === quote) break;
           if (ch === 92) {
             out += this.input.slice(chunkStart, this.state.pos);
             out += this.readEscapedChar(false);
@@ -8357,7 +8357,7 @@ var require_lib = __commonJS({
       this.state.lineStart = this.state.pos;
       return out;
     };
-    pp$9.jsxReadString = function(quote2) {
+    pp$9.jsxReadString = function(quote) {
       var out = "";
       var chunkStart = ++this.state.pos;
       for (; ; ) {
@@ -8365,7 +8365,7 @@ var require_lib = __commonJS({
           this.raise(this.state.start, "Unterminated string constant");
         }
         var ch = this.input.charCodeAt(this.state.pos);
-        if (ch === quote2) break;
+        if (ch === quote) break;
         if (ch === 38) {
           out += this.input.slice(chunkStart, this.state.pos);
           out += this.jsxReadEntity();
@@ -8936,7 +8936,7 @@ var require_shell_quote_word = __commonJS({
         var SQ = "'";
         var DQ = '"';
         var BS = "\\";
-        var quote2 = false;
+        var quote = false;
         var esc = false;
         var out = "";
         for (var i2 = 0, len = s2.length; i2 < len; i2++) {
@@ -8944,10 +8944,10 @@ var require_shell_quote_word = __commonJS({
           if (esc) {
             out += c;
             esc = false;
-          } else if (quote2) {
-            if (c === quote2) {
-              quote2 = false;
-            } else if (quote2 === SQ) {
+          } else if (quote) {
+            if (c === quote) {
+              quote = false;
+            } else if (quote === SQ) {
               out += c;
             } else if (c === BS) {
               i2 += 1;
@@ -8961,7 +8961,7 @@ var require_shell_quote_word = __commonJS({
               out += c;
             }
           } else if (c === DQ || c === SQ) {
-            quote2 = c;
+            quote = c;
           } else if (RegExp("^#$").test(c)) {
             commented = true;
             if (out.length) {
@@ -16822,9 +16822,9 @@ var require_lexer = __commonJS({
         }
       }
       *parseQuotedScalar() {
-        const quote2 = this.charAt(0);
-        let end = this.buffer.indexOf(quote2, this.pos + 1);
-        if (quote2 === "'") {
+        const quote = this.charAt(0);
+        let end = this.buffer.indexOf(quote, this.pos + 1);
+        if (quote === "'") {
           while (end !== -1 && this.buffer[end + 1] === "'")
             end = this.buffer.indexOf("'", end + 2);
         } else {
@@ -18130,10 +18130,6 @@ var require_dist2 = __commonJS({
   }
 });
 
-// src/codex-export.ts
-var import_fs2 = require("fs");
-var import_path4 = require("path");
-
 // src/parser.ts
 var import_bash_parser = __toESM(require_src(), 1);
 var import_path = require("path");
@@ -18148,10 +18144,10 @@ function preprocessPathParentheses(input) {
   while (i < input.length) {
     const ch = input[i];
     if (ch === '"' || ch === "'") {
-      const quote2 = ch;
+      const quote = ch;
       let j = i + 1;
-      while (j < input.length && input[j] !== quote2) {
-        if (input[j] === "\\" && quote2 === '"') j++;
+      while (j < input.length && input[j] !== quote) {
+        if (input[j] === "\\" && quote === '"') j++;
         j++;
       }
       result.push(input.slice(i, j + 1));
@@ -20605,111 +20601,57 @@ function mergeNonLayerFields(config, raw) {
 }
 
 // src/core.ts
+function wardenEval(command, options) {
+  const config = loadConfig(options?.cwd);
+  return wardenEvalWithConfig(command, config, options?.cwd);
+}
 function wardenEvalWithConfig(command, config, cwd) {
   const parsed = parseCommand(command);
   return evaluate(parsed, config, cwd);
 }
 
-// src/codex.ts
-function toCodexDecision(decision) {
-  if (decision === "allow") return "allow";
-  if (decision === "ask") return "prompt";
-  return "forbidden";
+// src/copilot.ts
+var MAX_STDIN_SIZE = 1024 * 1024;
+function output(decision, reason) {
+  const result = {
+    permissionDecision: decision,
+    permissionDecisionReason: reason
+  };
+  process.stdout.write(JSON.stringify(result));
 }
-function quote(value) {
-  return JSON.stringify(value);
-}
-function collectCandidateCommands(config) {
-  const names = /* @__PURE__ */ new Set();
-  for (const layer of config.layers) {
-    for (const name of layer.alwaysAllow) names.add(name);
-    for (const name of layer.alwaysDeny) names.add(name);
-    for (const rule of layer.rules) names.add(rule.command);
-  }
-  return [...names].map((n) => n.trim()).filter((n) => n.length > 0 && !/\s/.test(n)).sort();
-}
-function buildCodexRuleRecords(config) {
-  const records = [];
-  for (const command of collectCandidateCommands(config)) {
-    const result = wardenEvalWithConfig(command, config);
-    records.push({
-      command,
-      decision: result.decision,
-      reason: result.reason
-    });
-  }
-  return records;
-}
-function generateCodexRules(config) {
-  const lines = [
-    "# Generated by claude-warden.",
-    "# Regenerate with: pnpm codex:export-rules",
-    ""
-  ];
-  for (const record of buildCodexRuleRecords(config)) {
-    lines.push(
-      `prefix_rule(pattern = [${quote(record.command)}], decision = ${quote(toCodexDecision(record.decision))}, justification = ${quote(`Warden: ${record.reason}`)})`
-    );
-  }
-  lines.push("");
-  return lines.join("\n");
-}
-
-// src/codex-export.ts
-function parseArgs(argv) {
-  let cwd = process.cwd();
-  let outPath = null;
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg === "--cwd" && argv[i + 1]) {
-      cwd = (0, import_path4.resolve)(argv[i + 1]);
-      i += 1;
-      continue;
-    }
-    if (arg === "--out" && argv[i + 1]) {
-      outPath = argv[i + 1];
-      i += 1;
-      continue;
-    }
-    if (arg === "--stdout") {
-      outPath = "-";
-      continue;
-    }
-    if (arg === "-h" || arg === "--help") {
-      printHelp();
+async function main() {
+  let raw = "";
+  for await (const chunk of process.stdin) {
+    raw += chunk;
+    if (raw.length > MAX_STDIN_SIZE) {
+      output("ask", "[warden] Input exceeds size limit");
       process.exit(0);
     }
   }
-  return { cwd, outPath };
-}
-function printHelp() {
-  process.stdout.write(
-    [
-      "Usage: node dist/codex-export.cjs [--cwd <dir>] [--out <path> | --stdout]",
-      "",
-      "Defaults:",
-      "  --cwd: current directory",
-      "  --out: <cwd>/.codex/rules/warden.rules",
-      ""
-    ].join("\n")
-  );
-}
-function main() {
-  const options = parseArgs(process.argv.slice(2));
-  const config = loadConfig(options.cwd);
-  const rules = generateCodexRules(config);
-  const target = options.outPath ?? (0, import_path4.join)(options.cwd, ".codex", "rules", "warden.rules");
-  if (target === "-") {
-    process.stdout.write(rules);
-    return;
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch {
+    process.exit(0);
   }
-  const resolvedTarget = (0, import_path4.isAbsolute)(target) ? target : (0, import_path4.resolve)(options.cwd, target);
-  (0, import_fs2.mkdirSync)((0, import_path4.dirname)(resolvedTarget), { recursive: true });
-  (0, import_fs2.writeFileSync)(resolvedTarget, rules, "utf-8");
-  process.stderr.write(`[warden] Wrote Codex rules to ${resolvedTarget}
-`);
+  if (input.toolName !== "bash") {
+    process.exit(0);
+  }
+  let command;
+  try {
+    const args2 = JSON.parse(input.toolArgs);
+    command = args2.command;
+  } catch {
+    process.exit(0);
+  }
+  if (!command || typeof command !== "string") {
+    process.exit(0);
+  }
+  const result = wardenEval(command, { cwd: input.cwd });
+  output(result.decision, `[warden] ${result.reason}`);
+  process.exit(0);
 }
-main();
+main().catch(() => process.exit(0));
 /*! Bundled license information:
 
 is-number/index.js:
