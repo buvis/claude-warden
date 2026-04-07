@@ -20600,6 +20600,12 @@ function mergeNonLayerFields(config, raw) {
   }
 }
 
+// src/core.ts
+function wardenEvalWithConfig(command, config, cwd) {
+  const parsed = parseCommand(command);
+  return evaluate(parsed, config, cwd);
+}
+
 // src/suggest.ts
 function generateAllowSnippet(details) {
   const lines = [];
@@ -20865,11 +20871,10 @@ async function main() {
     process.exit(0);
   }
   const config = loadConfig(input.cwd);
+  const result = wardenEvalWithConfig(command, config, input.cwd);
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
-    const parsed2 = parseCommand(command);
-    const result2 = evaluate(parsed2, config, input.cwd);
-    if (result2.decision === "deny" && !yoloState.bypassDeny) {
+    if (result.decision === "deny" && !yoloState.bypassDeny) {
     } else {
       const expiryInfo = yoloState.expiresAt ? `expires ${new Date(yoloState.expiresAt).toLocaleTimeString()}` : "full session";
       const output2 = {
@@ -20883,8 +20888,6 @@ async function main() {
       process.exit(0);
     }
   }
-  const parsed = parseCommand(command);
-  const result = evaluate(parsed, config, input.cwd);
   if (result.decision === "allow") {
     const output2 = {
       hookSpecificOutput: {

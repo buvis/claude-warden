@@ -1,5 +1,4 @@
-import { parseCommand } from './parser';
-import { evaluate } from './evaluator';
+import { wardenEvalWithConfig } from './core';
 import { loadConfig } from './rules';
 import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
@@ -88,13 +87,11 @@ async function main() {
   }
 
   const config = loadConfig(input.cwd);
+  const result = wardenEvalWithConfig(command, config, input.cwd);
 
   // Check YOLO mode
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
-    const parsed = parseCommand(command);
-    const result = evaluate(parsed, config, input.cwd);
-
     // In YOLO mode, only block alwaysDeny commands (unless bypassDeny is set)
     if (result.decision === 'deny' && !yoloState.bypassDeny) {
       // Fall through to normal deny handling below
@@ -113,9 +110,6 @@ async function main() {
       process.exit(0);
     }
   }
-
-  const parsed = parseCommand(command);
-  const result = evaluate(parsed, config, input.cwd);
 
   if (result.decision === 'allow') {
     const output: HookOutput = {

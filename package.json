@@ -4,6 +4,9 @@
   "description": "Smart command safety filter for Claude Code — auto-approves safe commands, blocks dangerous ones",
   "type": "module",
   "main": "dist/index.cjs",
+  "bin": {
+    "warden": "dist/cli.cjs"
+  },
   "license": "MIT",
   "author": "banyudu",
   "repository": {
@@ -14,6 +17,8 @@
   "keywords": [
     "claude-code",
     "claude-code-plugin",
+    "copilot",
+    "copilot-cli",
     "safety",
     "security",
     "shell",
@@ -22,6 +27,7 @@
   "files": [
     "dist",
     ".claude-plugin",
+    ".github/hooks",
     "hooks",
     "config",
     "marketplace.json",
@@ -35,6 +41,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "eval": "node dist/index.cjs",
+    "warden": "node dist/cli.cjs",
     "codex:export-rules": "node dist/codex-export.cjs",
     "sync-plugin-version": "node scripts/sync-plugin-version.cjs",
     "release": "scripts/release.sh patch",
