@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **hook**: bypass-permissions mode detection now matches Claude Code's internal `bypassPermissions` enum value (from upstream 794ea79)
+- **marketplace**: version in marketplace.json synced to 0.6.3, was stuck at 0.1.0
+
+### Added
+
+- **cli**: generic `warden eval "command"` CLI for debugging rule decisions outside a hook
+- **copilot**: GitHub Copilot CLI adapter with flat JSON hook protocol
+- **core**: reusable `wardenEval`/`wardenEvalWithConfig` module, eliminating duplicate parse+evaluate calls
+
+### Changed
+
+- **build**: `sync-plugin-version` script now syncs both plugin.json and marketplace.json
+
 ## [0.6.3] - 2026-04-03
 
 ### Changed

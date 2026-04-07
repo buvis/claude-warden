@@ -1,5 +1,4 @@
-import { parseCommand } from './parser';
-import { evaluate } from './evaluator';
+import { wardenEvalWithConfig } from './core';
 import { loadConfig } from './rules';
 import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
@@ -39,8 +38,8 @@ async function main() {
     process.exit(0);
   }
 
-  // Auto-allow when running with --dangerously-skip-permissions
-  if (input.permission_mode === 'dangerously-skip-permissions') {
+  // Claude Code sends the internal enum value, not the CLI flag name.
+  if (input.permission_mode === 'bypassPermissions') {
     process.exit(0);
   }
 
@@ -90,38 +89,17 @@ async function main() {
   }
 
   const config = loadConfig(input.cwd);
+  const result = wardenEvalWithConfig(command, config, input.cwd);
+  const elapsed = Date.now() - startTime;
 
-  // Check YOLO mode - evaluate once here, reuse result below if deny falls through
-  let yoloActive = false;
+  // Check YOLO mode
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
-    yoloActive = true;
-    const parsed = parseCommand(command);
-    const result = evaluate(parsed, config, 0, input.cwd);
-
     // In YOLO mode, only block alwaysDeny commands (unless bypassDeny is set)
     if (result.decision === 'deny' && !yoloState.bypassDeny) {
-      // Fall through to deny handling below - reuse this result
-      const elapsed = Date.now() - startTime;
-      logDecision(config, input, result, elapsed, true);
-      if (config.notifyOnDeny) {
-        const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
-        sendNotification('Claude Warden', `Blocked: ${truncated}`, config);
-      }
-      const { reason, systemMessage } = formatSystemMessage('deny', command, result.details);
-      const output: HookOutput = {
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'deny',
-          permissionDecisionReason: reason,
-        },
-        systemMessage,
-      };
-      process.stdout.write(JSON.stringify(output));
-      process.stderr.write(`${reason}\n`);
-      process.exit(2);
+      // Fall through to normal deny handling below
     } else {
-      logDecision(config, input, result, Date.now() - startTime, true);
+      logDecision(config, input, result, elapsed, true);
       const expiryInfo = yoloState.expiresAt
         ? `until ${new Date(yoloState.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
         : 'full session';
@@ -136,10 +114,6 @@ async function main() {
       process.exit(0);
     }
   }
-
-  const parsed = parseCommand(command);
-  const result = evaluate(parsed, config, 0, input.cwd);
-  const elapsed = Date.now() - startTime;
 
   if (result.decision === 'allow') {
     logDecision(config, input, result, elapsed, false);

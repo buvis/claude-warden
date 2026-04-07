@@ -14057,6 +14057,12 @@ function mergeNonLayerFields(config, raw) {
   }
 }
 
+// src/core.ts
+function wardenEvalWithConfig(command, config, cwd) {
+  const parsed = parseCommand(command);
+  return evaluate(parsed, config, 0, cwd);
+}
+
 // src/suggest.ts
 function generateAllowSnippet(details) {
   const lines = [];
@@ -14308,7 +14314,7 @@ async function main() {
   if (input.tool_name !== "Bash") {
     process.exit(0);
   }
-  if (input.permission_mode === "dangerously-skip-permissions") {
+  if (input.permission_mode === "bypassPermissions") {
     process.exit(0);
   }
   if (process.env.WARDEN_YOLO === "true" || process.env.WARDEN_YOLO === "1") {
@@ -14348,34 +14354,13 @@ async function main() {
     process.exit(0);
   }
   const config = loadConfig(input.cwd);
-  let yoloActive = false;
+  const result = wardenEvalWithConfig(command, config, input.cwd);
+  const elapsed = Date.now() - startTime;
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
-    yoloActive = true;
-    const parsed2 = parseCommand(command);
-    const result2 = evaluate(parsed2, config, 0, input.cwd);
-    if (result2.decision === "deny" && !yoloState.bypassDeny) {
-      const elapsed2 = Date.now() - startTime;
-      logDecision(config, input, result2, elapsed2, true);
-      if (config.notifyOnDeny) {
-        const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
-        sendNotification("Claude Warden", `Blocked: ${truncated}`, config);
-      }
-      const { reason: reason2, systemMessage: systemMessage2 } = formatSystemMessage("deny", command, result2.details);
-      const output2 = {
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: reason2
-        },
-        systemMessage: systemMessage2
-      };
-      process.stdout.write(JSON.stringify(output2));
-      process.stderr.write(`${reason2}
-`);
-      process.exit(2);
+    if (result.decision === "deny" && !yoloState.bypassDeny) {
     } else {
-      logDecision(config, input, result2, Date.now() - startTime, true);
+      logDecision(config, input, result, elapsed, true);
       const expiryInfo = yoloState.expiresAt ? `until ${new Date(yoloState.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "full session";
       const output2 = {
         hookSpecificOutput: {
@@ -14388,9 +14373,6 @@ async function main() {
       process.exit(0);
     }
   }
-  const parsed = parseCommand(command);
-  const result = evaluate(parsed, config, 0, input.cwd);
-  const elapsed = Date.now() - startTime;
   if (result.decision === "allow") {
     logDecision(config, input, result, elapsed, false);
     const output2 = {
