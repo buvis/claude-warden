@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-07
+
 ### Fixed
 
 - **hook**: bypass-permissions mode detection now matches Claude Code's internal `bypassPermissions` enum value (from upstream 794ea79)
