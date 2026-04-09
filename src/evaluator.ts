@@ -6,13 +6,14 @@ import type {
 import { parseCommand } from './parser';
 import { evaluateTargetPolicies } from './targets';
 import { globToRegex } from './glob';
+import { warn } from './rules';
 
 /** Safely test a regex pattern, returning false on invalid patterns. */
 function safeRegexTest(pattern: string, input: string): boolean {
   try {
     return new RegExp(pattern).test(input);
   } catch {
-    process.stderr.write(`[warden] Warning: invalid regex pattern: ${pattern}\n`);
+    warn(`[warden] Warning: invalid regex pattern: ${pattern}\n`);
     return false;
   }
 }
