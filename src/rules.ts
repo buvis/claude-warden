@@ -13,6 +13,19 @@ function isValidDecision(value: string): value is 'allow' | 'deny' | 'ask' {
   return VALID_DECISIONS.has(value);
 }
 
+// When running as a PreToolUse hook, any stderr output is surfaced by
+// Claude Code as "hook error" — even with exit code 0. The hook entry
+// point sets this flag so config-loading warnings stay silent. The CLI
+// leaves it unset and keeps full verbosity.
+let quiet = false;
+export function setQuiet(value: boolean): void {
+  quiet = value;
+}
+export function warn(message: string): void {
+  if (quiet) return;
+  process.stderr.write(message);
+}
+
 const USER_CONFIG_PATHS = [
   join(homedir(), '.claude', 'warden.yaml'),
   join(homedir(), '.claude', 'warden.json'),
@@ -78,53 +91,9 @@ function tryLoadFile(filePath: string): Record<string, unknown> | null {
       return parsed as Record<string, unknown>;
     }
   } catch (err) {
-    process.stderr.write(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}\n`);
+    warn(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}\n`);
   }
   return null;
-}
-
-/** Known command names from default config (used for misconfiguration detection) */
-const KNOWN_COMMANDS = new Set([
-  ...DEFAULT_CONFIG.layers[0].alwaysAllow,
-  ...DEFAULT_CONFIG.layers[0].alwaysDeny,
-  ...DEFAULT_CONFIG.layers[0].rules.map(r => r.command),
-]);
-
-/**
- * Detect likely misconfiguration where argPatterns on one command
- * seem to reference another command name (e.g. argPatterns on "bash"
- * matching "python"). This is a common user mistake — rules must
- * target the actual command being invoked.
- */
-function warnArgPatternCommandMismatch(rule: CommandRule): void {
-  if (!Array.isArray(rule.argPatterns)) return;
-
-  for (const pattern of rule.argPatterns) {
-    const matchers = [
-      ...(pattern.match?.anyArgMatches || []),
-      ...(pattern.match?.argsMatch || []),
-    ];
-    for (const m of matchers) {
-      // Extract literal command names from simple patterns like 'python', '^python$', '^(python|node)$'
-      const literals = extractLiteralsFromPattern(m);
-      for (const lit of literals) {
-        if (lit !== rule.command && KNOWN_COMMANDS.has(lit)) {
-          process.stderr.write(
-            `[warden] Warning: rule for "${rule.command}" has argPattern matching "${lit}" — ` +
-            `this won't work as expected. Rules are matched by the command being run, not its arguments. ` +
-            `If you want to control "${lit}", add a separate rule with command: "${lit}".\n`
-          );
-        }
-      }
-    }
-  }
-}
-
-function extractLiteralsFromPattern(pattern: string): string[] {
-  // Strip common regex anchors/grouping
-  let cleaned = pattern.replace(/^\^?\(?(.*?)\)?\$?$/, '$1');
-  // Split on | for alternation groups
-  return cleaned.split('|').map(s => s.trim()).filter(s => /^[a-z][a-z0-9_-]*$/i.test(s));
 }
 
 function extractLayer(raw: Record<string, unknown>): ConfigLayer {
@@ -132,18 +101,17 @@ function extractLayer(raw: Record<string, unknown>): ConfigLayer {
   for (const rule of rules) {
     if (rule && typeof rule === 'object') {
       if (rule.default && !isValidDecision(rule.default)) {
-        process.stderr.write(`[warden] Warning: invalid rule default "${rule.default}" for "${rule.command}", using "ask"\n`);
+        warn(`[warden] Warning: invalid rule default "${rule.default}" for "${rule.command}", using "ask"\n`);
         rule.default = 'ask';
       }
       if (Array.isArray(rule.argPatterns)) {
         for (const pattern of rule.argPatterns) {
           if (pattern?.decision && !isValidDecision(pattern.decision)) {
-            process.stderr.write(`[warden] Warning: invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"\n`);
+            warn(`[warden] Warning: invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"\n`);
             pattern.decision = 'ask';
           }
         }
       }
-      warnArgPatternCommandMismatch(rule);
     }
   }
   return {
@@ -178,7 +146,7 @@ function parseTrustedRemotes(raw: unknown[]): TrustedRemote[] {
     const obj = entry as Record<string, unknown>;
     const context = String(obj.context || '');
     if (!VALID_REMOTE_CONTEXTS.has(context as RemoteContext)) {
-      process.stderr.write(`[warden] Warning: unknown remote context "${context}", skipping\n`);
+      warn(`[warden] Warning: unknown remote context "${context}", skipping\n`);
       continue;
     }
     const name = String(obj.name || '');
@@ -235,7 +203,7 @@ function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
         break;
       }
       default:
-        process.stderr.write(`[warden] Warning: unknown target policy type "${type}", skipping\n`);
+        warn(`[warden] Warning: unknown target policy type "${type}", skipping\n`);
     }
   }
   return results;
@@ -338,7 +306,7 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
     if (isValidDecision(raw.defaultDecision)) {
       config.defaultDecision = raw.defaultDecision;
     } else {
-      process.stderr.write(`[warden] Warning: invalid defaultDecision "${raw.defaultDecision}", ignoring\n`);
+      warn(`[warden] Warning: invalid defaultDecision "${raw.defaultDecision}", ignoring\n`);
     }
   }
   if (typeof raw.askOnSubshell === 'boolean') {

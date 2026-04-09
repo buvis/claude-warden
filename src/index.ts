@@ -1,5 +1,10 @@
 import { wardenEvalWithConfig } from './core';
-import { loadConfig } from './rules';
+import { loadConfig, setQuiet } from './rules';
+
+// In hook mode any stderr output is surfaced by Claude Code as a
+// "hook error" line in the UI, even when we exit 0. Silence config
+// warnings so only real denies (exit 2) show up.
+setQuiet(true);
 import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
