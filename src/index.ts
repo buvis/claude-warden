@@ -1,14 +1,14 @@
 import { wardenEvalWithConfig } from './core';
-import { loadConfig, setQuiet } from './rules';
-
-// In hook mode any stderr output is surfaced by Claude Code as a
-// "hook error" line in the UI, even when we exit 0. Silence config
-// warnings so only real denies (exit 2) show up.
-setQuiet(true);
+import { loadConfig } from './rules';
 import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
 import type { HookInput, HookOutput } from './types';
+
+// Note: rules.ts defaults to quiet mode, which is what we want in a
+// hook. Any stderr output would be surfaced by Claude Code as a
+// "hook error" line even with exit code 0. Only real denies (exit 2)
+// should reach stderr.
 
 const MAX_STDIN_SIZE = 1024 * 1024; // 1MB
 

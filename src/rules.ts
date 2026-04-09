@@ -3,7 +3,7 @@ import { parse as parseYaml } from 'yaml';
 import { homedir } from 'os';
 import { join } from 'path';
 import type {
-  WardenConfig, ConfigLayer, CommandRule, TrustedTarget,
+  WardenConfig, ConfigLayer, TrustedTarget,
   TrustedRemote, RemoteContext, TargetPolicy, PathPolicy, DatabasePolicy, EndpointPolicy,
 } from './types';
 import { DEFAULT_CONFIG } from './defaults';
@@ -13,11 +13,12 @@ function isValidDecision(value: string): value is 'allow' | 'deny' | 'ask' {
   return VALID_DECISIONS.has(value);
 }
 
-// When running as a PreToolUse hook, any stderr output is surfaced by
-// Claude Code as "hook error" — even with exit code 0. The hook entry
-// point sets this flag so config-loading warnings stay silent. The CLI
-// leaves it unset and keeps full verbosity.
-let quiet = false;
+// Default to quiet: when running as a PreToolUse hook, any stderr
+// output is surfaced by Claude Code as "hook error" — even with exit
+// code 0. Silent-by-default means any new hook entry point is safe
+// without extra wiring. CLI entry points (cli.ts, codex-export.ts)
+// explicitly call setQuiet(false) to restore full verbosity.
+let quiet = true;
 export function setQuiet(value: boolean): void {
   quiet = value;
 }

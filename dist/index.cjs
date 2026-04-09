@@ -19461,10 +19461,7 @@ var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
 function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
-var quiet = false;
-function setQuiet(value) {
-  quiet = value;
-}
+var quiet = true;
 function warn(message) {
   if (quiet) return;
   process.stderr.write(message);
@@ -20783,7 +20780,6 @@ function deactivateYolo(sessionId) {
 }
 
 // src/index.ts
-setQuiet(true);
 var MAX_STDIN_SIZE = 1024 * 1024;
 async function main() {
   let raw = "";

@@ -19461,7 +19461,10 @@ var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
 function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
-var quiet = false;
+var quiet = true;
+function setQuiet(value) {
+  quiet = value;
+}
 function warn(message) {
   if (quiet) return;
   process.stderr.write(message);
@@ -20586,6 +20589,7 @@ function wardenEvalWithConfig(command, config, cwd) {
 }
 
 // src/cli.ts
+setQuiet(false);
 function printHelp() {
   process.stdout.write(
     [

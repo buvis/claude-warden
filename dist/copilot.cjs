@@ -19461,7 +19461,7 @@ var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
 function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
-var quiet = false;
+var quiet = true;
 function warn(message) {
   if (quiet) return;
   process.stderr.write(message);

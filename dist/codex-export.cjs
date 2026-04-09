@@ -19465,7 +19465,10 @@ var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
 function isValidDecision(value) {
   return VALID_DECISIONS.has(value);
 }
-var quiet = false;
+var quiet = true;
+function setQuiet(value) {
+  quiet = value;
+}
 function warn(message) {
   if (quiet) return;
   process.stderr.write(message);
@@ -20631,6 +20634,7 @@ function generateCodexRules(config) {
 }
 
 // src/codex-export.ts
+setQuiet(false);
 function parseArgs(argv) {
   let cwd = process.cwd();
   let outPath = null;
