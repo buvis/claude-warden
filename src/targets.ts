@@ -2,6 +2,7 @@ import { resolve, normalize } from 'path';
 import { homedir } from 'os';
 import type { ParsedCommand, WardenConfig, CommandEvalDetail, TargetPolicy, PathPolicy, DatabasePolicy, EndpointPolicy } from './types';
 import { globToRegex, pathGlobToRegex } from './glob';
+import { warn } from './rules';
 
 const PATH_COMMANDS = ['rm', 'chmod', 'chown', 'cp', 'mv', 'tee', 'mkdir', 'rmdir', 'touch', 'ln'];
 const DATABASE_COMMANDS = ['psql', 'mysql', 'mariadb', 'redis-cli', 'mongosh', 'mongo', 'pg_dump', 'mysqldump', 'mongodump'];
@@ -56,7 +57,7 @@ function evaluatePathPolicy(policy: PathPolicy, cmd: ParsedCommand, cwd: string)
     try {
       globRegex = new RegExp(`^${pathGlobToRegex(policyPath)}${recursive ? '(/.*)?' : ''}$`);
     } catch {
-      process.stderr.write(`[warden] Warning: invalid glob pattern in path target policy: ${policy.path}\n`);
+      warn(`[warden] Warning: invalid glob pattern in path target policy: ${policy.path}\n`);
       return false;
     }
   }
@@ -131,7 +132,7 @@ function evaluateDatabasePolicy(policy: DatabasePolicy, cmd: ParsedCommand): boo
       const hostRegex = globToRegex(policy.host);
       if (!hostRegex.test(host)) return false;
     } catch {
-      process.stderr.write(`[warden] Warning: invalid glob pattern in database host policy: ${policy.host}\n`);
+      warn(`[warden] Warning: invalid glob pattern in database host policy: ${policy.host}\n`);
       return false;
     }
   }
@@ -146,7 +147,7 @@ function evaluateDatabasePolicy(policy: DatabasePolicy, cmd: ParsedCommand): boo
       const dbRegex = globToRegex(policy.database);
       if (!dbRegex.test(database)) return false;
     } catch {
-      process.stderr.write(`[warden] Warning: invalid glob pattern in database policy: ${policy.database}\n`);
+      warn(`[warden] Warning: invalid glob pattern in database policy: ${policy.database}\n`);
       return false;
     }
   }
@@ -180,7 +181,7 @@ function evaluateEndpointPolicy(policy: EndpointPolicy, cmd: ParsedCommand): boo
   try {
     patternRegex = globToRegex(policy.pattern);
   } catch {
-    process.stderr.write(`[warden] Warning: invalid glob pattern in endpoint policy: ${policy.pattern}\n`);
+    warn(`[warden] Warning: invalid glob pattern in endpoint policy: ${policy.pattern}\n`);
     return false;
   }
   return urls.some(url => patternRegex.test(url));
