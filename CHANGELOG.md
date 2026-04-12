@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-04-12
+
 ### Added
 
 - **codex**: native Codex support via PreToolUse hooks, preserving the full dynamic pipeline instead of static rule export
