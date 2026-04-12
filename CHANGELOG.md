@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **codex**: native Codex support via PreToolUse hooks, preserving the full dynamic pipeline instead of static rule export
+- **codex**: `warden-hook` bin entry for simpler hook registration without hard-coding paths
+
+### Fixed
+
+- **hook**: silence config-loading warnings in hook mode to prevent Claude Code from surfacing them as errors
+- **hook**: route targets.ts warnings through warn() for consistent hook-mode silence
+- **hook**: run hook script directly instead of via node interpreter
+
 ## [0.7.0] - 2026-04-07
 
 ### Fixed
