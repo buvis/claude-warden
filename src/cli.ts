@@ -1,5 +1,10 @@
 import { wardenEval } from './core';
+import { setQuiet } from './rules';
 import type { Decision } from './types';
+
+// CLI is interactive — surface config-loading warnings to stderr.
+// (rules.ts defaults to quiet mode for hook entry points.)
+setQuiet(false);
 
 function printHelp(): void {
   process.stdout.write(

@@ -1,7 +1,11 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { generateCodexRules } from './codex';
-import { loadConfig } from './rules';
+import { loadConfig, setQuiet } from './rules';
+
+// CLI is interactive — surface config-loading warnings to stderr.
+// (rules.ts defaults to quiet mode for hook entry points.)
+setQuiet(false);
 
 interface CliOptions {
   cwd: string;

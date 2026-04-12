@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.cjs",
   "bin": {
-    "warden": "dist/cli.cjs"
+    "warden": "dist/cli.cjs",
+    "warden-hook": "dist/index.cjs"
   },
   "license": "MIT",
   "author": "buvis",
@@ -32,6 +33,7 @@
     ".claude-plugin",
     ".claude",
     ".github/hooks",
+    ".codex",
     "hooks",
     "config",
     "marketplace.json",
@@ -39,7 +41,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && chmod +x dist/*.cjs",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -51,7 +53,7 @@
     "release": "dev/bin/release patch",
     "release:minor": "dev/bin/release minor",
     "release:major": "dev/bin/release major",
-    "prepublishOnly": "pnpm run sync-plugin-version && pnpm run build && pnpm run test",
+    "prepublishOnly": "pnpm run sync-plugin-version && pnpm run build && pnpm run test && chmod +x dist/*.cjs",
     "postpublish": "claude plugin update warden@buvis-plugins 2>/dev/null; echo 'Plugin cache updated'"
   },
   "dependencies": {

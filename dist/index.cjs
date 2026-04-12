@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 "use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -1665,7 +1666,7 @@ var require_log = __commonJS({
       if (logLevel === "debug")
         console.log(...messages);
     }
-    function warn(logLevel, warning) {
+    function warn2(logLevel, warning) {
       if (logLevel === "debug" || logLevel === "warn") {
         if (typeof node_process.emitWarning === "function")
           node_process.emitWarning(warning);
@@ -1674,7 +1675,7 @@ var require_log = __commonJS({
       }
     }
     exports2.debug = debug;
-    exports2.warn = warn;
+    exports2.warn = warn2;
   }
 });
 
@@ -11362,7 +11363,7 @@ function parseCommand(input) {
 }
 
 // src/evaluator.ts
-var import_os3 = require("os");
+var import_os5 = require("os");
 
 // src/script-scanner.ts
 var import_fs = require("fs");
@@ -11784,18 +11785,1046 @@ function evaluateTargetPolicies(cmd, cwd, config) {
   };
 }
 
+// src/rules.ts
+var import_fs2 = require("fs");
+var import_yaml = __toESM(require_dist(), 1);
+var import_os4 = require("os");
+var import_path5 = require("path");
+
+// src/defaults.ts
+var import_os3 = require("os");
+var import_path4 = require("path");
+var SAFE_DEV_TOOLS = [
+  "jest",
+  "vitest",
+  "tsc",
+  "eslint",
+  "prettier",
+  "mkdirp",
+  "concurrently",
+  "turbo",
+  "next",
+  "nuxt",
+  "vite",
+  "astro",
+  "playwright",
+  "cypress",
+  "mocha",
+  "nyc",
+  "c8",
+  "ts-jest",
+  "tsup",
+  "esbuild",
+  "rollup",
+  "webpack",
+  "prisma",
+  "drizzle-kit",
+  "typeorm",
+  "knex",
+  "sequelize-cli",
+  "tailwindcss",
+  "postcss",
+  "autoprefixer",
+  "lint-staged",
+  "husky",
+  "changeset",
+  "semantic-release",
+  "lerna",
+  "nx",
+  "create-react-app",
+  "create-next-app",
+  "create-vite",
+  "degit",
+  "storybook",
+  "wrangler",
+  "netlify",
+  "vercel",
+  "json",
+  "biome"
+];
+var SCRIPT_RUNNERS = ["nodemon"];
+var REGISTRY_OPS = ["publish", "unpublish", "deprecate", "owner", "access", "token", "adduser", "login", "logout"];
+var SAFE_PKG_MANAGER_CMDS = [
+  "install",
+  "add",
+  "remove",
+  "uninstall",
+  "update",
+  "upgrade",
+  "outdated",
+  "ls",
+  "list",
+  "run",
+  "test",
+  "start",
+  "build",
+  "init",
+  "create",
+  "info",
+  "view",
+  "show",
+  "why",
+  "pack",
+  "cache",
+  "config",
+  "get",
+  "set",
+  "version",
+  "help",
+  "exec",
+  "dedupe",
+  "prune",
+  "audit",
+  "completion",
+  "whoami"
+];
+var VERSION_HELP_FLAGS = {
+  match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] },
+  decision: "allow",
+  description: "Version/help flags"
+};
+function anyArgMatchesPattern(items) {
+  return `^(${items.join("|")})$`;
+}
+function safeDevToolsPattern() {
+  return {
+    match: { anyArgMatches: [anyArgMatchesPattern(SAFE_DEV_TOOLS)] },
+    decision: "allow",
+    description: "Well-known dev tools"
+  };
+}
+function scriptRunnersPattern() {
+  return {
+    match: { anyArgMatches: [anyArgMatchesPattern(SCRIPT_RUNNERS)] },
+    decision: "ask",
+    reason: "runs arbitrary code"
+  };
+}
+function registryOpsPattern() {
+  return {
+    match: { anyArgMatches: [anyArgMatchesPattern(REGISTRY_OPS)] },
+    decision: "ask",
+    reason: "modifies package registry"
+  };
+}
+function pkgManagerRule(command, extraSafeCmds = []) {
+  const safeCmds = [...SAFE_PKG_MANAGER_CMDS, ...extraSafeCmds];
+  return {
+    command,
+    default: "ask",
+    argPatterns: [
+      registryOpsPattern(),
+      {
+        match: { anyArgMatches: [anyArgMatchesPattern(safeCmds)] },
+        decision: "allow",
+        description: `Standard ${command} commands`
+      },
+      VERSION_HELP_FLAGS
+    ]
+  };
+}
+function pkgRunnerRule(command) {
+  return {
+    command,
+    default: "ask",
+    argPatterns: [
+      safeDevToolsPattern(),
+      scriptRunnersPattern(),
+      VERSION_HELP_FLAGS
+    ]
+  };
+}
+var DEFAULT_CONFIG = {
+  defaultDecision: "ask",
+  askOnSubshell: true,
+  notifyOnAsk: true,
+  notifyOnDeny: true,
+  audit: true,
+  auditPath: (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden-audit.jsonl"),
+  auditAllowDecisions: false,
+  trustedRemotes: [],
+  targetPolicies: [],
+  layers: [{
+    alwaysAllow: [
+      // Read-only file operations
+      "cat",
+      "head",
+      "tail",
+      "less",
+      "more",
+      "wc",
+      "sort",
+      "uniq",
+      "diff",
+      "comm",
+      "cut",
+      "paste",
+      "tr",
+      "fold",
+      "expand",
+      "unexpand",
+      "column",
+      "rev",
+      "tac",
+      "nl",
+      "od",
+      "xxd",
+      "file",
+      "stat",
+      // Search/find
+      "grep",
+      "egrep",
+      "fgrep",
+      "rg",
+      "ag",
+      "ack",
+      "fd",
+      "fzf",
+      "locate",
+      "which",
+      "whereis",
+      "type",
+      "command",
+      // Directory listing
+      "ls",
+      "dir",
+      "tree",
+      "exa",
+      "eza",
+      "lsd",
+      // Path/string utilities
+      "basename",
+      "dirname",
+      "realpath",
+      "readlink",
+      "echo",
+      "printf",
+      "true",
+      "false",
+      "test",
+      "[",
+      // Date/time
+      "date",
+      "cal",
+      // Environment info
+      "env",
+      "printenv",
+      "uname",
+      "hostname",
+      "whoami",
+      "id",
+      "pwd",
+      // Process viewing (read-only)
+      "ps",
+      "top",
+      "htop",
+      "uptime",
+      "free",
+      "df",
+      "du",
+      "lsof",
+      // Text processing
+      "jq",
+      "yq",
+      "seq",
+      // Network diagnostics (read-only)
+      "nslookup",
+      "dig",
+      "host",
+      "ping",
+      "traceroute",
+      "mtr",
+      "netstat",
+      "ss",
+      "ifconfig",
+      "ip",
+      "nmap",
+      "arp",
+      // Pagers and formatters
+      "bat",
+      "pygmentize",
+      "highlight",
+      // Version managers (read-only)
+      "nvm",
+      "fnm",
+      "rbenv",
+      "pyenv",
+      // Terminal
+      "stty",
+      "tput",
+      "reset",
+      "clear",
+      // System/hardware info
+      "lscpu",
+      "lsblk",
+      "lsusb",
+      "lspci",
+      "lsmod",
+      "dmesg",
+      "sysctl",
+      "sw_vers",
+      "system_profiler",
+      "hostinfo",
+      "lsb_release",
+      "hostnamectl",
+      "arch",
+      "getconf",
+      // User/group info
+      "groups",
+      "getent",
+      "w",
+      "last",
+      "lastlog",
+      "finger",
+      "users",
+      // Process info
+      "pgrep",
+      "pidof",
+      "jobs",
+      // Compression/archive
+      "tar",
+      "gzip",
+      "gunzip",
+      "bzip2",
+      "bunzip2",
+      "xz",
+      "unxz",
+      "zip",
+      "unzip",
+      "7z",
+      "zcat",
+      "bzcat",
+      "xzcat",
+      "zless",
+      "zmore",
+      "zgrep",
+      // Clipboard
+      "pbcopy",
+      "pbpaste",
+      "xclip",
+      "xsel",
+      "wl-copy",
+      "wl-paste",
+      // Binary analysis
+      "strings",
+      "nm",
+      "objdump",
+      "readelf",
+      "ldd",
+      "otool",
+      "size",
+      // ImageMagick
+      "magick",
+      "convert",
+      "identify",
+      "mogrify",
+      "composite",
+      "montage",
+      "compare",
+      "conjure",
+      "stream",
+      // macOS utilities (read-only)
+      "mdfind",
+      "mdls",
+      "mdutil",
+      "plutil",
+      "sips",
+      "xcode-select",
+      "xcrun",
+      "xcodebuild",
+      "networkQuality",
+      // Misc safe
+      "cd",
+      "pushd",
+      "popd",
+      "dirs",
+      "hash",
+      "alias",
+      "set",
+      "unset",
+      "sleep",
+      "wait",
+      "time",
+      "md5",
+      "md5sum",
+      "sha256sum",
+      "shasum",
+      "cksum",
+      "base64",
+      "watch",
+      "timeout",
+      "nohup",
+      "nice",
+      "iconv",
+      "locale",
+      "localedef",
+      "numfmt",
+      "factor",
+      "bc",
+      "dc"
+    ],
+    alwaysDeny: [
+      "sudo",
+      "su",
+      "doas",
+      "eval",
+      "mkfs",
+      "fdisk",
+      "dd",
+      "shutdown",
+      "reboot",
+      "halt",
+      "poweroff",
+      "iptables",
+      "ip6tables",
+      "nft",
+      "useradd",
+      "userdel",
+      "usermod",
+      "groupadd",
+      "groupdel",
+      "crontab",
+      "systemctl",
+      "service",
+      "launchctl",
+      "wipefs",
+      "shred"
+    ],
+    rules: [
+      // --- CLI tools ---
+      {
+        command: "claude",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] }, decision: "allow", description: "Version/help flags" },
+          { match: { argsMatch: ["^plugin(s)?\\s+(list|help|validate|marketplace\\s+(list|help))\\b"] }, decision: "allow", description: "Read-only plugin commands" }
+        ]
+      },
+      // --- Shell builtins ---
+      {
+        command: "export",
+        default: "allow",
+        argPatterns: [
+          {
+            match: { anyArgMatches: [
+              "^(LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)="
+            ] },
+            decision: "ask",
+            description: "Env vars that control library loading"
+          },
+          {
+            match: { anyArgMatches: [
+              "^PATH=.*\\$(PATH|\\{PATH\\})"
+            ] },
+            decision: "allow",
+            description: "PATH extension (preserves existing PATH)"
+          },
+          {
+            match: { anyArgMatches: [
+              "^PATH="
+            ] },
+            decision: "ask",
+            description: "PATH replacement (drops existing PATH)"
+          }
+        ]
+      },
+      // --- Shell sourcing ---
+      ...["source", "."].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          {
+            match: { anyArgMatches: [
+              "(\\.bashrc|\\.zshrc|\\.profile|\\.bash_profile|\\.zprofile|\\.shrc)$",
+              "nvm\\.sh$",
+              "\\.envrc$",
+              "\\.env$"
+            ] },
+            decision: "allow",
+            description: "Common shell config and env files"
+          },
+          {
+            match: { noArgs: true },
+            decision: "deny",
+            reason: "missing file argument"
+          }
+        ]
+      })),
+      // --- Shell interpreters ---
+      ...["bash", "sh", "zsh"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^--(version|help)$"] }, decision: "allow", description: "Version/help flags" }
+        ]
+      })),
+      // --- Node.js ecosystem ---
+      { command: "node", default: "ask" },
+      { command: "tsx", default: "ask" },
+      { command: "ts-node", default: "ask" },
+      // npx / bunx - package runners
+      pkgRunnerRule("npx"),
+      pkgRunnerRule("bunx"),
+      pkgRunnerRule("pnpx"),
+      // npm / pnpm / yarn - package managers
+      pkgManagerRule("npm", ["ci", "search", "explain", "prefix", "root", "fund", "doctor", "diff", "pkg", "query", "shrinkwrap"]),
+      pkgManagerRule("pnpm", ["store", "fetch", "doctor", "patch"]),
+      pkgManagerRule("yarn", ["up", "dlx", "workspaces"]),
+      // bun - runtime + package manager
+      {
+        command: "bun",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: [anyArgMatchesPattern([...SAFE_PKG_MANAGER_CMDS, "ci", "pm", "x", "link", "unlink"])] }, decision: "allow", description: "Standard bun commands" },
+          safeDevToolsPattern(),
+          scriptRunnersPattern(),
+          VERSION_HELP_FLAGS
+        ]
+      },
+      // --- Python ---
+      ...["python", "python3"].map((cmd) => ({
+        command: cmd,
+        default: "ask"
+      })),
+      { command: "pip", default: "allow" },
+      { command: "pip3", default: "allow" },
+      {
+        command: "uv",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^publish$"] }, decision: "ask", reason: "publishes to PyPI" },
+          { match: { anyArgMatches: [anyArgMatchesPattern([
+            "pip",
+            "venv",
+            "init",
+            "add",
+            "remove",
+            "lock",
+            "sync",
+            "tree",
+            "cache",
+            "self",
+            "version",
+            "help",
+            "python",
+            "export"
+          ])] }, decision: "allow", description: "Safe uv subcommands" },
+          VERSION_HELP_FLAGS
+        ]
+      },
+      { command: "pipx", default: "ask" },
+      // --- Git ---
+      {
+        command: "git",
+        default: "allow",
+        argPatterns: [
+          { match: { argsMatch: ["push\\s+--force", "push\\s+-f\\b"] }, decision: "ask", reason: "force push overwrites remote history" },
+          { match: { argsMatch: ["reset\\s+--hard"] }, decision: "ask", reason: "hard reset discards uncommitted changes" },
+          { match: { anyArgMatches: ["^clean$"] }, decision: "ask", reason: "removes untracked files" }
+        ]
+      },
+      {
+        command: "gh",
+        default: "allow",
+        argPatterns: [
+          { match: { argsMatch: ["repo\\s+delete", "repo\\s+archive"] }, decision: "ask", reason: "destructive repo operation" }
+        ]
+      },
+      // --- Build tools ---
+      { command: "make", default: "allow" },
+      { command: "cmake", default: "allow" },
+      {
+        command: "cargo",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(publish|login|logout|owner|yank)$"] }, decision: "ask", reason: "Registry modification" }
+        ]
+      },
+      {
+        command: "go",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^generate$"] }, decision: "ask", reason: "runs arbitrary commands" }
+        ]
+      },
+      { command: "rustup", default: "allow" },
+      { command: "tsc", default: "allow" },
+      { command: "turbo", default: "allow" },
+      { command: "nx", default: "allow" },
+      { command: "lerna", default: "allow" },
+      // --- Docker ---
+      {
+        command: "docker",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(ps|images|logs|inspect|stats|top|version|info)$"] }, decision: "allow", description: "Read-only docker commands" },
+          { match: { anyArgMatches: ["^(build|run|compose|exec|pull|stop|start|restart|create)$"] }, decision: "ask", reason: "modifies Docker state" },
+          { match: { anyArgMatches: ["^(system\\s+prune|container\\s+prune|image\\s+prune)$"] }, decision: "ask", reason: "prunes Docker resources" }
+        ]
+      },
+      { command: "docker-compose", default: "ask" },
+      {
+        command: "kubectl",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$"] }, decision: "allow", description: "Read-only kubectl commands" },
+          { match: { anyArgMatches: ["^(delete|drain|cordon|taint)$"] }, decision: "ask", reason: "destructive cluster operation" },
+          VERSION_HELP_FLAGS
+        ]
+      },
+      // --- Potentially dangerous text/file tools ---
+      // `find` is handled specially in the evaluator (recursive -exec evaluation)
+      {
+        command: "sed",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^-i$", "^-i\\b", "^--in-place"] }, decision: "ask", reason: "modifies files in place" }
+        ]
+      },
+      {
+        command: "awk",
+        default: "allow",
+        argPatterns: [
+          { match: { argsMatch: ["system\\s*\\(", "\\|\\s*getline", "print\\s*>"] }, decision: "ask", reason: "awk system() or file output" }
+        ]
+      },
+      {
+        command: "xargs",
+        default: "ask",
+        argPatterns: [
+          { match: { noArgs: true }, decision: "allow", description: "xargs with no args runs echo (safe)" }
+        ]
+      },
+      {
+        command: "tee",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^/(etc|usr|var|sys|proc|boot|root|lib)"] }, decision: "ask", reason: "writes to system directory" }
+        ]
+      },
+      {
+        command: "openssl",
+        default: "allow",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(enc|rsautl|pkeyutl|smime|cms)$"] }, decision: "ask", reason: "encryption/signing" }
+        ]
+      },
+      // --- File operations ---
+      {
+        command: "rm",
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^-[^\\s]*r[^\\s]*f$|^-[^\\s]*f[^\\s]*r$"] }, decision: "ask", reason: "recursive force delete" },
+          { match: { anyArgMatches: ["^-[^\\s]*r"] }, decision: "ask", reason: "Recursive delete" },
+          { match: { argCount: { max: 3 }, not: false }, decision: "allow", description: "Deleting a small number of non-recursive files" }
+        ]
+      },
+      { command: "mkdir", default: "allow" },
+      { command: "touch", default: "allow" },
+      { command: "cp", default: "allow" },
+      { command: "mv", default: "allow" },
+      { command: "ln", default: "allow" },
+      {
+        command: "chmod",
+        default: "ask",
+        argPatterns: [
+          { match: { argsMatch: ["-R\\s+777"] }, decision: "deny", reason: "recursive world-writable permissions" }
+        ]
+      },
+      { command: "chown", default: "ask" },
+      // --- Network ---
+      { command: "curl", default: "allow" },
+      { command: "wget", default: "allow" },
+      { command: "ssh", default: "ask" },
+      { command: "scp", default: "ask" },
+      { command: "rsync", default: "ask" },
+      // --- Package managers ---
+      { command: "brew", default: "allow" },
+      { command: "apt", default: "ask" },
+      { command: "apt-get", default: "ask" },
+      { command: "yum", default: "ask" },
+      { command: "dnf", default: "ask" },
+      { command: "pacman", default: "ask" },
+      // --- Terraform / IaC ---
+      { command: "terraform", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(plan|validate|fmt|show|state|output|providers|version|graph|console)$"] }, decision: "allow", description: "Read-only terraform commands" }
+      ] },
+      // --- macOS open ---
+      { command: "open", default: "ask" },
+      // --- Text editors ---
+      ...["vi", "vim", "nvim", "nano", "emacs"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [VERSION_HELP_FLAGS]
+      })),
+      // --- Scripting languages ---
+      { command: "perl", default: "ask" },
+      ...["ruby", "php"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^-e$", "^--eval"] }, decision: "ask", reason: "evaluates inline code" },
+          VERSION_HELP_FLAGS
+        ]
+      })),
+      // --- Java ecosystem ---
+      { command: "java", default: "ask", argPatterns: [VERSION_HELP_FLAGS] },
+      { command: "javac", default: "allow" },
+      // --- Swift / Zig / Dotnet ---
+      { command: "swift", default: "allow", argPatterns: [
+        { match: { anyArgMatches: ["^(build|test|run|package)$"] }, decision: "allow" }
+      ] },
+      { command: "swiftc", default: "allow" },
+      { command: "zig", default: "allow" },
+      { command: "dotnet", default: "allow", argPatterns: [
+        { match: { anyArgMatches: ["^(publish|nuget)$"] }, decision: "ask", reason: "publishes package" }
+      ] },
+      // --- Database CLIs ---
+      ...["psql", "mysql", "mariadb", "sqlite3", "redis-cli", "mongosh"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [VERSION_HELP_FLAGS]
+      })),
+      // --- Cloud CLIs ---
+      { command: "gcloud", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(info|version|help|config|components)$"] }, decision: "allow", description: "Config/info" },
+        { match: { anyArgMatches: ["^(list|describe|get-iam-policy|get)$"] }, decision: "allow", description: "Read-only ops" },
+        VERSION_HELP_FLAGS
+      ] },
+      { command: "az", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(list|show|get)$"] }, decision: "allow", description: "Read-only ops" },
+        VERSION_HELP_FLAGS
+      ] },
+      { command: "aws", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(describe|list|get|sts)$"] }, decision: "allow", description: "Read-only ops" },
+        VERSION_HELP_FLAGS
+      ] },
+      // --- Helm ---
+      { command: "helm", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(list|search|show|status|get|template|version|env|history)$"] }, decision: "allow", description: "Read-only helm commands" },
+        VERSION_HELP_FLAGS
+      ] },
+      // --- Fly.io ---
+      ...["fly", "flyctl"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(status|logs|info|version|platform|doctor|dig)$"] }, decision: "allow", description: "Read-only fly commands" },
+          { match: { argsMatch: ["^apps\\s+list"] }, decision: "allow", description: "List fly apps" },
+          { match: { anyArgMatches: ["^(deploy|destroy|scale|secrets)$"] }, decision: "ask", reason: "Destructive fly operation" },
+          VERSION_HELP_FLAGS
+        ]
+      })),
+      // --- Screen/tmux ---
+      ...["screen", "tmux"].map((cmd) => ({
+        command: cmd,
+        default: "ask",
+        argPatterns: [
+          { match: { anyArgMatches: ["^(list-sessions|ls|list)$"] }, decision: "allow", description: "List sessions" },
+          VERSION_HELP_FLAGS
+        ]
+      })),
+      // --- GPG ---
+      { command: "gpg", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(--verify|--list-keys|--list-secret-keys|--fingerprint)$"] }, decision: "allow", description: "Read-only gpg" },
+        VERSION_HELP_FLAGS
+      ] },
+      // --- macOS-specific ---
+      { command: "defaults", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(read|read-type|find|domains)$"] }, decision: "allow", description: "Read-only defaults operations" }
+      ] },
+      { command: "diskutil", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(list|info|apfs|cs|appleRAID)$"] }, decision: "allow", description: "Read-only diskutil" }
+      ] },
+      { command: "codesign", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^(-vv|--verify|--display|-d)$"] }, decision: "allow", description: "Verify codesign" }
+      ] },
+      { command: "networksetup", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^-(get|list|show)"] }, decision: "allow", description: "Read-only network configuration queries" }
+      ] },
+      { command: "scutil", default: "ask", argPatterns: [
+        { match: { anyArgMatches: ["^--get$", "^--dns$", "^--proxy$", "^--nwi$"] }, decision: "allow", description: "Read-only system configuration queries" }
+      ] },
+      { command: "osascript", default: "ask" },
+      { command: "say", default: "ask" },
+      // --- Process management ---
+      { command: "kill", default: "ask" },
+      { command: "killall", default: "ask" },
+      { command: "pkill", default: "ask" },
+      { command: "renice", default: "ask" }
+    ]
+  }]
+};
+
+// src/rules.ts
+var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
+function isValidDecision(value) {
+  return VALID_DECISIONS.has(value);
+}
+var quiet = true;
+function warn(message) {
+  if (quiet) return;
+  process.stderr.write(message);
+}
+var USER_CONFIG_PATHS = [
+  (0, import_path5.join)((0, import_os4.homedir)(), ".claude", "warden.yaml"),
+  (0, import_path5.join)((0, import_os4.homedir)(), ".claude", "warden.json")
+];
+var PROJECT_CONFIG_NAMES = [
+  ".claude/warden.yaml",
+  ".claude/warden.json"
+];
+function loadConfig(cwd) {
+  const config = structuredClone(DEFAULT_CONFIG);
+  const defaultLayer = config.layers[0];
+  let userLayer = null;
+  let userRaw = null;
+  for (const configPath of USER_CONFIG_PATHS) {
+    const result = tryLoadFile(configPath);
+    if (result) {
+      userLayer = extractLayer(result);
+      userRaw = result;
+      break;
+    }
+  }
+  let workspaceLayer = null;
+  let workspaceRaw = null;
+  if (cwd) {
+    for (const name of PROJECT_CONFIG_NAMES) {
+      const result = tryLoadFile((0, import_path5.join)(cwd, name));
+      if (result) {
+        workspaceLayer = extractLayer(result);
+        workspaceRaw = result;
+        break;
+      }
+    }
+  }
+  config.layers = [
+    ...workspaceLayer ? [workspaceLayer] : [],
+    ...userLayer ? [userLayer] : [],
+    defaultLayer
+  ];
+  if (userRaw) mergeNonLayerFields(config, userRaw);
+  if (workspaceRaw) mergeNonLayerFields(config, workspaceRaw);
+  return config;
+}
+function tryLoadFile(filePath) {
+  if (!(0, import_fs2.existsSync)(filePath)) return null;
+  try {
+    const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
+    const parsed = filePath.endsWith(".yaml") || filePath.endsWith(".yml") ? (0, import_yaml.parse)(raw) : JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      return parsed;
+    }
+  } catch (err) {
+    warn(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}
+`);
+  }
+  return null;
+}
+function extractLayer(raw) {
+  const rules = Array.isArray(raw.rules) ? raw.rules : [];
+  for (const rule of rules) {
+    if (rule && typeof rule === "object") {
+      if (rule.default && !isValidDecision(rule.default)) {
+        warn(`[warden] Warning: invalid rule default "${rule.default}" for "${rule.command}", using "ask"
+`);
+        rule.default = "ask";
+      }
+      if (Array.isArray(rule.argPatterns)) {
+        for (const pattern of rule.argPatterns) {
+          if (pattern?.decision && !isValidDecision(pattern.decision)) {
+            warn(`[warden] Warning: invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"
+`);
+            pattern.decision = "ask";
+          }
+        }
+      }
+    }
+  }
+  return {
+    alwaysAllow: Array.isArray(raw.alwaysAllow) ? raw.alwaysAllow : [],
+    alwaysDeny: Array.isArray(raw.alwaysDeny) ? raw.alwaysDeny : [],
+    rules
+  };
+}
+function parseTrustedList(raw) {
+  return raw.map((entry) => {
+    if (typeof entry === "string") return { name: entry };
+    if (entry && typeof entry === "object" && "name" in entry) {
+      const obj = entry;
+      const target = { name: String(obj.name) };
+      if (obj.allowAll === true) target.allowAll = true;
+      if (obj.overrides && typeof obj.overrides === "object") {
+        target.overrides = extractLayer(obj.overrides);
+      }
+      return target;
+    }
+    return null;
+  }).filter((t) => t !== null);
+}
+var VALID_REMOTE_CONTEXTS = /* @__PURE__ */ new Set(["ssh", "docker", "kubectl", "sprite", "fly"]);
+function parseTrustedRemotes(raw) {
+  const results = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const obj = entry;
+    const context = String(obj.context || "");
+    if (!VALID_REMOTE_CONTEXTS.has(context)) {
+      warn(`[warden] Warning: unknown remote context "${context}", skipping
+`);
+      continue;
+    }
+    const name = String(obj.name || "");
+    if (!name) continue;
+    const remote = { name, context };
+    if (obj.allowAll === true) remote.allowAll = true;
+    if (obj.overrides && typeof obj.overrides === "object") {
+      remote.overrides = extractLayer(obj.overrides);
+    }
+    results.push(remote);
+  }
+  return results;
+}
+function parseTargetPolicies(raw) {
+  const results = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || !("type" in entry)) {
+      warn(`[warden] Warning: targetPolicies entry missing "type" field, skipping
+`);
+      continue;
+    }
+    const obj = entry;
+    if (typeof obj.decision !== "string" || !isValidDecision(obj.decision)) {
+      warn(`[warden] Warning: targetPolicies entry missing or invalid "decision", skipping
+`);
+      continue;
+    }
+    const base = {
+      decision: obj.decision,
+      ...typeof obj.reason === "string" && { reason: obj.reason },
+      ...Array.isArray(obj.commands) && { commands: obj.commands },
+      ...obj.allowAll === true && { allowAll: true }
+    };
+    switch (obj.type) {
+      case "path": {
+        if (typeof obj.path !== "string") {
+          warn(`[warden] Warning: path targetPolicy missing "path" field, skipping
+`);
+          continue;
+        }
+        const policy = { ...base, type: "path", path: obj.path, recursive: typeof obj.recursive === "boolean" ? obj.recursive : true };
+        results.push(policy);
+        break;
+      }
+      case "database": {
+        if (typeof obj.host !== "string") {
+          warn(`[warden] Warning: database targetPolicy missing "host" field, skipping
+`);
+          continue;
+        }
+        const policy = {
+          ...base,
+          type: "database",
+          host: obj.host,
+          ...typeof obj.port === "number" && { port: obj.port },
+          ...typeof obj.database === "string" && { database: obj.database }
+        };
+        results.push(policy);
+        break;
+      }
+      case "endpoint": {
+        if (typeof obj.pattern !== "string") {
+          warn(`[warden] Warning: endpoint targetPolicy missing "pattern" field, skipping
+`);
+          continue;
+        }
+        const policy = { ...base, type: "endpoint", pattern: obj.pattern };
+        results.push(policy);
+        break;
+      }
+      default:
+        warn(`[warden] Warning: unknown targetPolicy type "${String(obj.type)}", skipping
+`);
+    }
+  }
+  return results;
+}
+var LEGACY_REMOTE_MAP = {
+  trustedSSHHosts: "ssh",
+  trustedDockerContainers: "docker",
+  trustedKubectlContexts: "kubectl",
+  trustedSprites: "sprite",
+  trustedFlyApps: "fly"
+};
+function mergeNonLayerFields(config, raw) {
+  if (Array.isArray(raw.trustedRemotes)) {
+    config.trustedRemotes = [...config.trustedRemotes, ...parseTrustedRemotes(raw.trustedRemotes)];
+  }
+  for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
+    if (Array.isArray(raw[key])) {
+      warn(`[warden] Warning: ${key} is deprecated, use trustedRemotes with context: "${context}" instead
+`);
+      const targets = parseTrustedList(raw[key]);
+      config.trustedRemotes = [...config.trustedRemotes, ...targets.map((t) => ({ ...t, context }))];
+    }
+  }
+  if (Array.isArray(raw.targetPolicies)) {
+    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies)];
+  }
+  if (typeof raw.defaultDecision === "string") {
+    if (isValidDecision(raw.defaultDecision)) {
+      config.defaultDecision = raw.defaultDecision;
+    } else {
+      warn(`[warden] Warning: invalid defaultDecision "${raw.defaultDecision}", ignoring
+`);
+    }
+  }
+  if (typeof raw.askOnSubshell === "boolean") {
+    config.askOnSubshell = raw.askOnSubshell;
+  }
+  if (typeof raw.notifyOnAsk === "boolean") {
+    config.notifyOnAsk = raw.notifyOnAsk;
+  }
+  if (typeof raw.notifyOnDeny === "boolean") {
+    config.notifyOnDeny = raw.notifyOnDeny;
+  }
+  if (typeof raw.audit === "boolean") {
+    config.audit = raw.audit;
+  }
+  if (typeof raw.auditPath === "string") {
+    config.auditPath = raw.auditPath;
+  }
+  if (typeof raw.auditAllowDecisions === "boolean") {
+    config.auditAllowDecisions = raw.auditAllowDecisions;
+  }
+  if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === "object") {
+    const overrides = raw.trustedContextOverrides;
+    const layer = extractLayer(overrides);
+    if (config.trustedContextOverrides) {
+      config.trustedContextOverrides = {
+        alwaysAllow: [...layer.alwaysAllow, ...config.trustedContextOverrides.alwaysAllow],
+        alwaysDeny: [...layer.alwaysDeny, ...config.trustedContextOverrides.alwaysDeny],
+        rules: [...layer.rules, ...config.trustedContextOverrides.rules]
+      };
+    } else {
+      config.trustedContextOverrides = layer;
+    }
+  }
+}
+
 // src/evaluator.ts
 function safeRegexTest(pattern, input) {
   try {
     return new RegExp(pattern).test(input);
   } catch {
-    process.stderr.write(`[warden] Warning: invalid regex pattern: ${pattern}
+    warn(`[warden] Warning: invalid regex pattern: ${pattern}
 `);
     return false;
   }
 }
 function expandTilde(path) {
-  return path.startsWith("~/") ? (0, import_os3.homedir)() + path.slice(1) : path;
+  return path.startsWith("~/") ? (0, import_os5.homedir)() + path.slice(1) : path;
 }
 function commandMatchesName(cmd, name) {
   if (name.includes("*")) {
@@ -11813,7 +12842,7 @@ function commandMatchesName(cmd, name) {
     return expandTilde(cmd.originalCommand) === name;
   }
   if (name.startsWith("~/")) {
-    return expandTilde(cmd.originalCommand) === (0, import_os3.homedir)() + name.slice(1);
+    return expandTilde(cmd.originalCommand) === (0, import_os5.homedir)() + name.slice(1);
   }
   return cmd.command === name;
 }
@@ -13012,1049 +14041,6 @@ function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
     return { command, args, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
   }
   return null;
-}
-
-// src/rules.ts
-var import_fs2 = require("fs");
-var import_yaml = __toESM(require_dist(), 1);
-var import_os5 = require("os");
-var import_path5 = require("path");
-
-// src/defaults.ts
-var import_os4 = require("os");
-var import_path4 = require("path");
-var SAFE_DEV_TOOLS = [
-  "jest",
-  "vitest",
-  "tsc",
-  "eslint",
-  "prettier",
-  "mkdirp",
-  "concurrently",
-  "turbo",
-  "next",
-  "nuxt",
-  "vite",
-  "astro",
-  "playwright",
-  "cypress",
-  "mocha",
-  "nyc",
-  "c8",
-  "ts-jest",
-  "tsup",
-  "esbuild",
-  "rollup",
-  "webpack",
-  "prisma",
-  "drizzle-kit",
-  "typeorm",
-  "knex",
-  "sequelize-cli",
-  "tailwindcss",
-  "postcss",
-  "autoprefixer",
-  "lint-staged",
-  "husky",
-  "changeset",
-  "semantic-release",
-  "lerna",
-  "nx",
-  "create-react-app",
-  "create-next-app",
-  "create-vite",
-  "degit",
-  "storybook",
-  "wrangler",
-  "netlify",
-  "vercel",
-  "json",
-  "biome"
-];
-var SCRIPT_RUNNERS = ["nodemon"];
-var REGISTRY_OPS = ["publish", "unpublish", "deprecate", "owner", "access", "token", "adduser", "login", "logout"];
-var SAFE_PKG_MANAGER_CMDS = [
-  "install",
-  "add",
-  "remove",
-  "uninstall",
-  "update",
-  "upgrade",
-  "outdated",
-  "ls",
-  "list",
-  "run",
-  "test",
-  "start",
-  "build",
-  "init",
-  "create",
-  "info",
-  "view",
-  "show",
-  "why",
-  "pack",
-  "cache",
-  "config",
-  "get",
-  "set",
-  "version",
-  "help",
-  "exec",
-  "dedupe",
-  "prune",
-  "audit",
-  "completion",
-  "whoami"
-];
-var VERSION_HELP_FLAGS = {
-  match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] },
-  decision: "allow",
-  description: "Version/help flags"
-};
-function anyArgMatchesPattern(items) {
-  return `^(${items.join("|")})$`;
-}
-function safeDevToolsPattern() {
-  return {
-    match: { anyArgMatches: [anyArgMatchesPattern(SAFE_DEV_TOOLS)] },
-    decision: "allow",
-    description: "Well-known dev tools"
-  };
-}
-function scriptRunnersPattern() {
-  return {
-    match: { anyArgMatches: [anyArgMatchesPattern(SCRIPT_RUNNERS)] },
-    decision: "ask",
-    reason: "runs arbitrary code"
-  };
-}
-function registryOpsPattern() {
-  return {
-    match: { anyArgMatches: [anyArgMatchesPattern(REGISTRY_OPS)] },
-    decision: "ask",
-    reason: "modifies package registry"
-  };
-}
-function pkgManagerRule(command, extraSafeCmds = []) {
-  const safeCmds = [...SAFE_PKG_MANAGER_CMDS, ...extraSafeCmds];
-  return {
-    command,
-    default: "ask",
-    argPatterns: [
-      registryOpsPattern(),
-      {
-        match: { anyArgMatches: [anyArgMatchesPattern(safeCmds)] },
-        decision: "allow",
-        description: `Standard ${command} commands`
-      },
-      VERSION_HELP_FLAGS
-    ]
-  };
-}
-function pkgRunnerRule(command) {
-  return {
-    command,
-    default: "ask",
-    argPatterns: [
-      safeDevToolsPattern(),
-      scriptRunnersPattern(),
-      VERSION_HELP_FLAGS
-    ]
-  };
-}
-var DEFAULT_CONFIG = {
-  defaultDecision: "ask",
-  askOnSubshell: true,
-  notifyOnAsk: true,
-  notifyOnDeny: true,
-  audit: true,
-  auditPath: (0, import_path4.join)((0, import_os4.homedir)(), ".claude", "warden-audit.jsonl"),
-  auditAllowDecisions: false,
-  trustedRemotes: [],
-  targetPolicies: [],
-  layers: [{
-    alwaysAllow: [
-      // Read-only file operations
-      "cat",
-      "head",
-      "tail",
-      "less",
-      "more",
-      "wc",
-      "sort",
-      "uniq",
-      "diff",
-      "comm",
-      "cut",
-      "paste",
-      "tr",
-      "fold",
-      "expand",
-      "unexpand",
-      "column",
-      "rev",
-      "tac",
-      "nl",
-      "od",
-      "xxd",
-      "file",
-      "stat",
-      // Search/find
-      "grep",
-      "egrep",
-      "fgrep",
-      "rg",
-      "ag",
-      "ack",
-      "fd",
-      "fzf",
-      "locate",
-      "which",
-      "whereis",
-      "type",
-      "command",
-      // Directory listing
-      "ls",
-      "dir",
-      "tree",
-      "exa",
-      "eza",
-      "lsd",
-      // Path/string utilities
-      "basename",
-      "dirname",
-      "realpath",
-      "readlink",
-      "echo",
-      "printf",
-      "true",
-      "false",
-      "test",
-      "[",
-      // Date/time
-      "date",
-      "cal",
-      // Environment info
-      "env",
-      "printenv",
-      "uname",
-      "hostname",
-      "whoami",
-      "id",
-      "pwd",
-      // Process viewing (read-only)
-      "ps",
-      "top",
-      "htop",
-      "uptime",
-      "free",
-      "df",
-      "du",
-      "lsof",
-      // Text processing
-      "jq",
-      "yq",
-      "seq",
-      // Network diagnostics (read-only)
-      "nslookup",
-      "dig",
-      "host",
-      "ping",
-      "traceroute",
-      "mtr",
-      "netstat",
-      "ss",
-      "ifconfig",
-      "ip",
-      "nmap",
-      "arp",
-      // Pagers and formatters
-      "bat",
-      "pygmentize",
-      "highlight",
-      // Version managers (read-only)
-      "nvm",
-      "fnm",
-      "rbenv",
-      "pyenv",
-      // Terminal
-      "stty",
-      "tput",
-      "reset",
-      "clear",
-      // System/hardware info
-      "lscpu",
-      "lsblk",
-      "lsusb",
-      "lspci",
-      "lsmod",
-      "dmesg",
-      "sysctl",
-      "sw_vers",
-      "system_profiler",
-      "hostinfo",
-      "lsb_release",
-      "hostnamectl",
-      "arch",
-      "getconf",
-      // User/group info
-      "groups",
-      "getent",
-      "w",
-      "last",
-      "lastlog",
-      "finger",
-      "users",
-      // Process info
-      "pgrep",
-      "pidof",
-      "jobs",
-      // Compression/archive
-      "tar",
-      "gzip",
-      "gunzip",
-      "bzip2",
-      "bunzip2",
-      "xz",
-      "unxz",
-      "zip",
-      "unzip",
-      "7z",
-      "zcat",
-      "bzcat",
-      "xzcat",
-      "zless",
-      "zmore",
-      "zgrep",
-      // Clipboard
-      "pbcopy",
-      "pbpaste",
-      "xclip",
-      "xsel",
-      "wl-copy",
-      "wl-paste",
-      // Binary analysis
-      "strings",
-      "nm",
-      "objdump",
-      "readelf",
-      "ldd",
-      "otool",
-      "size",
-      // ImageMagick
-      "magick",
-      "convert",
-      "identify",
-      "mogrify",
-      "composite",
-      "montage",
-      "compare",
-      "conjure",
-      "stream",
-      // macOS utilities (read-only)
-      "mdfind",
-      "mdls",
-      "mdutil",
-      "plutil",
-      "sips",
-      "xcode-select",
-      "xcrun",
-      "xcodebuild",
-      "networkQuality",
-      // Misc safe
-      "cd",
-      "pushd",
-      "popd",
-      "dirs",
-      "hash",
-      "alias",
-      "set",
-      "unset",
-      "sleep",
-      "wait",
-      "time",
-      "md5",
-      "md5sum",
-      "sha256sum",
-      "shasum",
-      "cksum",
-      "base64",
-      "watch",
-      "timeout",
-      "nohup",
-      "nice",
-      "iconv",
-      "locale",
-      "localedef",
-      "numfmt",
-      "factor",
-      "bc",
-      "dc"
-    ],
-    alwaysDeny: [
-      "sudo",
-      "su",
-      "doas",
-      "eval",
-      "mkfs",
-      "fdisk",
-      "dd",
-      "shutdown",
-      "reboot",
-      "halt",
-      "poweroff",
-      "iptables",
-      "ip6tables",
-      "nft",
-      "useradd",
-      "userdel",
-      "usermod",
-      "groupadd",
-      "groupdel",
-      "crontab",
-      "systemctl",
-      "service",
-      "launchctl",
-      "wipefs",
-      "shred"
-    ],
-    rules: [
-      // --- CLI tools ---
-      {
-        command: "claude",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] }, decision: "allow", description: "Version/help flags" },
-          { match: { argsMatch: ["^plugin(s)?\\s+(list|help|validate|marketplace\\s+(list|help))\\b"] }, decision: "allow", description: "Read-only plugin commands" }
-        ]
-      },
-      // --- Shell builtins ---
-      {
-        command: "export",
-        default: "allow",
-        argPatterns: [
-          {
-            match: { anyArgMatches: [
-              "^(LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)="
-            ] },
-            decision: "ask",
-            description: "Env vars that control library loading"
-          },
-          {
-            match: { anyArgMatches: [
-              "^PATH=.*\\$(PATH|\\{PATH\\})"
-            ] },
-            decision: "allow",
-            description: "PATH extension (preserves existing PATH)"
-          },
-          {
-            match: { anyArgMatches: [
-              "^PATH="
-            ] },
-            decision: "ask",
-            description: "PATH replacement (drops existing PATH)"
-          }
-        ]
-      },
-      // --- Shell sourcing ---
-      ...["source", "."].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [
-          {
-            match: { anyArgMatches: [
-              "(\\.bashrc|\\.zshrc|\\.profile|\\.bash_profile|\\.zprofile|\\.shrc)$",
-              "nvm\\.sh$",
-              "\\.envrc$",
-              "\\.env$"
-            ] },
-            decision: "allow",
-            description: "Common shell config and env files"
-          },
-          {
-            match: { noArgs: true },
-            decision: "deny",
-            reason: "missing file argument"
-          }
-        ]
-      })),
-      // --- Shell interpreters ---
-      ...["bash", "sh", "zsh"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^--(version|help)$"] }, decision: "allow", description: "Version/help flags" }
-        ]
-      })),
-      // --- Node.js ecosystem ---
-      { command: "node", default: "ask" },
-      { command: "tsx", default: "ask" },
-      { command: "ts-node", default: "ask" },
-      // npx / bunx - package runners
-      pkgRunnerRule("npx"),
-      pkgRunnerRule("bunx"),
-      pkgRunnerRule("pnpx"),
-      // npm / pnpm / yarn - package managers
-      pkgManagerRule("npm", ["ci", "search", "explain", "prefix", "root", "fund", "doctor", "diff", "pkg", "query", "shrinkwrap"]),
-      pkgManagerRule("pnpm", ["store", "fetch", "doctor", "patch"]),
-      pkgManagerRule("yarn", ["up", "dlx", "workspaces"]),
-      // bun - runtime + package manager
-      {
-        command: "bun",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: [anyArgMatchesPattern([...SAFE_PKG_MANAGER_CMDS, "ci", "pm", "x", "link", "unlink"])] }, decision: "allow", description: "Standard bun commands" },
-          safeDevToolsPattern(),
-          scriptRunnersPattern(),
-          VERSION_HELP_FLAGS
-        ]
-      },
-      // --- Python ---
-      ...["python", "python3"].map((cmd) => ({
-        command: cmd,
-        default: "ask"
-      })),
-      { command: "pip", default: "allow" },
-      { command: "pip3", default: "allow" },
-      {
-        command: "uv",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^publish$"] }, decision: "ask", reason: "publishes to PyPI" },
-          { match: { anyArgMatches: [anyArgMatchesPattern([
-            "pip",
-            "venv",
-            "init",
-            "add",
-            "remove",
-            "lock",
-            "sync",
-            "tree",
-            "cache",
-            "self",
-            "version",
-            "help",
-            "python",
-            "export"
-          ])] }, decision: "allow", description: "Safe uv subcommands" },
-          VERSION_HELP_FLAGS
-        ]
-      },
-      { command: "pipx", default: "ask" },
-      // --- Git ---
-      {
-        command: "git",
-        default: "allow",
-        argPatterns: [
-          { match: { argsMatch: ["push\\s+--force", "push\\s+-f\\b"] }, decision: "ask", reason: "force push overwrites remote history" },
-          { match: { argsMatch: ["reset\\s+--hard"] }, decision: "ask", reason: "hard reset discards uncommitted changes" },
-          { match: { anyArgMatches: ["^clean$"] }, decision: "ask", reason: "removes untracked files" }
-        ]
-      },
-      {
-        command: "gh",
-        default: "allow",
-        argPatterns: [
-          { match: { argsMatch: ["repo\\s+delete", "repo\\s+archive"] }, decision: "ask", reason: "destructive repo operation" }
-        ]
-      },
-      // --- Build tools ---
-      { command: "make", default: "allow" },
-      { command: "cmake", default: "allow" },
-      {
-        command: "cargo",
-        default: "allow",
-        argPatterns: [
-          { match: { anyArgMatches: ["^(publish|login|logout|owner|yank)$"] }, decision: "ask", reason: "Registry modification" }
-        ]
-      },
-      {
-        command: "go",
-        default: "allow",
-        argPatterns: [
-          { match: { anyArgMatches: ["^generate$"] }, decision: "ask", reason: "runs arbitrary commands" }
-        ]
-      },
-      { command: "rustup", default: "allow" },
-      { command: "tsc", default: "allow" },
-      { command: "turbo", default: "allow" },
-      { command: "nx", default: "allow" },
-      { command: "lerna", default: "allow" },
-      // --- Docker ---
-      {
-        command: "docker",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^(ps|images|logs|inspect|stats|top|version|info)$"] }, decision: "allow", description: "Read-only docker commands" },
-          { match: { anyArgMatches: ["^(build|run|compose|exec|pull|stop|start|restart|create)$"] }, decision: "ask", reason: "modifies Docker state" },
-          { match: { anyArgMatches: ["^(system\\s+prune|container\\s+prune|image\\s+prune)$"] }, decision: "ask", reason: "prunes Docker resources" }
-        ]
-      },
-      { command: "docker-compose", default: "ask" },
-      {
-        command: "kubectl",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^(get|describe|logs|top|explain|api-resources|api-versions|version|config|cluster-info)$"] }, decision: "allow", description: "Read-only kubectl commands" },
-          { match: { anyArgMatches: ["^(delete|drain|cordon|taint)$"] }, decision: "ask", reason: "destructive cluster operation" },
-          VERSION_HELP_FLAGS
-        ]
-      },
-      // --- Potentially dangerous text/file tools ---
-      // `find` is handled specially in the evaluator (recursive -exec evaluation)
-      {
-        command: "sed",
-        default: "allow",
-        argPatterns: [
-          { match: { anyArgMatches: ["^-i$", "^-i\\b", "^--in-place"] }, decision: "ask", reason: "modifies files in place" }
-        ]
-      },
-      {
-        command: "awk",
-        default: "allow",
-        argPatterns: [
-          { match: { argsMatch: ["system\\s*\\(", "\\|\\s*getline", "print\\s*>"] }, decision: "ask", reason: "awk system() or file output" }
-        ]
-      },
-      {
-        command: "xargs",
-        default: "ask",
-        argPatterns: [
-          { match: { noArgs: true }, decision: "allow", description: "xargs with no args runs echo (safe)" }
-        ]
-      },
-      {
-        command: "tee",
-        default: "allow",
-        argPatterns: [
-          { match: { anyArgMatches: ["^/(etc|usr|var|sys|proc|boot|root|lib)"] }, decision: "ask", reason: "writes to system directory" }
-        ]
-      },
-      {
-        command: "openssl",
-        default: "allow",
-        argPatterns: [
-          { match: { anyArgMatches: ["^(enc|rsautl|pkeyutl|smime|cms)$"] }, decision: "ask", reason: "encryption/signing" }
-        ]
-      },
-      // --- File operations ---
-      {
-        command: "rm",
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^-[^\\s]*r[^\\s]*f$|^-[^\\s]*f[^\\s]*r$"] }, decision: "ask", reason: "recursive force delete" },
-          { match: { anyArgMatches: ["^-[^\\s]*r"] }, decision: "ask", reason: "Recursive delete" },
-          { match: { argCount: { max: 3 }, not: false }, decision: "allow", description: "Deleting a small number of non-recursive files" }
-        ]
-      },
-      { command: "mkdir", default: "allow" },
-      { command: "touch", default: "allow" },
-      { command: "cp", default: "allow" },
-      { command: "mv", default: "allow" },
-      { command: "ln", default: "allow" },
-      {
-        command: "chmod",
-        default: "ask",
-        argPatterns: [
-          { match: { argsMatch: ["-R\\s+777"] }, decision: "deny", reason: "recursive world-writable permissions" }
-        ]
-      },
-      { command: "chown", default: "ask" },
-      // --- Network ---
-      { command: "curl", default: "allow" },
-      { command: "wget", default: "allow" },
-      { command: "ssh", default: "ask" },
-      { command: "scp", default: "ask" },
-      { command: "rsync", default: "ask" },
-      // --- Package managers ---
-      { command: "brew", default: "allow" },
-      { command: "apt", default: "ask" },
-      { command: "apt-get", default: "ask" },
-      { command: "yum", default: "ask" },
-      { command: "dnf", default: "ask" },
-      { command: "pacman", default: "ask" },
-      // --- Terraform / IaC ---
-      { command: "terraform", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(plan|validate|fmt|show|state|output|providers|version|graph|console)$"] }, decision: "allow", description: "Read-only terraform commands" }
-      ] },
-      // --- macOS open ---
-      { command: "open", default: "ask" },
-      // --- Text editors ---
-      ...["vi", "vim", "nvim", "nano", "emacs"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [VERSION_HELP_FLAGS]
-      })),
-      // --- Scripting languages ---
-      { command: "perl", default: "ask" },
-      ...["ruby", "php"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^-e$", "^--eval"] }, decision: "ask", reason: "evaluates inline code" },
-          VERSION_HELP_FLAGS
-        ]
-      })),
-      // --- Java ecosystem ---
-      { command: "java", default: "ask", argPatterns: [VERSION_HELP_FLAGS] },
-      { command: "javac", default: "allow" },
-      // --- Swift / Zig / Dotnet ---
-      { command: "swift", default: "allow", argPatterns: [
-        { match: { anyArgMatches: ["^(build|test|run|package)$"] }, decision: "allow" }
-      ] },
-      { command: "swiftc", default: "allow" },
-      { command: "zig", default: "allow" },
-      { command: "dotnet", default: "allow", argPatterns: [
-        { match: { anyArgMatches: ["^(publish|nuget)$"] }, decision: "ask", reason: "publishes package" }
-      ] },
-      // --- Database CLIs ---
-      ...["psql", "mysql", "mariadb", "sqlite3", "redis-cli", "mongosh"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [VERSION_HELP_FLAGS]
-      })),
-      // --- Cloud CLIs ---
-      { command: "gcloud", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(info|version|help|config|components)$"] }, decision: "allow", description: "Config/info" },
-        { match: { anyArgMatches: ["^(list|describe|get-iam-policy|get)$"] }, decision: "allow", description: "Read-only ops" },
-        VERSION_HELP_FLAGS
-      ] },
-      { command: "az", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(list|show|get)$"] }, decision: "allow", description: "Read-only ops" },
-        VERSION_HELP_FLAGS
-      ] },
-      { command: "aws", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(describe|list|get|sts)$"] }, decision: "allow", description: "Read-only ops" },
-        VERSION_HELP_FLAGS
-      ] },
-      // --- Helm ---
-      { command: "helm", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(list|search|show|status|get|template|version|env|history)$"] }, decision: "allow", description: "Read-only helm commands" },
-        VERSION_HELP_FLAGS
-      ] },
-      // --- Fly.io ---
-      ...["fly", "flyctl"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^(status|logs|info|version|platform|doctor|dig)$"] }, decision: "allow", description: "Read-only fly commands" },
-          { match: { argsMatch: ["^apps\\s+list"] }, decision: "allow", description: "List fly apps" },
-          { match: { anyArgMatches: ["^(deploy|destroy|scale|secrets)$"] }, decision: "ask", reason: "Destructive fly operation" },
-          VERSION_HELP_FLAGS
-        ]
-      })),
-      // --- Screen/tmux ---
-      ...["screen", "tmux"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^(list-sessions|ls|list)$"] }, decision: "allow", description: "List sessions" },
-          VERSION_HELP_FLAGS
-        ]
-      })),
-      // --- GPG ---
-      { command: "gpg", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(--verify|--list-keys|--list-secret-keys|--fingerprint)$"] }, decision: "allow", description: "Read-only gpg" },
-        VERSION_HELP_FLAGS
-      ] },
-      // --- macOS-specific ---
-      { command: "defaults", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(read|read-type|find|domains)$"] }, decision: "allow", description: "Read-only defaults operations" }
-      ] },
-      { command: "diskutil", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(list|info|apfs|cs|appleRAID)$"] }, decision: "allow", description: "Read-only diskutil" }
-      ] },
-      { command: "codesign", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(-vv|--verify|--display|-d)$"] }, decision: "allow", description: "Verify codesign" }
-      ] },
-      { command: "networksetup", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^-(get|list|show)"] }, decision: "allow", description: "Read-only network configuration queries" }
-      ] },
-      { command: "scutil", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^--get$", "^--dns$", "^--proxy$", "^--nwi$"] }, decision: "allow", description: "Read-only system configuration queries" }
-      ] },
-      { command: "osascript", default: "ask" },
-      { command: "say", default: "ask" },
-      // --- Process management ---
-      { command: "kill", default: "ask" },
-      { command: "killall", default: "ask" },
-      { command: "pkill", default: "ask" },
-      { command: "renice", default: "ask" }
-    ]
-  }]
-};
-
-// src/rules.ts
-var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
-function isValidDecision(value) {
-  return VALID_DECISIONS.has(value);
-}
-var USER_CONFIG_PATHS = [
-  (0, import_path5.join)((0, import_os5.homedir)(), ".claude", "warden.yaml"),
-  (0, import_path5.join)((0, import_os5.homedir)(), ".claude", "warden.json")
-];
-var PROJECT_CONFIG_NAMES = [
-  ".claude/warden.yaml",
-  ".claude/warden.json"
-];
-function loadConfig(cwd) {
-  const config = structuredClone(DEFAULT_CONFIG);
-  const defaultLayer = config.layers[0];
-  let userLayer = null;
-  let userRaw = null;
-  for (const configPath of USER_CONFIG_PATHS) {
-    const result = tryLoadFile(configPath);
-    if (result) {
-      userLayer = extractLayer(result);
-      userRaw = result;
-      break;
-    }
-  }
-  let workspaceLayer = null;
-  let workspaceRaw = null;
-  if (cwd) {
-    for (const name of PROJECT_CONFIG_NAMES) {
-      const result = tryLoadFile((0, import_path5.join)(cwd, name));
-      if (result) {
-        workspaceLayer = extractLayer(result);
-        workspaceRaw = result;
-        break;
-      }
-    }
-  }
-  config.layers = [
-    ...workspaceLayer ? [workspaceLayer] : [],
-    ...userLayer ? [userLayer] : [],
-    defaultLayer
-  ];
-  if (userRaw) mergeNonLayerFields(config, userRaw);
-  if (workspaceRaw) mergeNonLayerFields(config, workspaceRaw);
-  return config;
-}
-function tryLoadFile(filePath) {
-  if (!(0, import_fs2.existsSync)(filePath)) return null;
-  try {
-    const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
-    const parsed = filePath.endsWith(".yaml") || filePath.endsWith(".yml") ? (0, import_yaml.parse)(raw) : JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      return parsed;
-    }
-  } catch (err) {
-    process.stderr.write(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}
-`);
-  }
-  return null;
-}
-var KNOWN_COMMANDS = /* @__PURE__ */ new Set([
-  ...DEFAULT_CONFIG.layers[0].alwaysAllow,
-  ...DEFAULT_CONFIG.layers[0].alwaysDeny,
-  ...DEFAULT_CONFIG.layers[0].rules.map((r) => r.command)
-]);
-function warnArgPatternCommandMismatch(rule) {
-  if (!Array.isArray(rule.argPatterns)) return;
-  for (const pattern of rule.argPatterns) {
-    const matchers = [
-      ...pattern.match?.anyArgMatches || [],
-      ...pattern.match?.argsMatch || []
-    ];
-    for (const m of matchers) {
-      const literals = extractLiteralsFromPattern(m);
-      for (const lit of literals) {
-        if (lit !== rule.command && KNOWN_COMMANDS.has(lit)) {
-          process.stderr.write(
-            `[warden] Warning: rule for "${rule.command}" has argPattern matching "${lit}" - this won't work as expected. Rules are matched by the command being run, not its arguments. If you want to control "${lit}", add a separate rule with command: "${lit}".
-`
-          );
-        }
-      }
-    }
-  }
-}
-function extractLiteralsFromPattern(pattern) {
-  let cleaned = pattern.replace(/^\^?\(?(.*?)\)?\$?$/, "$1");
-  return cleaned.split("|").map((s) => s.trim()).filter((s) => /^[a-z][a-z0-9_-]*$/i.test(s));
-}
-function extractLayer(raw) {
-  const rules = Array.isArray(raw.rules) ? raw.rules : [];
-  for (const rule of rules) {
-    if (rule && typeof rule === "object") {
-      if (rule.default && !isValidDecision(rule.default)) {
-        process.stderr.write(`[warden] Warning: invalid rule default "${rule.default}" for "${rule.command}", using "ask"
-`);
-        rule.default = "ask";
-      }
-      if (Array.isArray(rule.argPatterns)) {
-        for (const pattern of rule.argPatterns) {
-          if (pattern?.decision && !isValidDecision(pattern.decision)) {
-            process.stderr.write(`[warden] Warning: invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"
-`);
-            pattern.decision = "ask";
-          }
-        }
-      }
-      warnArgPatternCommandMismatch(rule);
-    }
-  }
-  return {
-    alwaysAllow: Array.isArray(raw.alwaysAllow) ? raw.alwaysAllow : [],
-    alwaysDeny: Array.isArray(raw.alwaysDeny) ? raw.alwaysDeny : [],
-    rules
-  };
-}
-function parseTrustedList(raw) {
-  return raw.map((entry) => {
-    if (typeof entry === "string") return { name: entry };
-    if (entry && typeof entry === "object" && "name" in entry) {
-      const obj = entry;
-      const target = { name: String(obj.name) };
-      if (obj.allowAll === true) target.allowAll = true;
-      if (obj.overrides && typeof obj.overrides === "object") {
-        target.overrides = extractLayer(obj.overrides);
-      }
-      return target;
-    }
-    return null;
-  }).filter((t) => t !== null);
-}
-function parseTargetPolicies(raw) {
-  const results = [];
-  for (const entry of raw) {
-    if (!entry || typeof entry !== "object" || !("type" in entry)) {
-      process.stderr.write(`[warden] Warning: targetPolicies entry missing "type" field, skipping
-`);
-      continue;
-    }
-    const obj = entry;
-    if (typeof obj.decision !== "string" || !isValidDecision(obj.decision)) {
-      process.stderr.write(`[warden] Warning: targetPolicies entry missing or invalid "decision", skipping
-`);
-      continue;
-    }
-    const base = {
-      decision: obj.decision,
-      ...typeof obj.reason === "string" && { reason: obj.reason },
-      ...Array.isArray(obj.commands) && { commands: obj.commands },
-      ...obj.allowAll === true && { allowAll: true }
-    };
-    switch (obj.type) {
-      case "path": {
-        if (typeof obj.path !== "string") {
-          process.stderr.write(`[warden] Warning: path targetPolicy missing "path" field, skipping
-`);
-          continue;
-        }
-        const policy = { ...base, type: "path", path: obj.path, recursive: typeof obj.recursive === "boolean" ? obj.recursive : true };
-        results.push(policy);
-        break;
-      }
-      case "database": {
-        if (typeof obj.host !== "string") {
-          process.stderr.write(`[warden] Warning: database targetPolicy missing "host" field, skipping
-`);
-          continue;
-        }
-        const policy = {
-          ...base,
-          type: "database",
-          host: obj.host,
-          ...typeof obj.port === "number" && { port: obj.port },
-          ...typeof obj.database === "string" && { database: obj.database }
-        };
-        results.push(policy);
-        break;
-      }
-      case "endpoint": {
-        if (typeof obj.pattern !== "string") {
-          process.stderr.write(`[warden] Warning: endpoint targetPolicy missing "pattern" field, skipping
-`);
-          continue;
-        }
-        const policy = { ...base, type: "endpoint", pattern: obj.pattern };
-        results.push(policy);
-        break;
-      }
-      default:
-        process.stderr.write(`[warden] Warning: unknown targetPolicy type "${String(obj.type)}", skipping
-`);
-    }
-  }
-  return results;
-}
-var LEGACY_REMOTE_MAP = {
-  trustedSSHHosts: "ssh",
-  trustedDockerContainers: "docker",
-  trustedKubectlContexts: "kubectl",
-  trustedSprites: "sprite",
-  trustedFlyApps: "fly"
-};
-function parseTrustedRemotes(raw) {
-  return raw.filter((entry) => !!entry && typeof entry === "object" && "context" in entry && "name" in entry).map((entry) => {
-    const remote = {
-      name: String(entry.name),
-      context: String(entry.context)
-    };
-    if (entry.allowAll === true) remote.allowAll = true;
-    if (entry.overrides && typeof entry.overrides === "object") {
-      remote.overrides = extractLayer(entry.overrides);
-    }
-    return remote;
-  });
-}
-function mergeNonLayerFields(config, raw) {
-  if (Array.isArray(raw.trustedRemotes)) {
-    config.trustedRemotes = [...config.trustedRemotes, ...parseTrustedRemotes(raw.trustedRemotes)];
-  }
-  for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
-    if (Array.isArray(raw[key])) {
-      process.stderr.write(`[warden] Warning: ${key} is deprecated, use trustedRemotes with context: "${context}" instead
-`);
-      const targets = parseTrustedList(raw[key]);
-      config.trustedRemotes = [...config.trustedRemotes, ...targets.map((t) => ({ ...t, context }))];
-    }
-  }
-  if (Array.isArray(raw.targetPolicies)) {
-    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies)];
-  }
-  if (typeof raw.defaultDecision === "string") {
-    if (isValidDecision(raw.defaultDecision)) {
-      config.defaultDecision = raw.defaultDecision;
-    } else {
-      process.stderr.write(`[warden] Warning: invalid defaultDecision "${raw.defaultDecision}", ignoring
-`);
-    }
-  }
-  if (typeof raw.askOnSubshell === "boolean") {
-    config.askOnSubshell = raw.askOnSubshell;
-  }
-  if (typeof raw.notifyOnAsk === "boolean") {
-    config.notifyOnAsk = raw.notifyOnAsk;
-  }
-  if (typeof raw.notifyOnDeny === "boolean") {
-    config.notifyOnDeny = raw.notifyOnDeny;
-  }
-  if (typeof raw.audit === "boolean") {
-    config.audit = raw.audit;
-  }
-  if (typeof raw.auditPath === "string") {
-    config.auditPath = raw.auditPath;
-  }
-  if (typeof raw.auditAllowDecisions === "boolean") {
-    config.auditAllowDecisions = raw.auditAllowDecisions;
-  }
-  if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === "object") {
-    const overrides = raw.trustedContextOverrides;
-    const layer = extractLayer(overrides);
-    if (config.trustedContextOverrides) {
-      config.trustedContextOverrides = {
-        alwaysAllow: [...layer.alwaysAllow, ...config.trustedContextOverrides.alwaysAllow],
-        alwaysDeny: [...layer.alwaysDeny, ...config.trustedContextOverrides.alwaysDeny],
-        rules: [...layer.rules, ...config.trustedContextOverrides.rules]
-      };
-    } else {
-      config.trustedContextOverrides = layer;
-    }
-  }
 }
 
 // src/core.ts
