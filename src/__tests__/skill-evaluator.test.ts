@@ -9,11 +9,55 @@ function configWith(skillRules: SkillRulesConfig): WardenConfig {
 
 describe('evaluateSkill', () => {
   describe('default rules', () => {
-    it('allows built-in safe skills', () => {
-      expect(evaluateSkill('commit', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+    it('allows read-only review skills', () => {
       expect(evaluateSkill('review', undefined, DEFAULT_CONFIG).decision).toBe('allow');
-      expect(evaluateSkill('simplify', undefined, DEFAULT_CONFIG).decision).toBe('allow');
-      expect(evaluateSkill('init', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('security-review', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('code-review:code-review', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('pr-review-toolkit:review-pr', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+    });
+
+    it('allows read-only slack skills', () => {
+      expect(evaluateSkill('slack:find-discussions', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('slack:summarize-channel', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('slack:channel-digest', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('slack:standup', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('slack:draft-announcement', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('slack:slack-messaging', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('slack:slack-search', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+    });
+
+    it('allows read-only guidance/usage skills', () => {
+      expect(evaluateSkill('keybindings-help', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('claude-api', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('azure-tools:azure-usage', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('gcloud-tools:gcloud-usage', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('linear-tools:linear-usage', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('tavily-tools:tavily-usage', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('mongodb-tools:mongodb-usage', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('supabase-tools:supabase-usage', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('playwright-tools:playwright-testing', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+    });
+
+    it('allows read-only plugin dev guidance skills', () => {
+      expect(evaluateSkill('plugin-dev:agent-development', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('plugin-dev:mcp-integration', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('plugin-dev:skill-development', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('plugin-dev:plugin-settings', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('plugin-dev:command-development', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('plugin-dev:plugin-structure', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('plugin-dev:hook-development', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+    });
+
+    it('allows read-only search/summarization skills', () => {
+      expect(evaluateSkill('promptfolio-summarize', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('promptfolio-search-skills', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+      expect(evaluateSkill('promptfolio-search-people', undefined, DEFAULT_CONFIG).decision).toBe('allow');
+    });
+
+    it('asks for write skills by default', () => {
+      expect(evaluateSkill('commit', undefined, DEFAULT_CONFIG).decision).toBe('ask');
+      expect(evaluateSkill('simplify', undefined, DEFAULT_CONFIG).decision).toBe('ask');
+      expect(evaluateSkill('init', undefined, DEFAULT_CONFIG).decision).toBe('ask');
     });
 
     it('asks for unknown skills', () => {
@@ -231,9 +275,9 @@ describe('evaluateSkill', () => {
 
   describe('details', () => {
     it('includes skill name in details', () => {
-      const result = evaluateSkill('commit', undefined, DEFAULT_CONFIG);
+      const result = evaluateSkill('review', undefined, DEFAULT_CONFIG);
       expect(result.details).toHaveLength(1);
-      expect(result.details[0].command).toBe('commit');
+      expect(result.details[0].command).toBe('review');
       expect(result.details[0].matchedRule).toBe('alwaysAllow');
     });
 
@@ -243,7 +287,7 @@ describe('evaluateSkill', () => {
     });
 
     it('has empty args array when no args', () => {
-      const result = evaluateSkill('commit', undefined, DEFAULT_CONFIG);
+      const result = evaluateSkill('review', undefined, DEFAULT_CONFIG);
       expect(result.details[0].args).toEqual([]);
     });
   });
