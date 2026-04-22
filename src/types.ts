@@ -122,9 +122,14 @@ export interface WardenConfig {
    * Text injected into every Claude Code session via the SessionStart hook.
    * `string` — override the built-in guidance.
    * `false` — disable injection entirely.
-   * `undefined` — use the built-in DEFAULT_SESSION_GUIDANCE.
+   * `undefined` — use the built-in guidance (interpolated with `tempScriptDir`).
    */
   sessionGuidance?: string | false;
+  /**
+   * Directory the built-in guidance tells Claude to save throwaway multi-line
+   * scripts to. Defaults to `/tmp`. Only used when `sessionGuidance` is unset.
+   */
+  tempScriptDir?: string;
 }
 
 export interface EvalResult {

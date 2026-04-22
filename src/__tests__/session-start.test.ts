@@ -58,6 +58,16 @@ describe('sessionGuidance config loading', () => {
     workspace = makeWorkspace('sessionGuidance: 42\n');
     expect(loadConfig(workspace).sessionGuidance).toBeUndefined();
   });
+
+  it('accepts a custom tempScriptDir', () => {
+    workspace = makeWorkspace('tempScriptDir: .warden-scratch\n');
+    expect(loadConfig(workspace).tempScriptDir).toBe('.warden-scratch');
+  });
+
+  it('ignores empty or invalid tempScriptDir', () => {
+    workspace = makeWorkspace('tempScriptDir: ""\n');
+    expect(loadConfig(workspace).tempScriptDir).toBeUndefined();
+  });
 });
 
 describe('SessionStart hook binary', () => {
@@ -87,6 +97,25 @@ describe('SessionStart hook binary', () => {
     const output = JSON.parse(stdout);
     expect(output.hookSpecificOutput.hookEventName).toBe('SessionStart');
     expect(output.hookSpecificOutput.additionalContext).toBe(DEFAULT_SESSION_GUIDANCE);
+    expect(output.hookSpecificOutput.additionalContext).toContain('/tmp/');
+  });
+
+  it('interpolates custom tempScriptDir into the default guidance', () => {
+    home = makeWorkspace();
+    workspace = makeWorkspace('tempScriptDir: .warden-scratch\n');
+    const { stdout, exitCode } = runHook(
+      {
+        session_id: 'test-tmp',
+        hook_event_name: 'SessionStart',
+        source: 'startup',
+        cwd: workspace,
+      },
+      { cwd: workspace, home },
+    );
+    expect(exitCode).toBe(0);
+    const output = JSON.parse(stdout);
+    expect(output.hookSpecificOutput.additionalContext).toContain('.warden-scratch/');
+    expect(output.hookSpecificOutput.additionalContext).not.toContain('/tmp/');
   });
 
   it('emits user-provided guidance when config sets a string', () => {

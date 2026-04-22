@@ -18933,14 +18933,18 @@ var DEFAULT_SKILL_RULES = {
     rules: []
   }]
 };
-var DEFAULT_SESSION_GUIDANCE = [
-  "Claude Warden is active. It filters Bash commands against safety rules and may ask or deny.",
-  "",
-  "- For JSON in shell pipelines, prefer `jq` (auto-allowed) over `python3 -c` / `node -e`.",
-  "- For multi-line logic, save a script to `scripts/*.sh` or add a `package.json` script rather than inline `bash -c` / `node -e`.",
-  "- When Warden denies or asks, read the reason \u2014 it often names the preferred alternative.",
-  "- To permanently allow a specific command, run `/warden:allow <cmd>`. To temporarily bypass filtering, `/warden:yolo`."
-].join("\n");
+var DEFAULT_TEMP_SCRIPT_DIR = "/tmp";
+function buildDefaultSessionGuidance(tempScriptDir) {
+  return [
+    "Claude Warden is active. It filters Bash commands against safety rules and may ask or deny.",
+    "",
+    "- For JSON in shell pipelines, prefer `jq` (auto-allowed) over `python3 -c` / `node -e`.",
+    `- For multi-line logic, save a temp script under \`${tempScriptDir}/\` (e.g. \`${tempScriptDir}/warden-task.sh\`) or add a \`package.json\` script rather than inline \`bash -c\` / \`node -e\`. Avoid polluting the repo with throwaway scripts.`,
+    "- When Warden denies or asks, read the reason \u2014 it often names the preferred alternative.",
+    "- To permanently allow a specific command, run `/warden:allow <cmd>`. To temporarily bypass filtering, `/warden:yolo`."
+  ].join("\n");
+}
+var DEFAULT_SESSION_GUIDANCE = buildDefaultSessionGuidance(DEFAULT_TEMP_SCRIPT_DIR);
 var DEFAULT_CONFIG = {
   defaultDecision: "ask",
   askOnSubshell: true,
@@ -19818,6 +19822,12 @@ function mergeNonLayerFields(config, raw) {
     config.sessionGuidance = raw.sessionGuidance;
   } else if (raw.sessionGuidance !== void 0) {
     warn(`[warden] Warning: invalid sessionGuidance (expected string or false), ignoring
+`);
+  }
+  if (typeof raw.tempScriptDir === "string" && raw.tempScriptDir.length > 0) {
+    config.tempScriptDir = raw.tempScriptDir;
+  } else if (raw.tempScriptDir !== void 0) {
+    warn(`[warden] Warning: invalid tempScriptDir (expected non-empty string), ignoring
 `);
   }
   if (raw.skills && typeof raw.skills === "object") {

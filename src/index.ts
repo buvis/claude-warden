@@ -4,7 +4,7 @@ import { evaluateSkill } from './skill-evaluator';
 import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
-import { DEFAULT_SESSION_GUIDANCE } from './defaults';
+import { buildDefaultSessionGuidance, DEFAULT_TEMP_SCRIPT_DIR } from './defaults';
 import type { HookInput, HookOutput, EvalResult, WardenConfig, Decision } from './types';
 
 // Note: rules.ts defaults to quiet mode, which is what we want in a
@@ -32,7 +32,8 @@ function emitDecision(decision: Decision, reason: string, stderrMessage?: string
 
 function handleSessionStart(config: WardenConfig): never {
   if (config.sessionGuidance === false) process.exit(0);
-  const text = config.sessionGuidance ?? DEFAULT_SESSION_GUIDANCE;
+  const text = config.sessionGuidance
+    ?? buildDefaultSessionGuidance(config.tempScriptDir ?? DEFAULT_TEMP_SCRIPT_DIR);
   const output: HookOutput = {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
