@@ -5,26 +5,42 @@ user_invocable: true
 
 Perform the full release workflow for claude-warden:
 
+## Constraints
+
+- **Do not use `grep` or `find -name` in Bash** — use `rg` (ripgrep) or the Glob/Grep tools. A PreToolUse hook blocks these.
+- **`main` is protected** — direct `git push origin main` is rejected. All changes must land via a PR.
+- **npm publishing is handled by CI** — the `publish.yml` workflow triggers on `release: published` and uses OIDC trusted publishing. Do NOT run `pnpm publish` / `npm publish` locally; it will fail or conflict.
+
 ## Steps
 
-1. **Check for changes**: Run `git status` and `git diff`. If there are uncommitted changes, commit them with an appropriate conventional commit message.
+1. **Check for changes**: Run `git status` and `git log`. If there are uncommitted changes, commit them with an appropriate conventional commit message first.
 
-2. **Determine version bump**: Look at the commits since the last release tag to decide the bump type:
-   - `fix:` commits → patch bump
-   - `feat:` commits → minor bump
-   - Breaking changes → major bump
-   - If unsure, ask the user which version bump they want (patch/minor/major).
+2. **Determine version bump**: Compare `git describe --tags --abbrev=0` with `git log <tag>..HEAD --oneline` to decide:
+   - `fix:` / `chore:` / `docs:` only → patch bump
+   - Any `feat:` commit → minor bump
+   - Breaking change (`feat!:`, `BREAKING CHANGE:`) → major bump (always confirm with user first)
+   - If unsure, ask the user.
 
-3. **Bump version**: Update `version` in `package.json` (and `.claude-plugin/plugin.json` if it has a version field). Do NOT run `npm version` — just edit the files directly.
+3. **Bump version**: Edit `version` in both `package.json` and `.claude-plugin/plugin.json` directly with the Edit tool. Do NOT run `npm version` or `pnpm version`.
 
-4. **Build**: Run `pnpm run build` to produce `dist/index.cjs`.
+4. **Build**: Run `pnpm run build` to produce `dist/*.cjs`.
 
-5. **Commit version bump**: Stage all changes and commit with message `<new-version>` (e.g., `1.8.3`).
+5. **Create release branch**: `main` is protected, so:
+   - `git checkout -b release/v<new-version>`
+   - `git add -A && git commit -m "<new-version>"` (e.g., `2.7.0`)
+   - `git push -u origin release/v<new-version>`
 
-6. **Push**: Run `git push origin main`.
+6. **Open and merge PR**:
+   - `gh pr create --base main --head release/v<new-version> --title "chore: release v<new-version>" --body "<changelog>"`
+   - `gh pr merge <pr-number> --merge --admin` (use `--admin` to bypass required checks if needed)
+   - `git checkout main && git fetch origin && git reset --hard origin/main`
 
-7. **Create GitHub release**: Run `gh release create v<new-version> --title "v<new-version>" --notes "<changelog>"`. Generate the changelog from commits since the last release tag.
+7. **Create GitHub release**: `gh release create v<new-version> --target main --title "v<new-version>" --notes "<changelog>"`. Generate the changelog from commits since the last release tag, grouped by conventional-commit type (Features / Fixes / Docs / Other).
 
-8. **Publish to npm**: Run `pnpm publish --access public --no-git-checks`.
+8. **Wait for publish CI**: The `Publish to npm` workflow auto-runs on release creation. Monitor with:
+   - `gh run list --workflow=publish.yml --limit 3`
+   - `gh run watch <run-id> --exit-status`
 
-9. **Report**: Show the user the new version, GitHub release URL, and npm package URL.
+   If it fails, consult `CLAUDE.md` → "Publish workflow gotchas" (especially the `npx -y npm@11.5.1 publish` requirement and the `gh release delete --cleanup-tag` re-run procedure).
+
+9. **Report**: Show the user the new version, GitHub release URL, and npm package URL (`https://www.npmjs.com/package/claude-warden/v/<new-version>`).
