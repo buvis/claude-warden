@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.8.0] - 2026-04-22
+
+### Features
+- default temp scripts to /tmp; add tempScriptDir config (5961909)
+- inject plugin-level guidance via SessionStart hook (#96) (33f09a1)
+
+### Other Changes
+- docs(release): consolidate into shared skill, drop duplicate command (200ed5d)
+- docs(release): align with hooks, protected main, and CI publishing (bb28db9)
+
 ## [2.4.0] - 2026-04-07
 
 ### Features
