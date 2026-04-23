@@ -594,7 +594,18 @@ export const DEFAULT_CONFIG: WardenConfig = {
 
       // --- Scripting languages ---
       { command: 'ruby', default: 'ask', argPatterns: [...inlineExecPatterns('Ruby', ['^-e$', '^--eval']), VERSION_HELP_FLAGS] },
-      { command: 'perl', default: 'ask', argPatterns: [...inlineExecPatterns('Perl', ['^-e$', '^-E$']),   VERSION_HELP_FLAGS] },
+      // `[npa]` bundles perl's common read-only short flags (`-pe`, `-ne`, `-ane`).
+      // `-i` (in-place edit) mutates files — detected separately so it's caught whether
+      // bundled (`-pie`, `-pi`) or passed as its own arg (`-i -pe`, `-i.bak -pe`).
+      {
+        command: 'perl',
+        default: 'ask',
+        argPatterns: [
+          { match: { anyArgMatches: ['^-[a-z]*i'] }, decision: 'ask', reason: 'Perl `-i` does in-place file edits. Save the script to scripts/*.pl and run it.' },
+          ...inlineExecPatterns('Perl', ['^-[npa]*[eE]$']),
+          VERSION_HELP_FLAGS,
+        ],
+      },
       { command: 'php',  default: 'ask', argPatterns: [...inlineExecPatterns('PHP',  ['^-r$']),          VERSION_HELP_FLAGS] },
 
       // --- Java ecosystem ---
