@@ -252,6 +252,10 @@ describe('evaluator', () => {
       ['node -p "1+1"',                             'JavaScript'],
       ['node -e "console.log(JSON.parse(x).foo)"',  'JavaScript'],
       ['perl -e "print 1"',                         'Perl'],
+      ['perl -pe "s/foo/bar/g"',                    'Perl'],
+      ['perl -ne "print if /foo/"',                 'Perl'],
+      ['perl -ane "print $F[0]"',                   'Perl'],
+      ['perl -pE "s/foo/bar/g"',                    'Perl'],
       ['ruby -e "puts 1"',                          'Ruby'],
       ['php -r "echo 1;"',                          'PHP'],
     ])('allows plausibly read-only inline script %s', (cmd) => {
@@ -278,6 +282,8 @@ describe('evaluator', () => {
       [`ruby -e "File.write('f','x')"`,                        'Ruby', 'rb'],
       // Perl — shell-out
       [`perl -e "system('ls')"`,                               'Perl', 'pl'],
+      [`perl -pe "system('rm x')"`,                            'Perl', 'pl'],
+      [`perl -ne "\`rm x\`"`,                                  'Perl', 'pl'],
       // PHP — shell-out / file-write
       [`php -r "${SHEXEC}('ls');"`,                            'PHP', 'php'],
       [`php -r "file_put_contents('f','x');"`,                 'PHP', 'php'],
@@ -304,6 +310,14 @@ describe('evaluator', () => {
     it(`does NOT mis-flag python3 ${SUB}_helper.py (no -c flag)`, () => {
       const r = eval_(`python3 ${SUB}_helper.py`);
       expect(r.reason ?? '').not.toContain('jq');
+    });
+
+    it.each([
+      'perl -pie "s/foo/bar/g" file',
+      'perl -i -pe "s/foo/bar/g" file',
+      'perl -i.bak -pe "s/foo/bar/g" file',
+    ])('does NOT allow perl with -i (in-place edit): %s', (cmd) => {
+      expect(eval_(cmd).decision).not.toBe('allow');
     });
   });
 
