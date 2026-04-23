@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.9.0] - 2026-04-23
+
+### Features
+- Add tsgo and turbo commands to SAFE_DEV_TOOLS in defaults configuration (a19c238)
+
+### Other Changes
+- docs: mention Codex in tagline and document skill whitelist (950c5a6)
+
 ## [2.8.0] - 2026-04-22
 
 ### Features
