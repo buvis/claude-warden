@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.10.0] - 2026-04-24
+
+### Features
+- feat(defaults): allow perl bundled short-flags (-pe, -ne, -ane) while keeping -i safe (84a86b3)
+
+### Bug Fixes
+- fix(parser): recursively evaluate explicit (...) subshells instead of blanket ask (214fad7)
+- fix(ci): dispatch publish.yml from auto-release so npm publish actually runs (0c3ff27)
+
 ## [2.9.0] - 2026-04-23
 
 ### Features
