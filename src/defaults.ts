@@ -63,6 +63,18 @@ function registryOpsPattern(): ArgPattern {
   };
 }
 
+function inlineScriptReason(lang: string, ext: string): string {
+  return `Inline ${lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${ext} and run it.`;
+}
+
+function inlineExecPattern(lang: string, ext: string, flags: string[]): ArgPattern {
+  return {
+    match: { anyArgMatches: flags },
+    decision: 'ask',
+    reason: inlineScriptReason(lang, ext),
+  };
+}
+
 function pkgManagerRule(command: string, extraSafeCmds: string[] = []): CommandRule {
   const safeCmds = [...SAFE_PKG_MANAGER_CMDS, ...extraSafeCmds];
   return {
@@ -471,15 +483,11 @@ export const DEFAULT_CONFIG: WardenConfig = {
       })),
 
       // --- Scripting languages ---
+      // perl/python/node have custom evaluators in evaluator.ts that handle inline
+      // -c/-e and file scanning via script-scanner.ts. ruby/php have no scanner.
       { command: 'perl', default: 'ask' },
-      ...['ruby', 'php'].map((cmd): CommandRule => ({
-        command: cmd,
-        default: 'ask',
-        argPatterns: [
-          { match: { anyArgMatches: ['^-e$', '^--eval'] }, decision: 'ask', reason: 'evaluates inline code' },
-          VERSION_HELP_FLAGS,
-        ],
-      })),
+      { command: 'ruby', default: 'ask', argPatterns: [inlineExecPattern('Ruby', 'rb', ['^-e$', '^--eval']), VERSION_HELP_FLAGS] },
+      { command: 'php',  default: 'ask', argPatterns: [inlineExecPattern('PHP', 'php', ['^-r$']), VERSION_HELP_FLAGS] },
 
       // --- Java ecosystem ---
       { command: 'java', default: 'ask', argPatterns: [VERSION_HELP_FLAGS] },

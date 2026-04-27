@@ -1352,21 +1352,32 @@ function userRulesWouldRestrict(cmd: ParsedCommand, config: WardenConfig): boole
   return !!rule && rule.default === 'deny';
 }
 
-/** Map scanScriptCode result to a CommandEvalDetail, or null if user rules should take precedence. */
+/**
+ * Map scanScriptCode result to a CommandEvalDetail, or null if user rules should take precedence.
+ *
+ * Pass `inline` for `-c`/`-e`-style invocations: the reason is wrapped with an
+ * educational nudge ("For JSON, prefer jq. For reuse, save to scripts/*.{ext} ...") so
+ * Claude has a fresh prompt to pick the right tool, even after SessionStart guidance has
+ * been compacted out of context.
+ */
 function mapScanResult(
   cmd: ParsedCommand,
   scanResult: ReturnType<typeof scanScriptCode>,
   matchedRule: string,
   config: WardenConfig,
+  inline?: { lang: string; ext: string },
 ): CommandEvalDetail | null {
   if (!scanResult) {
     // Safe script - but respect user rules if they restrict this command
     if (userRulesWouldRestrict(cmd, config)) return null;
     return { command: cmd.command, args: cmd.args, decision: 'allow', reason: 'script content is safe', matchedRule };
   }
-  const reason = scanResult.level === 'dangerous'
+  const baseReason = scanResult.level === 'dangerous'
     ? `dangerous: ${scanResult.reason}`
     : scanResult.reason;
+  const reason = inline
+    ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})`
+    : baseReason;
   return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
 }
 
@@ -1409,7 +1420,7 @@ function evaluatePythonCommand(cmd: ParsedCommand, config: WardenConfig, depth: 
     if (!code) {
       return { command, args, decision: 'ask', reason: 'missing code after -c', matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, 'python'), rule, config);
+    return mapScanResult(cmd, scanScriptCode(code, 'python'), rule, config, { lang: 'Python', ext: 'py' });
   }
 
   // 3. -m <module>
@@ -1459,7 +1470,7 @@ function evaluateNodeCommand(cmd: ParsedCommand, config: WardenConfig, depth: nu
     if (!code) {
       return { command, args, decision: 'ask', reason: 'missing code after eval flag', matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, 'typescript'), rule, config);
+    return mapScanResult(cmd, scanScriptCode(code, 'typescript'), rule, config, { lang: 'JavaScript', ext: 'js' });
   }
 
   // 3. First arg ending in script extension → read and scan
@@ -1493,7 +1504,7 @@ function evaluatePerlCommand(cmd: ParsedCommand, config: WardenConfig, depth: nu
     if (!code) {
       return { command, args, decision: 'ask', reason: 'missing code after -e', matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, 'perl'), rule, config);
+    return mapScanResult(cmd, scanScriptCode(code, 'perl'), rule, config, { lang: 'Perl', ext: 'pl' });
   }
 
   // 3. First arg ending in .pl / .pm → read and scan

@@ -258,6 +258,36 @@ describe('evaluator', () => {
     });
   });
 
+  describe('inline interpreter reasons', () => {
+    it.each([
+      [`python -c "import os; os.system('ls')"`,    'Python',     'py'],
+      [`python3 -c "import subprocess"`,            'Python',     'py'],
+      [`node -e "require('child_process')"`,        'JavaScript', 'js'],
+      [`node --eval "require('child_process')"`,    'JavaScript', 'js'],
+      [`node -p "eval(x)"`,                         'JavaScript', 'js'],
+      [`perl -e "system('ls')"`,                    'Perl',       'pl'],
+      [`perl -E "system('ls')"`,                    'Perl',       'pl'],
+      [`ruby -e "puts 1"`,                          'Ruby',       'rb'],
+      [`php -r "echo 1;"`,                          'PHP',        'php'],
+    ])('asks with educational reason for %s', (cmd, lang, ext) => {
+      const r = eval_(cmd);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('jq');
+      expect(r.reason).toContain(`scripts/*.${ext}`);
+      expect(r.reason).toContain(lang);
+    });
+
+    it('does NOT trigger inline nudge for python3 script.py', () => {
+      const r = eval_('python3 script.py');
+      expect(r.reason ?? '').not.toContain('jq');
+    });
+
+    it('does NOT trigger inline nudge for node script.js', () => {
+      const r = eval_('node script.js');
+      expect(r.reason ?? '').not.toContain('jq');
+    });
+  });
+
   describe('edge cases', () => {
     it('allows empty command', () => {
       expect(eval_('').decision).toBe('allow');
