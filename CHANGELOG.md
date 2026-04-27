@@ -8,6 +8,7 @@
 - **defaults**: auto-allow benign inline interpreter scripts when the body shows no shell-out, file-write, or network access; risky bodies still ask (from upstream aabfce6)
 - **script-scanner**: extended TypeScript/JavaScript patterns to catch chained method calls (`require('fs').writeFileSync(...)`, `.spawn(`, `.createWriteStream(`) and plain `fetch()`/`net.connect()` that the previous `fs.`-anchored patterns missed
 - **node**: handle `--eval=script` / `--print=script` form (no space between flag and body) when the script body parses cleanly
+- **defaults**: perl `-pe`/`-ne`/`-ane`/`-pE` bundled short-flags treated like `-e` for sed-like one-liners; `-i` (in-place edit) detected separately and still asks (from upstream 84a86b3)
 
 ## [0.10.0] - 2026-04-27
 

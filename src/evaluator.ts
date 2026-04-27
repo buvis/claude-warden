@@ -1506,8 +1506,21 @@ function evaluatePerlCommand(cmd: ParsedCommand, config: WardenConfig, depth: nu
     return { command, args, decision: 'allow', reason: 'version/help flag', matchedRule: rule };
   }
 
-  // 2. -e / -E → inline code
-  const eIdx = args.findIndex(a => a === '-e' || a === '-E');
+  // 2. -i (in-place edit) is checked before the eval flag because it can be bundled
+  // (-pie, -pi) or standalone (-i, -i.bak). Mutates files; ask regardless of body.
+  if (args.some(a => /^-[a-z]*i/.test(a))) {
+    return {
+      command,
+      args,
+      decision: 'ask',
+      reason: 'Perl `-i` does in-place file edits. Save the script to scripts/*.pl and run it.',
+      matchedRule: rule,
+    };
+  }
+
+  // 3. -e / -E inline (also bundled: -pe, -ne, -ane, -pE — common sed-like one-liners).
+  // The `[npa]` lets us accept the read-only short flags without breaking strict -e/-E.
+  const eIdx = args.findIndex(a => /^-[npa]*[eE]$/.test(a));
   if (eIdx !== -1) {
     const code = args[eIdx + 1];
     if (!code) {
