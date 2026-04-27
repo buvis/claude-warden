@@ -1463,14 +1463,23 @@ function evaluateNodeCommand(cmd: ParsedCommand, config: WardenConfig, depth: nu
     return { command, args, decision: 'allow', reason: 'version/help flag', matchedRule: rule };
   }
 
-  // 2. -e / --eval / -p / --print → inline code
+  // 2. -e / --eval / -p / --print → inline code (also --eval=script / --print=script form)
+  const inlineJs = { lang: 'JavaScript', ext: 'js' };
   const evalIdx = args.findIndex(a => a === '-e' || a === '--eval' || a === '-p' || a === '--print');
   if (evalIdx !== -1) {
     const code = args[evalIdx + 1];
     if (!code) {
       return { command, args, decision: 'ask', reason: 'missing code after eval flag', matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, 'typescript'), rule, config, { lang: 'JavaScript', ext: 'js' });
+    return mapScanResult(cmd, scanScriptCode(code, 'typescript'), rule, config, inlineJs);
+  }
+  const evalEqArg = args.find(a => a.startsWith('--eval=') || a.startsWith('--print='));
+  if (evalEqArg) {
+    const code = evalEqArg.slice(evalEqArg.indexOf('=') + 1);
+    if (!code) {
+      return { command, args, decision: 'ask', reason: 'missing code after eval flag', matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, 'typescript'), rule, config, inlineJs);
   }
 
   // 3. First arg ending in script extension → read and scan

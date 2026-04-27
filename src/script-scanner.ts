@@ -49,6 +49,7 @@ const TYPESCRIPT_PATTERNS: ScanPattern[] = [
   { regex: /\bchild_process\b/, level: 'dangerous', reason: 'child_process can execute shell commands' },
   { regex: /\bexecSync\s*\(/, level: 'dangerous', reason: 'execSync() executes shell commands' },
   { regex: /\bspawnSync\s*\(/, level: 'dangerous', reason: 'spawnSync() executes shell commands' },
+  { regex: /\.spawn\s*\(/, level: 'dangerous', reason: '.spawn() executes shell commands' },
   { regex: /\bfs\.rmSync\s*\([^)]*recursive/, level: 'dangerous', reason: 'fs.rmSync with recursive deletes directory trees' },
   { regex: /\bfs\.rmdirSync\s*\([^)]*recursive/, level: 'dangerous', reason: 'fs.rmdirSync with recursive deletes directory trees' },
   { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: 'dangerous', reason: 'eval() executes arbitrary code' },
@@ -56,15 +57,18 @@ const TYPESCRIPT_PATTERNS: ScanPattern[] = [
   { regex: /\bprocess\.exit\s*\(/, level: 'dangerous', reason: 'process.exit() terminates the process' },
   { regex: /\brimraf\b/, level: 'dangerous', reason: 'rimraf deletes directory trees' },
 
-  // Cautious
-  { regex: /\bfs\.writeFileSync\s*\(/, level: 'cautious', reason: 'writes to file' },
-  { regex: /\bfs\.writeFile\s*\(/, level: 'cautious', reason: 'writes to file' },
-  { regex: /\bfs\.appendFile(Sync)?\s*\(/, level: 'cautious', reason: 'appends to file' },
-  { regex: /\bfs\.unlinkSync\s*\(/, level: 'cautious', reason: 'deletes file' },
-  { regex: /\bfs\.unlink\s*\(/, level: 'cautious', reason: 'deletes file' },
-  { regex: /\bfs\.renameSync\s*\(/, level: 'cautious', reason: 'renames/moves file' },
+  // Cautious — match both `fs.writeFileSync(` and chained `require('fs').writeFileSync(`
+  { regex: /\.writeFileSync\s*\(/, level: 'cautious', reason: 'writes to file' },
+  { regex: /\.writeFile\s*\(/, level: 'cautious', reason: 'writes to file' },
+  { regex: /\.appendFile(Sync)?\s*\(/, level: 'cautious', reason: 'appends to file' },
+  { regex: /\.createWriteStream\s*\(/, level: 'cautious', reason: 'opens write stream' },
+  { regex: /\.unlinkSync\s*\(/, level: 'cautious', reason: 'deletes file' },
+  { regex: /\.unlink\s*\(/, level: 'cautious', reason: 'deletes file' },
+  { regex: /\.renameSync\s*\(/, level: 'cautious', reason: 'renames/moves file' },
   { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: 'cautious', reason: 'makes mutating HTTP request' },
+  { regex: /\bfetch\s*\(/, level: 'cautious', reason: 'makes HTTP request' },
   { regex: /\bhttps?\.request\s*\(/, level: 'cautious', reason: 'makes HTTP request' },
+  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: 'cautious', reason: 'opens network connection' },
 ];
 
 // ─── Perl patterns ───
