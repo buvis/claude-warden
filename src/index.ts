@@ -4,7 +4,21 @@ import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
 import { logDecision } from './audit';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
-import type { HookInput, HookOutput } from './types';
+import { DEFAULT_SESSION_GUIDANCE } from './defaults';
+import type { HookInput, HookOutput, WardenConfig } from './types';
+
+function handleSessionStart(config: WardenConfig): never {
+  if (config.sessionGuidance === false) process.exit(0);
+  const text = config.sessionGuidance ?? DEFAULT_SESSION_GUIDANCE;
+  const output: HookOutput = {
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext: text,
+    },
+  };
+  process.stdout.write(JSON.stringify(output));
+  process.exit(0);
+}
 
 // Note: rules.ts defaults to quiet mode, which is what we want in a
 // hook. Any stderr output would be surfaced by Claude Code as a
@@ -37,6 +51,11 @@ async function main() {
   } catch {
     // Can't parse input - don't interfere
     process.exit(0);
+  }
+
+  if (input.hook_event_name === 'SessionStart') {
+    const config = loadConfig(input.cwd);
+    handleSessionStart(config);
   }
 
   if (input.tool_name !== 'Bash') {

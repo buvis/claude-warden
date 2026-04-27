@@ -262,6 +262,11 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
   if (typeof raw.notifyOnDeny === 'boolean') {
     config.notifyOnDeny = raw.notifyOnDeny;
   }
+  if (typeof raw.sessionGuidance === 'string' || raw.sessionGuidance === false) {
+    config.sessionGuidance = raw.sessionGuidance;
+  } else if (raw.sessionGuidance !== undefined) {
+    warn(`[warden] Warning: invalid sessionGuidance (expected string or false), ignoring\n`);
+  }
   if (typeof raw.audit === 'boolean') {
     config.audit = raw.audit;
   }
