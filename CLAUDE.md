@@ -40,10 +40,9 @@ The hook communicates with Claude Code via the PreToolUse hook protocol:
 
 ## Releasing
 
-Releases are done remotely by creating a GitHub release (not by publishing locally). A CI workflow handles npm publishing via OIDC trusted publishing when a release is created.
+Use `dev/bin/release [patch|minor|major]`. The script bumps `package.json`, syncs `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, stamps `CHANGELOG.md` (replaces `[Unreleased]` heading with the version + date), builds `dist/`, commits as `chore: release vX.Y.Z`, pushes, then bumps the sibling marketplace repo at `../claude-plugins` and pushes that. CI publishes to npm via OIDC.
 
-1. Merge PR to `master`
-2. `gh release create vX.Y.Z --target master --title "vX.Y.Z" --notes "..."`
+**Do not pre-bump versions or pre-stamp the changelog.** The release script does both. Land feature commits with the entry under `[Unreleased]` and a clean working tree, then run the script.
 
 **Burned npm versions:** v3.0.0 was published to npm by mistake and can never be reused. When versioning reaches v3, start from v3.0.1.
 
