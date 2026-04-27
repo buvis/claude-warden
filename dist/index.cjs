@@ -11293,7 +11293,6 @@ function walkNode(node, result) {
       break;
     }
     case "Subshell": {
-      result.hasSubshell = true;
       walkCompoundList(node.body, result);
       break;
     }
@@ -11574,6 +11573,7 @@ var SAFE_DEV_TOOLS = [
   "jest",
   "vitest",
   "tsc",
+  "tsgo",
   "eslint",
   "prettier",
   "mkdirp",
@@ -11652,7 +11652,18 @@ var SAFE_PKG_MANAGER_CMDS = [
   "prune",
   "audit",
   "completion",
-  "whoami"
+  "whoami",
+  // Common script aliases (run implicitly by npm/pnpm/yarn/bun)
+  "typecheck",
+  "type-check",
+  "lint",
+  "format",
+  "check",
+  "check-types",
+  "test:unit",
+  "test:e2e",
+  "test:watch",
+  "lint:fix"
 ];
 var VERSION_HELP_FLAGS = {
   match: { anyArgMatches: ["^--(version|help)$", "^-[vh]$"] },
@@ -11695,6 +11706,7 @@ function pkgManagerRule(command, extraSafeCmds = []) {
         decision: "allow",
         description: `Standard ${command} commands`
       },
+      safeDevToolsPattern(),
       VERSION_HELP_FLAGS
     ]
   };
@@ -11710,6 +11722,18 @@ function pkgRunnerRule(command) {
     ]
   };
 }
+var DEFAULT_TEMP_SCRIPT_DIR = "/tmp";
+function buildDefaultSessionGuidance(tempScriptDir) {
+  return [
+    "Claude Warden is active. It filters Bash commands against safety rules and may ask or deny.",
+    "",
+    "- For JSON in shell pipelines, prefer `jq` (auto-allowed) over `python3 -c` / `node -e`.",
+    `- For multi-line logic, save a temp script under \`${tempScriptDir}/\` (e.g. \`${tempScriptDir}/warden-task.sh\`) or add a \`package.json\` script rather than inline \`bash -c\` / \`node -e\`. Avoid polluting the repo with throwaway scripts.`,
+    "- When Warden denies or asks, read the reason \u2014 it often names the preferred alternative.",
+    "- To permanently allow a specific command, run `/warden:allow <cmd>`. To temporarily bypass filtering, `/warden:yolo`."
+  ].join("\n");
+}
+var DEFAULT_SESSION_GUIDANCE = buildDefaultSessionGuidance(DEFAULT_TEMP_SCRIPT_DIR);
 var DEFAULT_CONFIG = {
   defaultDecision: "ask",
   askOnSubshell: true,
@@ -12044,7 +12068,7 @@ var DEFAULT_CONFIG = {
       pkgRunnerRule("pnpx"),
       // npm / pnpm / yarn - package managers
       pkgManagerRule("npm", ["ci", "search", "explain", "prefix", "root", "fund", "doctor", "diff", "pkg", "query", "shrinkwrap"]),
-      pkgManagerRule("pnpm", ["store", "fetch", "doctor", "patch"]),
+      pkgManagerRule("pnpm", ["store", "fetch", "doctor", "patch", "--filter", "-F", "--recursive", "-r", "--workspace-root", "-w"]),
       pkgManagerRule("yarn", ["up", "dlx", "workspaces"]),
       // bun - runtime + package manager
       {
@@ -12125,6 +12149,7 @@ var DEFAULT_CONFIG = {
       },
       { command: "rustup", default: "allow" },
       { command: "tsc", default: "allow" },
+      { command: "tsgo", default: "allow" },
       { command: "turbo", default: "allow" },
       { command: "nx", default: "allow" },
       { command: "lerna", default: "allow" },
@@ -12263,16 +12288,21 @@ var DEFAULT_CONFIG = {
       })),
       // --- Cloud CLIs ---
       { command: "gcloud", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(info|version|help|config|components)$"] }, decision: "allow", description: "Config/info" },
-        { match: { anyArgMatches: ["^(list|describe|get-iam-policy|get)$"] }, decision: "allow", description: "Read-only ops" },
+        { match: { anyArgMatches: ["^(info|version|help|topic|components|feedback|survey)$"] }, decision: "allow", description: "Info/meta commands" },
+        { match: { anyArgMatches: ["^config$"] }, decision: "allow", description: "Config subcommands" },
+        { match: { anyArgMatches: ["^(list|describe|get|get-iam-policy|browse|tail|read|show|search|lookup|check)$"] }, decision: "allow", description: "Read-only verbs" },
+        { match: { anyArgMatches: ["^(list|get|describe|show|print|read|search|lookup|check)-[a-z][a-z0-9-]*$"] }, decision: "allow", description: "Read-only verb-noun (list-enabled, get-value, print-access-token, etc.)" },
         VERSION_HELP_FLAGS
       ] },
       { command: "az", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(list|show|get)$"] }, decision: "allow", description: "Read-only ops" },
+        { match: { anyArgMatches: ["^(list|show|get|search|check)$"] }, decision: "allow", description: "Read-only verbs" },
+        { match: { anyArgMatches: ["^(list|show|get|search|check)-[a-z][a-z0-9-]*$"] }, decision: "allow", description: "Read-only verb-noun" },
+        { match: { anyArgMatches: ["^(version|help|account|feedback)$"] }, decision: "allow", description: "Info/meta commands" },
         VERSION_HELP_FLAGS
       ] },
       { command: "aws", default: "ask", argPatterns: [
-        { match: { anyArgMatches: ["^(describe|list|get|sts)$"] }, decision: "allow", description: "Read-only ops" },
+        { match: { anyArgMatches: ["^(describe|list|get|sts|help|search|lookup|check)$"] }, decision: "allow", description: "Read-only verbs" },
+        { match: { anyArgMatches: ["^(describe|list|get|search|lookup|check)-[a-z][a-z0-9-]*$"] }, decision: "allow", description: "Read-only verb-noun" },
         VERSION_HELP_FLAGS
       ] },
       // --- Helm ---
@@ -12564,6 +12594,18 @@ function mergeNonLayerFields(config, raw) {
   }
   if (typeof raw.notifyOnDeny === "boolean") {
     config.notifyOnDeny = raw.notifyOnDeny;
+  }
+  if (typeof raw.sessionGuidance === "string" || raw.sessionGuidance === false) {
+    config.sessionGuidance = raw.sessionGuidance;
+  } else if (raw.sessionGuidance !== void 0) {
+    warn(`[warden] Warning: invalid sessionGuidance (expected string or false), ignoring
+`);
+  }
+  if (typeof raw.tempScriptDir === "string" && raw.tempScriptDir.length > 0) {
+    config.tempScriptDir = raw.tempScriptDir;
+  } else if (raw.tempScriptDir !== void 0) {
+    warn(`[warden] Warning: invalid tempScriptDir (expected non-empty string), ignoring
+`);
   }
   if (typeof raw.audit === "boolean") {
     config.audit = raw.audit;
@@ -14083,7 +14125,7 @@ function generateAllowSnippet(details) {
   }
   return lines.join("\n");
 }
-function formatSystemMessage(decision, rawCommand, details) {
+function formatSystemMessage(decision, rawCommand, details, fallbackReason) {
   const relevant = details.filter((d) => d.decision !== "allow");
   if (decision === "ask") {
     const parts2 = relevant.map((d) => {
@@ -14092,7 +14134,8 @@ function formatSystemMessage(decision, rawCommand, details) {
     });
     const cmds = [...new Set(relevant.map((d) => d.command))];
     const allowHint = cmds.length === 1 ? `/warden:allow ${cmds[0]}` : "/warden:allow";
-    const reason2 = `[warden] ${parts2.join("; ")} (${allowHint})`;
+    const body2 = parts2.length > 0 ? parts2.join("; ") : fallbackReason || "";
+    const reason2 = `[warden] ${body2} (${allowHint})`;
     const helpLines = ["To auto-allow, add to ~/.claude/warden.yaml or .claude/warden.yaml:"];
     for (const d of relevant) {
       helpLines.push(`- Allow all \`${d.command}\` \u2192 \`/warden:allow ${d.command}\``);
@@ -14105,7 +14148,8 @@ function formatSystemMessage(decision, rawCommand, details) {
     return { reason: reason2, systemMessage: helpLines.join("\n") };
   }
   const parts = relevant.map((d) => `${d.command}: ${d.reason}`);
-  const reason = `[warden] blocked ${parts.join("; ")}`;
+  const body = parts.length > 0 ? parts.join("; ") : fallbackReason || "";
+  const reason = `[warden] blocked ${body}`;
   const snippet = generateAllowSnippet(details);
   let systemMessage;
   if (snippet) {
@@ -14275,6 +14319,18 @@ function deactivateYolo(sessionId) {
 }
 
 // src/index.ts
+function handleSessionStart(config) {
+  if (config.sessionGuidance === false) process.exit(0);
+  const text = config.sessionGuidance ?? buildDefaultSessionGuidance(config.tempScriptDir ?? DEFAULT_TEMP_SCRIPT_DIR);
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: text
+    }
+  };
+  process.stdout.write(JSON.stringify(output));
+  process.exit(0);
+}
 var MAX_STDIN_SIZE = 1024 * 1024;
 async function main() {
   const startTime = Date.now();
@@ -14298,6 +14354,10 @@ async function main() {
     input = JSON.parse(raw);
   } catch {
     process.exit(0);
+  }
+  if (input.hook_event_name === "SessionStart") {
+    const config2 = loadConfig(input.cwd);
+    handleSessionStart(config2);
   }
   if (input.tool_name !== "Bash") {
     process.exit(0);
@@ -14379,7 +14439,7 @@ async function main() {
       const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
       sendNotification("Claude Warden", `Blocked: ${truncated}`, config);
     }
-    const { reason: reason2, systemMessage: systemMessage2 } = formatSystemMessage("deny", command, result.details);
+    const { reason: reason2, systemMessage: systemMessage2 } = formatSystemMessage("deny", command, result.details, result.reason);
     const output2 = {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
@@ -14398,7 +14458,7 @@ async function main() {
     const truncated = command.length > 80 ? command.slice(0, 77) + "..." : command;
     sendNotification("Claude Warden", `Permission needed: ${truncated}`, config);
   }
-  const { reason, systemMessage } = formatSystemMessage("ask", command, result.details);
+  const { reason, systemMessage } = formatSystemMessage("ask", command, result.details, result.reason);
   const output = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",

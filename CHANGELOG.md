@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **defaults**: common script aliases (typecheck, lint, format, check) and pnpm workspace flags (--filter, --recursive, --workspace-root) auto-allowed (from upstream 631c369)
+- **defaults**: well-known dev tools (jest, vitest, tsc, ...) now auto-allowed when run via pnpm/yarn without explicit `run` (from upstream e3210cc)
+- **defaults**: gcloud/az/aws read-only verb-noun patterns (get-value, print-access-token, list-enabled, ...) auto-allowed (from upstream c8e4870)
+- **defaults**: `tsgo` added to safe dev tools (from upstream a19c238)
+- **hook**: SessionStart hook injects plugin-level guidance to shape Claude's tool choice before warden needs to ask (from upstream 33f09a1, 5961909)
+- **config**: `sessionGuidance` (string|false) and `tempScriptDir` config keys
+
+### Fixed
+
+- **parser**: explicit `(...)` subshells now walked into commands instead of triggering a blanket ask, with a fallback reason when details are empty (from upstream 214fad7)
+
 ## [0.8.0] - 2026-04-12
 
 ### Added
