@@ -11399,21 +11399,25 @@ var TYPESCRIPT_PATTERNS = [
   { regex: /\bchild_process\b/, level: "dangerous", reason: "child_process can execute shell commands" },
   { regex: /\bexecSync\s*\(/, level: "dangerous", reason: "execSync() executes shell commands" },
   { regex: /\bspawnSync\s*\(/, level: "dangerous", reason: "spawnSync() executes shell commands" },
+  { regex: /\.spawn\s*\(/, level: "dangerous", reason: ".spawn() executes shell commands" },
   { regex: /\bfs\.rmSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmSync with recursive deletes directory trees" },
   { regex: /\bfs\.rmdirSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmdirSync with recursive deletes directory trees" },
   { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() executes arbitrary code" },
   { regex: /\bnew\s+Function\s*\(/, level: "dangerous", reason: "new Function() compiles arbitrary code" },
   { regex: /\bprocess\.exit\s*\(/, level: "dangerous", reason: "process.exit() terminates the process" },
   { regex: /\brimraf\b/, level: "dangerous", reason: "rimraf deletes directory trees" },
-  // Cautious
-  { regex: /\bfs\.writeFileSync\s*\(/, level: "cautious", reason: "writes to file" },
-  { regex: /\bfs\.writeFile\s*\(/, level: "cautious", reason: "writes to file" },
-  { regex: /\bfs\.appendFile(Sync)?\s*\(/, level: "cautious", reason: "appends to file" },
-  { regex: /\bfs\.unlinkSync\s*\(/, level: "cautious", reason: "deletes file" },
-  { regex: /\bfs\.unlink\s*\(/, level: "cautious", reason: "deletes file" },
-  { regex: /\bfs\.renameSync\s*\(/, level: "cautious", reason: "renames/moves file" },
+  // Cautious — match both `fs.writeFileSync(` and chained `require('fs').writeFileSync(`
+  { regex: /\.writeFileSync\s*\(/, level: "cautious", reason: "writes to file" },
+  { regex: /\.writeFile\s*\(/, level: "cautious", reason: "writes to file" },
+  { regex: /\.appendFile(Sync)?\s*\(/, level: "cautious", reason: "appends to file" },
+  { regex: /\.createWriteStream\s*\(/, level: "cautious", reason: "opens write stream" },
+  { regex: /\.unlinkSync\s*\(/, level: "cautious", reason: "deletes file" },
+  { regex: /\.unlink\s*\(/, level: "cautious", reason: "deletes file" },
+  { regex: /\.renameSync\s*\(/, level: "cautious", reason: "renames/moves file" },
   { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: "cautious", reason: "makes mutating HTTP request" },
-  { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" }
+  { regex: /\bfetch\s*\(/, level: "cautious", reason: "makes HTTP request" },
+  { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" },
+  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" }
 ];
 var PERL_PATTERNS = [
   // Dangerous
@@ -11697,6 +11701,52 @@ function registryOpsPattern() {
     decision: "ask",
     reason: "modifies package registry"
   };
+}
+var INLINE_LANG_CONFIG = {
+  Ruby: {
+    ext: "rb",
+    patterns: [
+      "`",
+      "%x[\\(\\{\\[]",
+      "\\bsystem\\s*\\(",
+      "\\bexec\\s*\\(",
+      "IO\\.popen",
+      "Kernel\\.",
+      "\\bspawn\\s*\\(",
+      `File\\.open\\s*\\([^)]*['"][wax+]`,
+      "File\\.write",
+      "open-uri",
+      "Net::HTTP"
+    ]
+  },
+  PHP: {
+    ext: "php",
+    patterns: [
+      "`",
+      "shell_exec",
+      "\\b(?:system|passthru|popen|proc_open)\\s*\\(",
+      "\\bexec\\s*\\(",
+      "file_put_contents",
+      "fwrite",
+      `fopen\\s*\\([^)]*['"][wax+]`,
+      "curl_exec",
+      "fsockopen"
+    ]
+  }
+};
+function inlineExecPatterns(lang, flags) {
+  const { ext, patterns } = INLINE_LANG_CONFIG[lang];
+  const reason = `Inline ${lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${ext} and run it.`;
+  const flagAlt = flags.map((f) => f.replace(/^\^/, "").replace(/\$$/, "")).join("|");
+  const compound = `(?:^|\\s)(?:${flagAlt})[\\s=][^\\n]{0,16000}?(?:${patterns.join("|")})`;
+  return [
+    { match: { argsMatch: [compound] }, decision: "ask", reason },
+    {
+      match: { anyArgMatches: flags },
+      decision: "allow",
+      description: `Plausibly read-only inline ${lang} script`
+    }
+  ];
 }
 function pkgManagerRule(command, extraSafeCmds = []) {
   const safeCmds = [...SAFE_PKG_MANAGER_CMDS, ...extraSafeCmds];
@@ -12266,15 +12316,11 @@ var DEFAULT_CONFIG = {
         argPatterns: [VERSION_HELP_FLAGS]
       })),
       // --- Scripting languages ---
+      // perl/python/node have custom evaluators in evaluator.ts that handle inline
+      // -c/-e and file scanning via script-scanner.ts. ruby/php have no scanner.
       { command: "perl", default: "ask" },
-      ...["ruby", "php"].map((cmd) => ({
-        command: cmd,
-        default: "ask",
-        argPatterns: [
-          { match: { anyArgMatches: ["^-e$", "^--eval"] }, decision: "ask", reason: "evaluates inline code" },
-          VERSION_HELP_FLAGS
-        ]
-      })),
+      { command: "ruby", default: "ask", argPatterns: [...inlineExecPatterns("Ruby", ["^-e$", "^--eval"]), VERSION_HELP_FLAGS] },
+      { command: "php", default: "ask", argPatterns: [...inlineExecPatterns("PHP", ["^-r$"]), VERSION_HELP_FLAGS] },
       // --- Java ecosystem ---
       { command: "java", default: "ask", argPatterns: [VERSION_HELP_FLAGS] },
       { command: "javac", default: "allow" },
@@ -13974,12 +14020,13 @@ function userRulesWouldRestrict(cmd, config) {
   const rule = collectMergedRule(cmd, config);
   return !!rule && rule.default === "deny";
 }
-function mapScanResult(cmd, scanResult, matchedRule, config) {
+function mapScanResult(cmd, scanResult, matchedRule, config, inline) {
   if (!scanResult) {
     if (userRulesWouldRestrict(cmd, config)) return null;
     return { command: cmd.command, args: cmd.args, decision: "allow", reason: "script content is safe", matchedRule };
   }
-  const reason = scanResult.level === "dangerous" ? `dangerous: ${scanResult.reason}` : scanResult.reason;
+  const baseReason = scanResult.level === "dangerous" ? `dangerous: ${scanResult.reason}` : scanResult.reason;
+  const reason = inline ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})` : baseReason;
   return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
 }
 function scanScriptFile(cmd, filePath, language, matchedRule, config, cwd) {
@@ -14026,7 +14073,7 @@ function evaluatePythonCommand(cmd, config, depth = 0, cwd) {
     if (!code) {
       return { command, args, decision: "ask", reason: "missing code after -c", matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, "python"), rule, config);
+    return mapScanResult(cmd, scanScriptCode(code, "python"), rule, config, { lang: "Python", ext: "py" });
   }
   const mIdx = args.indexOf("-m");
   if (mIdx !== -1) {
@@ -14056,13 +14103,22 @@ function evaluateNodeCommand(cmd, config, depth = 0, cwd) {
   if (args.some((a) => a === "--version" || a === "--help" || a === "-v" || a === "-h")) {
     return { command, args, decision: "allow", reason: "version/help flag", matchedRule: rule };
   }
+  const inlineJs = { lang: "JavaScript", ext: "js" };
   const evalIdx = args.findIndex((a) => a === "-e" || a === "--eval" || a === "-p" || a === "--print");
   if (evalIdx !== -1) {
     const code = args[evalIdx + 1];
     if (!code) {
       return { command, args, decision: "ask", reason: "missing code after eval flag", matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, "typescript"), rule, config);
+    return mapScanResult(cmd, scanScriptCode(code, "typescript"), rule, config, inlineJs);
+  }
+  const evalEqArg = args.find((a) => a.startsWith("--eval=") || a.startsWith("--print="));
+  if (evalEqArg) {
+    const code = evalEqArg.slice(evalEqArg.indexOf("=") + 1);
+    if (!code) {
+      return { command, args, decision: "ask", reason: "missing code after eval flag", matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, "typescript"), rule, config, inlineJs);
   }
   const scriptArg = args.find((a) => !a.startsWith("-") && NODE_SCRIPT_EXTENSIONS.test(a));
   if (scriptArg) {
@@ -14079,13 +14135,22 @@ function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
   if (args.some((a) => a === "--version" || a === "--help" || a === "-v")) {
     return { command, args, decision: "allow", reason: "version/help flag", matchedRule: rule };
   }
-  const eIdx = args.findIndex((a) => a === "-e" || a === "-E");
+  if (args.some((a) => /^-[a-z]*i/.test(a))) {
+    return {
+      command,
+      args,
+      decision: "ask",
+      reason: "Perl `-i` does in-place file edits. Save the script to scripts/*.pl and run it.",
+      matchedRule: rule
+    };
+  }
+  const eIdx = args.findIndex((a) => /^-[npa]*[eE]$/.test(a));
   if (eIdx !== -1) {
     const code = args[eIdx + 1];
     if (!code) {
       return { command, args, decision: "ask", reason: "missing code after -e", matchedRule: rule };
     }
-    return mapScanResult(cmd, scanScriptCode(code, "perl"), rule, config);
+    return mapScanResult(cmd, scanScriptCode(code, "perl"), rule, config, { lang: "Perl", ext: "pl" });
   }
   const scriptArg = args.find((a) => !a.startsWith("-") && (a.endsWith(".pl") || a.endsWith(".pm")));
   if (scriptArg) {
