@@ -4,12 +4,13 @@ import { formatSystemMessage } from './suggest';
 import { sendNotification } from './notify';
 import { logDecision } from './audit';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
-import { DEFAULT_SESSION_GUIDANCE } from './defaults';
+import { buildDefaultSessionGuidance, DEFAULT_TEMP_SCRIPT_DIR } from './defaults';
 import type { HookInput, HookOutput, WardenConfig } from './types';
 
 function handleSessionStart(config: WardenConfig): never {
   if (config.sessionGuidance === false) process.exit(0);
-  const text = config.sessionGuidance ?? DEFAULT_SESSION_GUIDANCE;
+  const text = config.sessionGuidance
+    ?? buildDefaultSessionGuidance(config.tempScriptDir ?? DEFAULT_TEMP_SCRIPT_DIR);
   const output: HookOutput = {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
