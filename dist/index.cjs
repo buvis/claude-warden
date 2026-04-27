@@ -12118,6 +12118,9 @@ var DEFAULT_CONFIG = {
         command: "git",
         default: "allow",
         argPatterns: [
+          { match: { anyArgMatches: ["^--no-verify$"] }, decision: "deny", reason: "--no-verify bypasses git hooks" },
+          { match: { argsMatch: ["^commit(\\s.+)?\\s-n(\\s|$)", "^commit(\\s.+)?\\s-n[a-zA-Z]"] }, decision: "deny", reason: "-n on git commit bypasses hooks" },
+          { match: { argsMatch: ["(^|\\s)-c\\s+core\\.hooksPath\\s*="] }, decision: "deny", reason: "overriding core.hooksPath bypasses git hooks" },
           { match: { argsMatch: ["push\\s+--force", "push\\s+-f\\b"] }, decision: "ask", reason: "force push overwrites remote history" },
           { match: { argsMatch: ["reset\\s+--hard"] }, decision: "ask", reason: "hard reset discards uncommitted changes" },
           { match: { anyArgMatches: ["^clean$"] }, decision: "ask", reason: "removes untracked files" }

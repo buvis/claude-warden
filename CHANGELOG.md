@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-04-27
+
 ### Added
 
 - **defaults**: deny git hook bypass — `--no-verify` on any git command, `-n` shorthand on `git commit`, and `-c core.hooksPath=` overrides
