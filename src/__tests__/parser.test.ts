@@ -190,9 +190,10 @@ describe('parseCommand', () => {
     expect(result.commands[1].command).toBe('echo');
   });
 
-  it('handles nested subshells', () => {
+  it('walks into nested subshells without flagging hasSubshell', () => {
     const result = parseCommand('(echo hello; (echo nested))');
-    expect(result.hasSubshell).toBe(true);
+    expect(result.hasSubshell).toBe(false);
+    expect(result.commands.map(c => c.command)).toContain('echo');
   });
 
   it('detects command substitution in double quotes', () => {
@@ -314,10 +315,14 @@ describe('parseCommand', () => {
     expect(result.commands[0].command).toBe('echo');
   });
 
-  it('does not affect actual subshell syntax', () => {
+  it('walks explicit subshell into commands without flagging hasSubshell', () => {
     const result = parseCommand('echo hello && (cd /tmp && ls)');
     expect(result.parseError).toBe(false);
-    expect(result.hasSubshell).toBe(true);
+    expect(result.hasSubshell).toBe(false);
+    const cmds = result.commands.map(c => c.command);
+    expect(cmds).toContain('echo');
+    expect(cmds).toContain('cd');
+    expect(cmds).toContain('ls');
   });
 });
 

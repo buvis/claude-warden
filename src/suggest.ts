@@ -73,6 +73,7 @@ export function formatSystemMessage(
   decision: 'deny' | 'ask',
   rawCommand: string,
   details: CommandEvalDetail[],
+  fallbackReason?: string,
 ): FormattedMessage {
   const relevant = details.filter(d => d.decision !== 'allow');
 
@@ -84,7 +85,8 @@ export function formatSystemMessage(
     });
     const cmds = [...new Set(relevant.map(d => d.command))];
     const allowHint = cmds.length === 1 ? `/warden:allow ${cmds[0]}` : '/warden:allow';
-    const reason = `[warden] ${parts.join('; ')} (${allowHint})`;
+    const body = parts.length > 0 ? parts.join('; ') : (fallbackReason || '');
+    const reason = `[warden] ${body} (${allowHint})`;
 
     // Verbose help in systemMessage - use resolved command name for allow hints
     const helpLines: string[] = ['To auto-allow, add to ~/.claude/warden.yaml or .claude/warden.yaml:'];
@@ -102,7 +104,8 @@ export function formatSystemMessage(
 
   // Deny
   const parts = relevant.map(d => `${d.command}: ${d.reason}`);
-  const reason = `[warden] blocked ${parts.join('; ')}`;
+  const body = parts.length > 0 ? parts.join('; ') : (fallbackReason || '');
+  const reason = `[warden] blocked ${body}`;
 
   const snippet = generateAllowSnippet(details);
   let systemMessage: string | undefined;

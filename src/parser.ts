@@ -379,7 +379,10 @@ function walkNode(node: Node, result: WalkResult): void {
     }
 
     case 'Subshell': {
-      result.hasSubshell = true;
+      // Explicit `(...)` subshells: walk inner commands so they're evaluated
+      // normally. We don't set hasSubshell here — its contents are fully
+      // extracted and side-effects (cd, env) are scoped to the subshell,
+      // making them safer than top-level execution, not less safe.
       walkCompoundList((node as Subshell).body, result);
       break;
     }

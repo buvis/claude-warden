@@ -159,7 +159,7 @@ async function main() {
       const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
       sendNotification('Claude Warden', `Blocked: ${truncated}`, config);
     }
-    const { reason, systemMessage } = formatSystemMessage('deny', command, result.details);
+    const { reason, systemMessage } = formatSystemMessage('deny', command, result.details, result.reason);
     const output: HookOutput = {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
@@ -179,7 +179,7 @@ async function main() {
     const truncated = command.length > 80 ? command.slice(0, 77) + '...' : command;
     sendNotification('Claude Warden', `Permission needed: ${truncated}`, config);
   }
-  const { reason, systemMessage } = formatSystemMessage('ask', command, result.details);
+  const { reason, systemMessage } = formatSystemMessage('ask', command, result.details, result.reason);
   const output: HookOutput = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
