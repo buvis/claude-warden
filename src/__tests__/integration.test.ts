@@ -358,6 +358,42 @@ describe('integration: realistic commands', () => {
     it('git reset --hard HEAD~1 → ask', () => {
       expect(warden('git reset --hard HEAD~1').decision).toBe('ask');
     });
+
+    it('git commit --no-verify -m "skip" → deny', () => {
+      expect(warden('git commit --no-verify -m "skip"').decision).toBe('deny');
+    });
+
+    it('git commit -m "x" --no-verify → deny (flag at end)', () => {
+      expect(warden('git commit -m "x" --no-verify').decision).toBe('deny');
+    });
+
+    it('git push --no-verify origin master → deny', () => {
+      expect(warden('git push --no-verify origin master').decision).toBe('deny');
+    });
+
+    it('git commit -n -m "x" → deny (-n shorthand)', () => {
+      expect(warden('git commit -n -m "x"').decision).toBe('deny');
+    });
+
+    it('git commit -nm "x" → deny (-n combined with -m)', () => {
+      expect(warden('git commit -nm "x"').decision).toBe('deny');
+    });
+
+    it('git -c core.hooksPath=/dev/null commit -m "x" → deny', () => {
+      expect(warden('git -c core.hooksPath=/dev/null commit -m "x"').decision).toBe('deny');
+    });
+
+    it('git log -n 5 → allow (-n outside commit)', () => {
+      expect(warden('git log -n 5').decision).toBe('allow');
+    });
+
+    it('git push -n origin master → allow (-n is dry-run for push)', () => {
+      expect(warden('git push -n origin master').decision).toBe('allow');
+    });
+
+    it('git commit -m "x" → allow (regression: normal commit)', () => {
+      expect(warden('git commit -m "x"').decision).toBe('allow');
+    });
   });
 
   describe('Docker container whitelisting end-to-end', () => {
