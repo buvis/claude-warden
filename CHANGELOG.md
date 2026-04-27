@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-27
+
 ### Added
 
 - **defaults**: common script aliases (typecheck, lint, format, check) and pnpm workspace flags (--filter, --recursive, --workspace-root) auto-allowed (from upstream 631c369)
