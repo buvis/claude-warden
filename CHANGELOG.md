@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-27
+
 ### Added
 
 - **defaults**: educational reason for inline interpreter scripts (`python -c`, `node -e`/`-p`/`--eval`, `perl -e`/`-E`, `ruby -e`, `php -r`) - reason now nudges Claude toward `jq` for JSON or saving the script to `scripts/*.{ext}` (from upstream b7141e2)
