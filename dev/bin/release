@@ -4,16 +4,35 @@ set -euo pipefail
 BUMP="${1:-patch}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-MARKETPLACE_ROOT="$(cd "$REPO_ROOT/../claude-plugins" 2>/dev/null && pwd)"
+MARKETPLACE_ROOT="$REPO_ROOT/../claude-plugins"
 MARKETPLACE="$MARKETPLACE_ROOT/.claude-plugin/marketplace.json"
+
+CURRENT_STEP=""
+on_error() {
+  local exit_code=$?
+  local line=$1
+  echo "" >&2
+  if [ -n "$CURRENT_STEP" ]; then
+    echo "[release] FAILED during: $CURRENT_STEP" >&2
+  fi
+  echo "[release] exit $exit_code at line $line" >&2
+  exit "$exit_code"
+}
+trap 'on_error $LINENO' ERR
+
+step() {
+  CURRENT_STEP="$1"
+  echo "[release] $CURRENT_STEP"
+}
 
 case "$BUMP" in
   patch|minor|major) ;;
-  *) echo "Usage: $0 [patch|minor|major] (default: patch)" && exit 1 ;;
+  *) echo "Usage: $0 [patch|minor|major] (default: patch)" >&2 && exit 1 ;;
 esac
 
 # --- Preflight checks ---
 
+step "checking CHANGELOG.md has [Unreleased] section"
 if ! grep -q '## \[Unreleased\]' CHANGELOG.md; then
   echo "Error: no [Unreleased] section in CHANGELOG.md" >&2
   exit 1
@@ -24,8 +43,16 @@ if ! echo "$UNRELEASED" | grep -q '^### '; then
   exit 1
 fi
 
+step "checking marketplace repo at $MARKETPLACE_ROOT"
+if [ ! -d "$MARKETPLACE_ROOT" ]; then
+  echo "Error: marketplace repo not cloned at $MARKETPLACE_ROOT" >&2
+  echo "       Run: git clone git@github.com:buvis/claude-plugins.git $MARKETPLACE_ROOT" >&2
+  exit 1
+fi
+MARKETPLACE_ROOT="$(cd "$MARKETPLACE_ROOT" && pwd)"
+MARKETPLACE="$MARKETPLACE_ROOT/.claude-plugin/marketplace.json"
 if [ ! -f "$MARKETPLACE" ]; then
-  echo "Error: marketplace not found at $MARKETPLACE" >&2
+  echo "Error: marketplace.json not found at $MARKETPLACE" >&2
   exit 1
 fi
 if [ -n "$(git -C "$MARKETPLACE_ROOT" status --porcelain)" ]; then
@@ -33,42 +60,59 @@ if [ -n "$(git -C "$MARKETPLACE_ROOT" status --porcelain)" ]; then
   exit 1
 fi
 
+step "checking working tree is clean"
 if [ -n "$(git status --porcelain)" ]; then
   echo "Error: working tree has uncommitted changes" >&2
+  git status --short >&2
   exit 1
 fi
 
+step "checking required tools (jq, perl, pnpm)"
 for cmd in jq perl pnpm; do
   if ! command -v "$cmd" &>/dev/null; then
-    echo "Error: $cmd not found" >&2
+    echo "Error: $cmd not found in PATH" >&2
     exit 1
   fi
 done
 
+step "running tests"
 if ! pnpm run test --silent; then
-  echo "Error: tests fail before release" >&2
+  echo "Error: tests fail before release - re-run 'pnpm run test' to see failures" >&2
   exit 1
 fi
 
 # --- Release ---
 
+step "bumping version ($BUMP)"
 pnpm version "$BUMP" --no-git-tag-version
 VERSION=$(jq -r .version package.json)
 DATE=$(date +%Y-%m-%d)
 
+step "stamping CHANGELOG.md with v$VERSION ($DATE)"
 perl -i -pe "s/^## \\[Unreleased\\]/## [Unreleased]\\n\\n## [$VERSION] - $DATE/" CHANGELOG.md
 
+step "syncing plugin/marketplace versions"
 pnpm run sync-plugin-version
+
+step "building dist"
 pnpm run build
 
+step "committing release v$VERSION"
 git add -A
 git commit -m "chore: release v$VERSION"
+
+step "pushing to origin"
 git push
 
+step "bumping marketplace.json to v$VERSION"
 perl -i -pe "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MARKETPLACE"
 git -C "$MARKETPLACE_ROOT" add .claude-plugin/marketplace.json
 git -C "$MARKETPLACE_ROOT" commit -m "chore: bump warden to v$VERSION"
-git -C "$MARKETPLACE_ROOT" push
-echo "Marketplace updated to v$VERSION"
 
-echo "Released v$VERSION"
+step "pushing marketplace"
+git -C "$MARKETPLACE_ROOT" push
+
+CURRENT_STEP=""
+echo ""
+echo "[release] ✓ released v$VERSION"
+echo "[release] ✓ marketplace updated to v$VERSION"
