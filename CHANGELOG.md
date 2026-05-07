@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.2] - 2026-05-07
+
+### Bug Fixes
+- fix(parser): bump bash-parser to 0.6.0 for process substitution (23c3e5a)
+
 ## [2.10.1] - 2026-04-29
 
 ### Bug Fixes
