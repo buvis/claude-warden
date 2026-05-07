@@ -167,9 +167,9 @@ var require_compose_function = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/shell-lexer.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/shell-lexer.js
 var require_shell_lexer = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/shell-lexer.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/shell-lexer.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var posixShellLexer = (mode, options) => ({
@@ -221,9 +221,9 @@ var require_shell_lexer = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/logger-phase.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/logger-phase.js
 var require_logger_phase = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/logger-phase.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/logger-phase.js"(exports2, module2) {
     "use strict";
     var logger = (name) => () => function* (tokens) {
       for (const tk of tokens) {
@@ -274,9 +274,9 @@ var require_filter_obj = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/operators.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/operators.js
 var require_operators = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/operators.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/operators.js"(exports2, module2) {
     "use strict";
     var operators = {
       "&": "AND",
@@ -301,9 +301,9 @@ var require_operators = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/tokens.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/tokens.js
 var require_tokens = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/tokens.js"(exports2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/tokens.js"(exports2) {
     "use strict";
     var hasOwnProperty = require_has_own_property();
     var filter = require_filter_obj();
@@ -424,9 +424,9 @@ var require_tokens = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/is-valid-name.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/is-valid-name.js
 var require_is_valid_name = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/is-valid-name.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/is-valid-name.js"(exports2, module2) {
     "use strict";
     module2.exports = function isValidName(text) {
       return /^[a-zA-Z_]\w*$/.test(text);
@@ -558,9 +558,9 @@ var require_iterable_transform_replace = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/index.js
 var require_utils = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/index.js"(exports2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/index.js"(exports2) {
     "use strict";
     exports2.loggerPhase = require_logger_phase();
     exports2.tokens = require_tokens();
@@ -659,9 +659,9 @@ var require_transform_spread_iterable = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/bash/rules/alias-substitution.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/bash/rules/alias-substitution.js
 var require_alias_substitution = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/bash/rules/alias-substitution.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/bash/rules/alias-substitution.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var identity = require_identity_function();
@@ -718,9 +718,9 @@ var require_alias_substitution = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/bash/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/bash/index.js
 var require_bash = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/bash/index.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/bash/index.js"(exports2, module2) {
     "use strict";
     var bashAliasSubstitution = require_alias_substitution();
     var name = "[a-zA-Z_][a-zA-Z0-9_]*";
@@ -920,9 +920,9 @@ var require_array_last = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/ast-builder.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/ast-builder.js
 var require_ast_builder = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/ast-builder.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/ast-builder.js"(exports2, module2) {
     "use strict";
     module2.exports = (options) => {
       const builder = {};
@@ -1204,9 +1204,9 @@ var require_deep_freeze = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/end.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/end.js
 var require_end = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/end.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/end.js"(exports2, module2) {
     "use strict";
     var eof = require_tokens().eof;
     module2.exports = function end() {
@@ -1218,9 +1218,9 @@ var require_end = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/operator.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/operator.js
 var require_operator = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/operator.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/operator.js"(exports2, module2) {
     "use strict";
     var t = require_tokens();
     var isPartOfOperator = t.isPartOfOperator;
@@ -1237,6 +1237,18 @@ var require_operator = __commonJS({
           };
         }
         return reducers.start(state, char);
+      }
+      if ((state.current === "<" || state.current === ">") && char === "(") {
+        const kind = state.current === "<" ? "in" : "out";
+        return {
+          nextReduction: reducers.processSubstitution,
+          nextState: state.appendChar(char).setExpansion(
+            (state.expansion || []).concat({
+              kind,
+              loc: { start: Object.assign({}, state.loc.start) }
+            })
+          )
+        };
       }
       if (isPartOfOperator(state.current + char)) {
         return {
@@ -1265,9 +1277,9 @@ var require_operator = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/comment.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/comment.js
 var require_comment = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/comment.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/comment.js"(exports2, module2) {
     "use strict";
     var newLine = require_tokens().newLine;
     module2.exports = function comment(state, source, reducers) {
@@ -1293,9 +1305,9 @@ var require_comment = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/single-quoting.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/single-quoting.js
 var require_single_quoting = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/single-quoting.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/single-quoting.js"(exports2, module2) {
     "use strict";
     var t = require_tokens();
     var tokenOrEmpty = t.tokenOrEmpty;
@@ -1323,9 +1335,9 @@ var require_single_quoting = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/double-quoting.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/double-quoting.js
 var require_double_quoting = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/double-quoting.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/double-quoting.js"(exports2, module2) {
     "use strict";
     var t = require_tokens();
     var tokenOrEmpty = t.tokenOrEmpty;
@@ -1372,9 +1384,9 @@ var require_double_quoting = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-start.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-start.js
 var require_expansion_start = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-start.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-start.js"(exports2, module2) {
     "use strict";
     function isSpecialParameter(char) {
       return char.match(/^[\d\-!@#?*$]$/);
@@ -1411,9 +1423,9 @@ var require_expansion_start = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-tick.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-tick.js
 var require_expansion_command_tick = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-tick.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-tick.js"(exports2, module2) {
     "use strict";
     var last = require_array_last();
     var t = require_tokens();
@@ -1453,9 +1465,9 @@ var require_expansion_command_tick = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/start.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/start.js
 var require_start = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/start.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/start.js"(exports2, module2) {
     "use strict";
     var t = require_tokens();
     var tokenOrEmpty = t.tokenOrEmpty;
@@ -1540,9 +1552,9 @@ var require_start = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-arithmetic.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-arithmetic.js
 var require_expansion_arithmetic = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-arithmetic.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-arithmetic.js"(exports2, module2) {
     "use strict";
     var last = require_array_last();
     var t = require_tokens();
@@ -1577,9 +1589,9 @@ var require_expansion_arithmetic = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-special-parameter.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-special-parameter.js
 var require_expansion_special_parameter = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-special-parameter.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-special-parameter.js"(exports2, module2) {
     "use strict";
     var last = require_array_last();
     module2.exports = function expansionSpecialParameter(state, source, _reducers) {
@@ -1597,9 +1609,9 @@ var require_expansion_special_parameter = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter.js
 var require_expansion_parameter = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter.js"(exports2, module2) {
     "use strict";
     var last = require_array_last();
     module2.exports = function expansionParameter(state, source, reducers) {
@@ -1630,9 +1642,9 @@ var require_expansion_parameter = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-or-arithmetic.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-or-arithmetic.js
 var require_expansion_command_or_arithmetic = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-or-arithmetic.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-command-or-arithmetic.js"(exports2, module2) {
     "use strict";
     var last = require_array_last();
     var t = require_tokens();
@@ -1674,9 +1686,9 @@ var require_expansion_command_or_arithmetic = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter-extended.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter-extended.js
 var require_expansion_parameter_extended = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter-extended.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/expansion-parameter-extended.js"(exports2, module2) {
     "use strict";
     var last = require_array_last();
     var t = require_tokens();
@@ -1710,9 +1722,65 @@ var require_expansion_parameter_extended = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/process-substitution.js
+var require_process_substitution = __commonJS({
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/process-substitution.js"(exports2, module2) {
+    "use strict";
+    var last = require_array_last();
+    var t = require_tokens();
+    var continueToken = t.continueToken;
+    module2.exports = function processSubstitution(state, source, reducers) {
+      const char = source && source.shift();
+      const xp = last(state.expansion);
+      const depth = xp.depth || 0;
+      if (char === void 0) {
+        return {
+          nextReduction: state.previousReducer,
+          tokensToEmit: [continueToken(state.current[0] + "(")],
+          nextState: state.replaceLastExpansion({
+            loc: Object.assign({}, xp.loc, { end: state.loc.previous })
+          })
+        };
+      }
+      if (char === "(") {
+        return {
+          nextReduction: reducers.processSubstitution,
+          nextState: state.appendChar(char).replaceLastExpansion({
+            command: (xp.command || "") + char,
+            depth: depth + 1
+          })
+        };
+      }
+      if (char === ")" && depth > 0) {
+        return {
+          nextReduction: reducers.processSubstitution,
+          nextState: state.appendChar(char).replaceLastExpansion({
+            command: (xp.command || "") + char,
+            depth: depth - 1
+          })
+        };
+      }
+      if (char === ")") {
+        delete xp.depth;
+        return {
+          nextReduction: state.previousReducer,
+          nextState: state.appendChar(char).replaceLastExpansion({
+            type: "process_substitution",
+            loc: Object.assign({}, xp.loc, { end: state.loc.current })
+          })
+        };
+      }
+      return {
+        nextReduction: reducers.processSubstitution,
+        nextState: state.appendChar(char).replaceLastExpansion({ command: (xp.command || "") + char })
+      };
+    };
+  }
+});
+
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/index.js
 var require_reducers = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/index.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/reducers/index.js"(exports2, module2) {
     "use strict";
     var end = require_end();
     var operator = require_operator();
@@ -1727,6 +1795,7 @@ var require_reducers = __commonJS({
     var expansionParameter = require_expansion_parameter();
     var expansionCommandOrArithmetic = require_expansion_command_or_arithmetic();
     var expansionParameterExtended = require_expansion_parameter_extended();
+    var processSubstitution = require_process_substitution();
     module2.exports = {
       end,
       operator,
@@ -1740,14 +1809,15 @@ var require_reducers = __commonJS({
       expansionSpecialParameter,
       expansionParameter,
       expansionCommandOrArithmetic,
-      expansionParameterExtended
+      expansionParameterExtended,
+      processSubstitution
     };
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/index.js
 var require_tokenizer = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/index.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/tokenizer/index.js"(exports2, module2) {
     "use strict";
     var deepFreeze = require_deep_freeze();
     var last = require_array_last();
@@ -2911,9 +2981,9 @@ var init_magic_string_es6 = __esm({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/field-splitting.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/field-splitting.js
 var require_field_splitting = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/field-splitting.js"(exports2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/field-splitting.js"(exports2) {
     "use strict";
     var map = require_map_iterable();
     var merge = require_transform_spread_iterable();
@@ -2946,9 +3016,9 @@ var require_field_splitting = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/parameter-expansion.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/parameter-expansion.js
 var require_parameter_expansion = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/parameter-expansion.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/parameter-expansion.js"(exports2, module2) {
     "use strict";
     var mapObj = require_map_obj();
     var filter = require_filter_obj();
@@ -3033,9 +3103,9 @@ var require_parameter_expansion = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/command-expansion.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/command-expansion.js
 var require_command_expansion = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/command-expansion.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/command-expansion.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     var MagicString2 = (init_magic_string_es6(), __toCommonJS(magic_string_es6_exports));
@@ -3084,6 +3154,35 @@ var require_command_expansion = __commonJS({
       return token;
     });
     module2.exports = commandExpansion;
+  }
+});
+
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/process-substitution.js
+var require_process_substitution2 = __commonJS({
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/process-substitution.js"(exports2, module2) {
+    "use strict";
+    var map = require_map_iterable();
+    var tokensUtils = require_tokens();
+    function setProcessSubstitution(xp) {
+      const bashParser = require_src();
+      const commandAST = bashParser(xp.command);
+      return Object.assign({}, xp, { commandAST });
+    }
+    var processSubstitution = () => map((token) => {
+      if (token.is("WORD") || token.is("ASSIGNMENT_WORD")) {
+        if (!token.expansion || token.expansion.length === 0) {
+          return token;
+        }
+        return tokensUtils.setExpansions(token, token.expansion.map((xp) => {
+          if (xp.type === "process_substitution") {
+            return setProcessSubstitution(xp);
+          }
+          return xp;
+        }));
+      }
+      return token;
+    });
+    module2.exports = processSubstitution;
   }
 });
 
@@ -8668,9 +8767,9 @@ var require_lib = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/arithmetic-expansion.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/arithmetic-expansion.js
 var require_arithmetic_expansion = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/arithmetic-expansion.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/arithmetic-expansion.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     var babylon = require_lib();
@@ -8727,9 +8826,9 @@ var require_arithmetic_expansion = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/alias-substitution.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/alias-substitution.js
 var require_alias_substitution2 = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/alias-substitution.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/alias-substitution.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var identity = require_identity_function();
@@ -8835,9 +8934,9 @@ var require_to_pascal_case = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/default-node-type.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/default-node-type.js
 var require_default_node_type = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/default-node-type.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/default-node-type.js"(exports2, module2) {
     "use strict";
     var toPascal = require_to_pascal_case();
     var map = require_map_iterable();
@@ -8856,9 +8955,9 @@ var require_default_node_type = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/tilde-expanding.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/tilde-expanding.js
 var require_tilde_expanding = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/tilde-expanding.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/tilde-expanding.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     var tokens = require_tokens();
@@ -8889,9 +8988,9 @@ var require_tilde_expanding = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/path-expansion.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/path-expansion.js
 var require_path_expansion = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/path-expansion.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/path-expansion.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     var tokens = require_tokens();
@@ -9101,9 +9200,9 @@ var require_dist = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/quote-removal.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/quote-removal.js
 var require_quote_removal = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/quote-removal.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/quote-removal.js"(exports2, module2) {
     "use strict";
     var parse2 = require_shell_quote_word();
     var unescape = require_dist();
@@ -9210,9 +9309,9 @@ var require_iterable_lookahead = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-simplecommand-names.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-simplecommand-names.js
 var require_identify_simplecommand_names = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-simplecommand-names.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-simplecommand-names.js"(exports2, module2) {
     "use strict";
     var lookahead = require_iterable_lookahead();
     var compose = require_compose_function();
@@ -9255,9 +9354,9 @@ var require_identify_simplecommand_names = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-maybe-simple-commands.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-maybe-simple-commands.js
 var require_identify_maybe_simple_commands = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-maybe-simple-commands.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/identify-maybe-simple-commands.js"(exports2, module2) {
     "use strict";
     var values = require_object_values();
     var compose = require_compose_function();
@@ -9275,9 +9374,9 @@ var require_identify_maybe_simple_commands = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/operator-tokens.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/operator-tokens.js
 var require_operator_tokens = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/operator-tokens.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/operator-tokens.js"(exports2, module2) {
     "use strict";
     var hasOwnProperty = require_has_own_property();
     var map = require_map_iterable();
@@ -9300,9 +9399,9 @@ var require_operator_tokens = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/reserved-words.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/reserved-words.js
 var require_reserved_words = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/reserved-words.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/reserved-words.js"(exports2, module2) {
     "use strict";
     var hasOwnProperty = require_has_own_property();
     var values = require_object_values();
@@ -9358,9 +9457,9 @@ var require_reverse_arguments = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/filter.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/filter.js
 var require_filter = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/filter.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/filter.js"(exports2, module2) {
     "use strict";
     var filterIterator = require_filter_iterator();
     var reverse = require_reverse_arguments();
@@ -9370,9 +9469,9 @@ var require_filter = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/non-null.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/non-null.js
 var require_non_null = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/utils/non-null.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/utils/non-null.js"(exports2, module2) {
     "use strict";
     var filter = require_filter();
     var nonNull = (tk) => tk !== null;
@@ -9381,9 +9480,9 @@ var require_non_null = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/separator.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/separator.js
 var require_separator = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/separator.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/separator.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var map = require_map_iterable();
@@ -9433,9 +9532,9 @@ var require_separator = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/linebreak-in.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/linebreak-in.js
 var require_linebreak_in = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/linebreak-in.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/linebreak-in.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var map = require_map_iterable();
@@ -9472,9 +9571,9 @@ var require_linebreak_in = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/for-name-variable.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/for-name-variable.js
 var require_for_name_variable = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/for-name-variable.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/for-name-variable.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var map = require_map_iterable();
@@ -9492,9 +9591,9 @@ var require_for_name_variable = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/function-name.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/function-name.js
 var require_function_name = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/function-name.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/function-name.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var map = require_map_iterable();
@@ -9510,9 +9609,9 @@ var require_function_name = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/io-number.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/io-number.js
 var require_io_number = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/io-number.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/io-number.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var map = require_map_iterable();
@@ -9529,9 +9628,9 @@ var require_io_number = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/new-line-list.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/new-line-list.js
 var require_new_line_list = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/new-line-list.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/new-line-list.js"(exports2, module2) {
     "use strict";
     var compose = require_compose_function();
     var map = require_map_iterable();
@@ -9557,9 +9656,9 @@ var require_new_line_list = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/assignment-word.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/assignment-word.js
 var require_assignment_word = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/assignment-word.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/assignment-word.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     var isValidName = require_is_valid_name();
@@ -9579,9 +9678,9 @@ var require_assignment_word = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/syntaxerror-oncontinue.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/syntaxerror-oncontinue.js
 var require_syntaxerror_oncontinue = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/syntaxerror-oncontinue.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/syntaxerror-oncontinue.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     module2.exports = function syntaxerrorOnContinue() {
@@ -9595,12 +9694,13 @@ var require_syntaxerror_oncontinue = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/index.js
 var require_rules = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/rules/index.js"(exports2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/rules/index.js"(exports2) {
     "use strict";
     exports2.parameterExpansion = require_parameter_expansion();
     exports2.commandExpansion = require_command_expansion();
+    exports2.processSubstitution = require_process_substitution2();
     exports2.arithmeticExpansion = require_arithmetic_expansion();
     exports2.aliasSubstitution = require_alias_substitution2();
     exports2.defaultNodeType = require_default_node_type();
@@ -9623,9 +9723,9 @@ var require_rules = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/grammar.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/grammar.js
 var require_grammar = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/grammar.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/grammar.js"(exports2, module2) {
     "use strict";
     module2.exports = {
       start: "complete_command",
@@ -10074,9 +10174,9 @@ var require_grammar = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/io-file-operators.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/io-file-operators.js
 var require_io_file_operators = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/io-file-operators.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/io-file-operators.js"(exports2, module2) {
     "use strict";
     var ioFileOperators = module2.exports = [
       "LESS",
@@ -10099,9 +10199,9 @@ var require_io_file_operators = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/parameter-operators.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/parameter-operators.js
 var require_parameter_operators = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/parameter-operators.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/parameter-operators.js"(exports2, module2) {
     "use strict";
     var name = "[a-zA-Z_][a-zA-Z0-9_]*";
     var parameterOps = {
@@ -10214,9 +10314,9 @@ var require_parameter_operators = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/reserved-words.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/reserved-words.js
 var require_reserved_words2 = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/reserved-words.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/reserved-words.js"(exports2, module2) {
     "use strict";
     module2.exports = {
       "if": "If",
@@ -10239,9 +10339,9 @@ var require_reserved_words2 = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/index.js
 var require_enums = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/enums/index.js"(exports2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/enums/index.js"(exports2) {
     "use strict";
     exports2.IOFileOperators = require_io_file_operators();
     exports2.operators = require_operators();
@@ -10250,9 +10350,9 @@ var require_enums = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/built-grammar.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/built-grammar.js
 var require_built_grammar = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/built-grammar.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/built-grammar.js"(exports2, module2) {
     "use strict";
     var parser = (function() {
       var o = function(k, v, o2, l) {
@@ -10654,9 +10754,9 @@ var require_built_grammar = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/index.js
 var require_posix = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/posix/index.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/posix/index.js"(exports2, module2) {
     "use strict";
     var astBuilder = require_ast_builder();
     var tokenizer = require_tokenizer();
@@ -10675,6 +10775,7 @@ var require_posix = __commonJS({
       phaseCatalog.parameterExpansion,
       phaseCatalog.arithmeticExpansion,
       phaseCatalog.commandExpansion,
+      phaseCatalog.processSubstitution,
       phaseCatalog.forNameVariable,
       phaseCatalog.functionName,
       phaseCatalog.identifySimpleCommandNames,
@@ -10714,9 +10815,9 @@ var require_posix = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/word-expansion/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/word-expansion/index.js
 var require_word_expansion = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/modes/word-expansion/index.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/modes/word-expansion/index.js"(exports2, module2) {
     "use strict";
     var map = require_map_iterable();
     var tokenOrEmpty = require_tokens().tokenOrEmpty;
@@ -10802,9 +10903,9 @@ var require_word_expansion = __commonJS({
   }
 });
 
-// node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/index.js
+// node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/index.js
 var require_src = __commonJS({
-  "node_modules/.pnpm/@banyudu+bash-parser@0.5.2/node_modules/@banyudu/bash-parser/src/index.js"(exports2, module2) {
+  "node_modules/.pnpm/@banyudu+bash-parser@0.6.0/node_modules/@banyudu/bash-parser/src/index.js"(exports2, module2) {
     "use strict";
     var shellLexer = require_shell_lexer();
     var utils = require_utils();

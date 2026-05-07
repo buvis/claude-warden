@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       bash-parser:
-        specifier: npm:@banyudu/bash-parser@0.5.2
-        version: '@banyudu/bash-parser@0.5.2'
+        specifier: npm:@banyudu/bash-parser@0.6.0
+        version: '@banyudu/bash-parser@0.6.0'
       yaml:
         specifier: ^2.4.0
         version: 2.8.2
@@ -30,8 +30,8 @@ importers:
 
 packages:
 
-  '@banyudu/bash-parser@0.5.2':
-    resolution: {integrity: sha512-0af6g3sKX5fR069PKgTLOviAssfcfYfgf8VJmMLr15KVBJq90exCZsx95O5kjU9C/wxzycQVDYtk6fiAlLft5g==}
+  '@banyudu/bash-parser@0.6.0':
+    resolution: {integrity: sha512-Bl74U5x4l+OTqIxRCU8VC2xGi89LheTLmET1skKeC6Iq+gnMJfXJkI5yqPC6n2mWGe9LY2xWfXggcCE1+IiUqw==}
     engines: {node: '>=10'}
 
   '@esbuild/aix-ppc64@0.21.5':
@@ -1038,7 +1038,7 @@ packages:
 
 snapshots:
 
-  '@banyudu/bash-parser@0.5.2':
+  '@banyudu/bash-parser@0.6.0':
     dependencies:
       array-last: 1.3.0
       babylon: 6.18.0
