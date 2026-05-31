@@ -1,24 +1,27 @@
 const fs = require('fs');
 const pkg = require('../package.json');
 
-const targets = [
-  '.claude-plugin/plugin.json',
-  '.claude-plugin/marketplace.json',
-];
+const pluginManifest = '.claude-plugin/plugin.json';
+const marketplaceManifest = '.claude-plugin/marketplace.json';
 
-for (const file of targets) {
-  const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
-  if (data.version !== undefined) {
-    data.version = pkg.version;
-  }
-  if (Array.isArray(data.plugins)) {
-    for (const plugin of data.plugins) {
-      if (plugin.version !== undefined) {
-        plugin.version = pkg.version;
-      }
-    }
-  }
-  fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
+// This plugin's own name, used to target the right marketplace entry so a
+// release never overwrites the versions of OTHER plugins in the list.
+const selfName = JSON.parse(fs.readFileSync(pluginManifest, 'utf-8')).name;
+
+// 1. This plugin's own manifest tracks pkg.version directly.
+const plugin = JSON.parse(fs.readFileSync(pluginManifest, 'utf-8'));
+plugin.version = pkg.version;
+fs.writeFileSync(pluginManifest, JSON.stringify(plugin, null, 2) + '\n');
+
+// 2. In the marketplace, touch ONLY this plugin's entry. Never loop-stamp every
+//    plugin: doing so is what once clobbered the whole list to one version.
+const marketplace = JSON.parse(fs.readFileSync(marketplaceManifest, 'utf-8'));
+const entry = (marketplace.plugins || []).find((p) => p.name === selfName);
+if (!entry) {
+  console.error(`No marketplace entry named "${selfName}"; nothing synced.`);
+  process.exit(1);
 }
+entry.version = pkg.version;
+fs.writeFileSync(marketplaceManifest, JSON.stringify(marketplace, null, 2) + '\n');
 
-console.log(`Synced version ${pkg.version} to ${targets.join(', ')}`);
+console.log(`Synced ${selfName} version ${pkg.version} to ${pluginManifest} and ${marketplaceManifest}`);
