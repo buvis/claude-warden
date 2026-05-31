@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **scanner**: ruby and php now use the same content scanner as python/node/perl - inline code (`-e`/`-r`) and script files (`.rb`/`.php`) are scanned, so a safe script file is auto-allowed instead of prompting
+
+### Fixed
+
+- **evaluator**: chain-resolved command provenance (`$VAR` -> binary) is now recorded in the audit log for every decision, not just auto-allowed ones
+
 ## [0.11.0] - 2026-04-27
 
 ### Added

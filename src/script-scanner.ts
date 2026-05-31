@@ -2,7 +2,7 @@ import { readFileSync, statSync } from 'fs';
 import { resolve, isAbsolute } from 'path';
 
 export type ScanLevel = 'dangerous' | 'cautious';
-export type Language = 'python' | 'typescript' | 'perl';
+export type Language = 'python' | 'typescript' | 'perl' | 'ruby' | 'php';
 
 export interface ScanResult {
   level: ScanLevel;
@@ -94,10 +94,48 @@ const PERL_PATTERNS: ScanPattern[] = [
   { regex: /\bFile::Path::remove_tree\b/, level: 'cautious', reason: 'removes directory trees' },
 ];
 
+// ─── Ruby patterns ───
+
+const RUBY_PATTERNS: ScanPattern[] = [
+  // Dangerous
+  { regex: /`[^`]+`/, level: 'dangerous', reason: 'backtick execution runs shell commands' },
+  { regex: /%x[(\{[]/, level: 'dangerous', reason: '%x{} executes shell commands' },
+  { regex: /\bsystem\s*\(/, level: 'dangerous', reason: 'system() executes shell commands' },
+  { regex: /\bexec\s*\(/, level: 'dangerous', reason: 'exec() replaces the process with a shell command' },
+  { regex: /\bIO\.popen\b/, level: 'dangerous', reason: 'IO.popen executes shell commands' },
+  { regex: /\bKernel\./, level: 'dangerous', reason: 'Kernel methods can execute shell commands' },
+  { regex: /\bspawn\s*\(/, level: 'dangerous', reason: 'spawn() executes shell commands' },
+
+  // Cautious
+  { regex: /\bFile\.open\s*\([^)]*['"][wax+]/, level: 'cautious', reason: 'opens file for writing' },
+  { regex: /\bFile\.write\b/, level: 'cautious', reason: 'writes to file' },
+  { regex: /\bopen-uri\b/, level: 'cautious', reason: 'makes HTTP requests' },
+  { regex: /\bNet::HTTP\b/, level: 'cautious', reason: 'makes HTTP requests' },
+];
+
+// ─── PHP patterns ───
+
+const PHP_PATTERNS: ScanPattern[] = [
+  // Dangerous
+  { regex: /`[^`]+`/, level: 'dangerous', reason: 'backtick execution runs shell commands' },
+  { regex: /\bshell_exec\b/, level: 'dangerous', reason: 'shell_exec() executes shell commands' },
+  { regex: /\b(?:system|passthru|popen|proc_open)\s*\(/, level: 'dangerous', reason: 'executes shell commands' },
+  { regex: /\bexec\s*\(/, level: 'dangerous', reason: 'exec() executes shell commands' },
+
+  // Cautious
+  { regex: /\bfile_put_contents\b/, level: 'cautious', reason: 'writes to file' },
+  { regex: /\bfwrite\b/, level: 'cautious', reason: 'writes to file' },
+  { regex: /\bfopen\s*\([^)]*['"][wax+]/, level: 'cautious', reason: 'opens file for writing' },
+  { regex: /\bcurl_exec\b/, level: 'cautious', reason: 'makes HTTP requests' },
+  { regex: /\bfsockopen\b/, level: 'cautious', reason: 'opens network connection' },
+];
+
 const PATTERNS_BY_LANGUAGE: Record<Language, ScanPattern[]> = {
   python: PYTHON_PATTERNS,
   typescript: TYPESCRIPT_PATTERNS,
   perl: PERL_PATTERNS,
+  ruby: RUBY_PATTERNS,
+  php: PHP_PATTERNS,
 };
 
 const MAX_SCRIPT_SIZE = 1024 * 1024; // 1MB

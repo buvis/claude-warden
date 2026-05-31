@@ -5,6 +5,7 @@ import { sendNotification } from './notify';
 import { logDecision } from './audit';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
 import { buildDefaultSessionGuidance, DEFAULT_TEMP_SCRIPT_DIR } from './defaults';
+import { readStdin } from './stdin';
 import type { HookInput, HookOutput, WardenConfig } from './types';
 
 function handleSessionStart(config: WardenConfig): never {
@@ -30,21 +31,19 @@ const MAX_STDIN_SIZE = 1024 * 1024; // 1MB
 
 async function main() {
   const startTime = Date.now();
-  let raw = '';
-  for await (const chunk of process.stdin) {
-    raw += chunk;
-    if (raw.length > MAX_STDIN_SIZE) {
-      const output = {
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'ask',
-          permissionDecisionReason: '[warden] Input exceeds size limit',
-        },
-      };
-      process.stdout.write(JSON.stringify(output));
-      process.exit(0);
-    }
+  const stdin = await readStdin(MAX_STDIN_SIZE);
+  if ('tooLarge' in stdin) {
+    const output = {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'ask',
+        permissionDecisionReason: '[warden] Input exceeds size limit',
+      },
+    };
+    process.stdout.write(JSON.stringify(output));
+    process.exit(0);
   }
+  const raw = stdin.data;
 
   let input: HookInput;
   try {

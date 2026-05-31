@@ -1506,6 +1506,24 @@ describe('evaluator', () => {
       expect(r.details[0].resolvedFrom).toBe('$ZDB');
     });
 
+    it('copies resolvedFrom to results from specialized evaluators', () => {
+      // defaultDecision 'deny' disables the chain-resolved auto-allow (1c), so the
+      // resolved `node` command routes through the script evaluator (tryScriptEval).
+      // Provenance must still be stamped on that result for the audit log.
+      const r = evalWith('N=node && $N --version', { defaultDecision: 'deny' });
+      const detail = r.details.find(d => d.command === 'node');
+      expect(detail?.decision).toBe('allow');
+      expect(detail?.resolvedFrom).toBe('$N');
+    });
+
+    it('copies resolvedFrom to command-rule results', () => {
+      // `git` has a rule, so the chain-resolved auto-allow defers and the command-rule
+      // layer decides. Provenance is stamped uniformly regardless of which layer wins.
+      const r = eval_('G=git && $G status');
+      const detail = r.details.find(d => d.command === 'git');
+      expect(detail?.resolvedFrom).toBe('$G');
+    });
+
     it('full chain integration: 0 prompts for assign+resolve+cleanup', () => {
       const r = eval_('TMPDIR=$(mktemp -d) && ZDB=/path/to/zdb && $ZDB init && rm -rf $TMPDIR');
       expect(r.decision).toBe('allow');
@@ -1661,6 +1679,10 @@ describe('script safety scanning', () => {
     writeFileSync(join(scriptDir, 'safe.ts'), 'const x: number = 1 + 2; console.log(x)');
     writeFileSync(join(scriptDir, 'safe.pl'), 'print "hello\\n"');
     writeFileSync(join(scriptDir, 'dangerous.pl'), 'system("ls -la")');
+    writeFileSync(join(scriptDir, 'safe.rb'), 'puts "hello"');
+    writeFileSync(join(scriptDir, 'dangerous.rb'), 'system("ls -la")');
+    writeFileSync(join(scriptDir, 'safe.php'), '<?php echo "hello";');
+    writeFileSync(join(scriptDir, 'dangerous.php'), '<?php shell_exec("ls");');
   });
 
   afterAll(() => {
@@ -1865,6 +1887,68 @@ describe('script safety scanning', () => {
       const r = eval_('perl');
       expect(r.decision).toBe('ask');
       expect(r.reason).toContain('REPL');
+    });
+  });
+
+  describe('evaluateRubyCommand', () => {
+    it('allows ruby --version', () => {
+      expect(eval_('ruby --version').decision).toBe('allow');
+    });
+
+    it('allows ruby -e with safe code', () => {
+      expect(eval_('ruby -e "puts 1"').decision).toBe('allow');
+    });
+
+    it('asks for ruby -e with dangerous code', () => {
+      const r = eval_('ruby -e "system(\'ls\')"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('Ruby');
+    });
+
+    // New behavior: ruby script files are now scanned (previously fell through to ask).
+    it('allows ruby with safe .rb file', () => {
+      const r = evalWithCwd('ruby safe.rb', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for ruby with dangerous .rb file', () => {
+      const r = evalWithCwd('ruby dangerous.rb', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
+    });
+
+    it('asks for bare ruby (REPL)', () => {
+      const r = eval_('ruby');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('REPL');
+    });
+  });
+
+  describe('evaluatePhpCommand', () => {
+    it('allows php --version', () => {
+      expect(eval_('php --version').decision).toBe('allow');
+    });
+
+    it('allows php -r with safe code', () => {
+      expect(eval_('php -r "echo 1;"').decision).toBe('allow');
+    });
+
+    it('asks for php -r with dangerous code', () => {
+      const r = eval_('php -r "shell_exec(\'ls\');"');
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('PHP');
+    });
+
+    // New behavior: php script files are now scanned (previously fell through to ask).
+    it('allows php with safe .php file', () => {
+      const r = evalWithCwd('php safe.php', scriptDir);
+      expect(r.decision).toBe('allow');
+    });
+
+    it('asks for php with dangerous .php file', () => {
+      const r = evalWithCwd('php dangerous.php', scriptDir);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('dangerous');
     });
   });
 

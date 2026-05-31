@@ -20,12 +20,20 @@ Claude Warden is a Claude Code plugin that provides smart command safety filteri
 
 **Hook entry point**: `src/index.ts` reads JSON from stdin (Claude Code hook protocol), runs the parse→evaluate pipeline, and outputs the permission decision via stdout JSON or exit code 2 (deny).
 
-**Pipeline**: `index.ts` → `parser.ts` → `evaluator.ts` (with config from `rules.ts` + `defaults.ts`, target policies from `targets.ts`)
+**Pipeline**: `index.ts` → `parser.ts` → `evaluator.ts` (which delegates to `remote-exec.ts` / `subcommand-runner.ts` / `script-eval.ts`, with config from `rules.ts` + `defaults.ts`, target policies from `targets.ts`)
+
+**Command extraction split** (the principle for where logic lives): *syntactic* extraction — pipes, chains, control flow, subshells, `sh -c` quoting — happens in `parser.ts` (it needs the AST). *Semantic* delegation — which flags consume values for xargs/uv/npx, trusted-target gating for remotes — happens in the evaluator's specialized modules. Parser produces the syntactic command list; the evaluator resolves inner commands.
 
 - `src/parser.ts` - AST-based shell command parser using unbash. Walks the AST to extract commands from pipes, chains, control flow (while/if/for/case/functions). Extracts env prefixes, normalizes command paths to basename. Recursively parses `sh -c`/`bash -c` arguments. Extracts script path from `bash/sh/zsh script.sh` invocations (evaluates script, not shell). Detects subshells, process substitutions, and heredocs. Tracks chain-scoped variable assignments (`VAR=value && ...`) and resolves `$VAR` in command position.
-- `src/evaluator.ts` - Decision engine. Hierarchy: global deny patterns → alwaysDeny → alwaysAllow → chain-local auto-allow → target policies → command-specific rules with argument pattern matching → default decision. For pipelines/chains, combines per-command results (any deny → deny, any ask → ask, all allow → allow).
+- `src/evaluator.ts` - Decision engine. The hierarchy is an explicit ordered list of `DecisionLayer` functions evaluated in `evaluateCommand` (first non-null decision wins): `PRE_LAYERS` (scopedAlwaysPolicy → targetPolicyLayer) → `AUTO_ALLOW_LAYERS` (chainResolvedBinary, localBinary, tempDirRm, chainLocalRm — skipped entirely under `defaultDecision: 'deny'`) → `RESOLVE_LAYERS` (specialized evaluators → command rules) → configured default. Chain-resolved provenance (`resolvedFrom`) is stamped uniformly on every decision. For pipelines/chains, `evaluate` combines per-command results (any deny → deny, any ask → ask, all allow → allow).
+- `src/remote-exec.ts` - Trusted-remote evaluators (ssh/scp/rsync, docker, kubectl, sprite, fly). Each parses its CLI grammar to extract a target + inner command, matches the target against `trustedRemotes`, then recursively evaluates the inner command under context overrides. Entry point: `tryRemoteExec`.
+- `src/subcommand-runner.ts` - Wrapper commands that delegate to an inner command: uv run, xargs, find -exec, npx/bunx/pnpx. Entry point: `trySubcommandRunner`.
+- `src/script-eval.ts` - Script-safety evaluators for python/node/perl/ruby/php: inline code (`-c`/`-e`/`-r`), script files, modules, REPL. Scans content via `script-scanner.ts`. Entry point: `tryScriptEval`.
+- `src/script-scanner.ts` - Content scanner: regex pattern tables per language (python/typescript/perl/ruby/php) classifying code as dangerous/cautious/safe. Heuristic, best-effort. **The allow path is load-bearing (upgrades ask→allow for plausibly-safe scripts); the ask path is a nudge, not a security boundary — trivial obfuscation evades it.**
+- `src/args.ts` - Shared arg helpers: `makeCommand` (build a bare ParsedCommand) and `skipLeadingFlags` (flag-walker for uv/npx).
+- `src/stdin.ts` - Shared `readStdin` (size-guarded) for the `index.ts` and `copilot.ts` hook entry points.
 - `src/defaults.ts` - Built-in rules for ~100 common dev commands. Three tiers: always-allow (cat, ls, grep...), always-deny (sudo, shutdown...), conditional (node, npx, git, docker... with argument-aware patterns).
-- `src/glob.ts` - Glob-to-regex conversion. `globToRegex` (general: `*`, `?`, `[...]`, `{a,b,c}`) and `pathGlobToRegex` (path-aware: `*` = single segment, `**` = any depth).
+- `src/glob.ts` - Glob-to-regex conversion. `globToRegex` (general: `*`, `?`, `[...]`, `{a,b,c}`) and `pathGlobToRegex` (path-aware: `*` = single segment, `**` = any depth). Both share one `globToRegexString(pattern, pathAware)` builder.
 - `src/targets.ts` - Target-aware policy evaluator. Three towers: path (filesystem targets with traversal protection), database (connection string/URI parsing), endpoint (URL matching). Uses globToRegex for pattern matching. Called from evaluator after alwaysDeny/alwaysAllow checks.
 - `src/rules.ts` - Loads and merges config from `~/.claude/warden.yaml` (user) and `.claude/warden.yaml` (project). User rules override defaults by command name. Config supports unified `trustedRemotes` (with `context` discriminator for ssh/docker/kubectl/sprite/fly) and `trustedContextOverrides` for context-aware filtering. Legacy separate trusted* keys auto-convert with deprecation warning.
 - `src/types.ts` - All TypeScript interfaces.
@@ -50,14 +58,14 @@ Use `dev/bin/release [patch|minor|major]`. The script bumps `package.json`, sync
 
 ## Safety invariant for auto-allow features
 
-The evaluator has features that auto-allow commands without user prompts (chain-local variable resolution, local binary detection, chain-local rm cleanup, temp-dir rm cleanup, trusted remote contexts). These must never override user-configured restrictions:
+The evaluator has features that auto-allow commands without user prompts (chain-local variable resolution, local binary detection, chain-local rm cleanup, temp-dir rm cleanup). These must never override user-configured restrictions. The invariant is now **structural**, expressed by the layer ordering in `evaluateCommand` rather than scattered guards:
 
-1. `alwaysDeny` is always checked first - no auto-allow can bypass it
-2. `config.defaultDecision === 'deny'` disables all auto-allow paths (chainResolved, localBinary, tempDirRm, chainLocalRm)
-3. Auto-allow for chain-resolved commands (`$VAR` → binary) only fires when the resolved command has **no matching rules**. If rules exist (which may contain deny/ask patterns for dangerous args), normal rule evaluation runs instead.
-4. Chain-local rm cleanup (`rm -rf $VAR` where VAR is chain-assigned) and temp-dir rm cleanup check rules before allowing - if any layer's rule for `rm` has `default: deny` or an argPattern that denies the specific invocation, the handler defers to normal evaluation.
+1. `PRE_LAYERS` (scopedAlwaysPolicy, including `alwaysDeny`) is always evaluated first — no auto-allow can bypass it.
+2. The `AUTO_ALLOW_LAYERS` group is **skipped entirely** when `config.defaultDecision === 'deny'` (one gate in `evaluateCommand`, not a guard in each layer). This is why the individual auto-allow functions no longer check `defaultDecision` themselves.
+3. Auto-allow for chain-resolved commands (`$VAR` → binary) only fires when the resolved command has **no matching rules** (`collectMergedRule` returns null). If rules exist (which may contain deny/ask patterns for dangerous args), the layer defers and `commandRulesLayer` runs.
+4. Chain-local rm cleanup (`rm -rf $VAR`) and temp-dir rm cleanup check rules before allowing — if any layer's rule for `rm` has `default: deny` or an argPattern that denies the specific invocation, they return null and defer to `commandRulesLayer`.
 
-When adding new auto-allow logic, always check `alwaysDeny`, `config.defaultDecision`, AND user rules before returning allow. The principle: auto-allow only upgrades the default "ask" for unknown commands - it never downgrades a user's explicit deny or rule-based restriction.
+When adding a new auto-allow rung, add it to `AUTO_ALLOW_LAYERS` (so it inherits the default-deny gate) and have it return null when `collectMergedRule` matches. The principle: auto-allow only upgrades the default "ask" for unknown commands — it never downgrades a user's explicit deny or rule-based restriction. Note that the **specialized evaluators** (`RESOLVE_LAYERS`) are not auto-allow defaults; they run regardless of `defaultDecision` and produce real evaluations (e.g. a safe script → allow, a dangerous one → ask).
 
 ## Plugin Structure
 

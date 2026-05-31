@@ -1,4 +1,5 @@
 import { wardenEval } from './core';
+import { readStdin } from './stdin';
 import type { Decision } from './types';
 
 interface CopilotHookInput {
@@ -19,14 +20,12 @@ function output(decision: Decision, reason: string): void {
 }
 
 async function main() {
-  let raw = '';
-  for await (const chunk of process.stdin) {
-    raw += chunk;
-    if (raw.length > MAX_STDIN_SIZE) {
-      output('ask', '[warden] Input exceeds size limit');
-      process.exit(0);
-    }
+  const stdin = await readStdin(MAX_STDIN_SIZE);
+  if ('tooLarge' in stdin) {
+    output('ask', '[warden] Input exceeds size limit');
+    process.exit(0);
   }
+  const raw = stdin.data;
 
   let input: CopilotHookInput;
   try {

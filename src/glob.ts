@@ -1,72 +1,29 @@
 /**
- * General glob → RegExp. Supports *, ?, [...], [!...], {a,b,c}.
- * Returns a compiled RegExp with ^...$ anchors.
- * Used for trusted context name matching.
+ * Convert a glob pattern to a regex string (no anchors).
+ *
+ * `pathAware` controls wildcard semantics:
+ * - false (general): `*` matches anything (`.*`), `?` matches one char (`.`).
+ *   Used for trusted context name matching.
+ * - true (path-aware): `*` matches a single path segment (`[^/]*`), `**` matches
+ *   any depth (`.*`), `?` matches one non-slash char (`[^/]`).
+ *
+ * Both modes support `[...]`, `[!...]`, and `{a,b,c}`.
  */
-export function globToRegex(pattern: string): RegExp {
-  let regex = '';
-  let i = 0;
-  while (i < pattern.length) {
-    const ch = pattern[i];
-    if (ch === '*') {
-      // Consume all consecutive * chars
-      while (pattern[i + 1] === '*') i++;
-      regex += '.*';
-    } else if (ch === '?') {
-      regex += '.';
-    } else if (ch === '[') {
-      i++;
-      if (i < pattern.length && pattern[i] === '!') {
-        regex += '[^';
-        i++;
-      } else {
-        regex += '[';
-      }
-      while (i < pattern.length && pattern[i] !== ']') {
-        regex += pattern[i];
-        i++;
-      }
-      if (i < pattern.length) {
-        regex += ']';
-      }
-    } else if (ch === '{') {
-      const end = pattern.indexOf('}', i);
-      if (end !== -1) {
-        const alternatives = pattern.slice(i + 1, end).split(',').map(s => s.replace(/[.+^$|\\()]/g, '\\$&'));
-        regex += `(${alternatives.join('|')})`;
-        i = end;
-      } else {
-        regex += '\\{';
-      }
-    } else if ('.+^$|\\()[]'.includes(ch)) {
-      regex += '\\' + ch;
-    } else {
-      regex += ch;
-    }
-    i++;
-  }
-  return new RegExp(`^${regex}$`);
-}
-
-/**
- * Path-aware glob → regex string (not compiled).
- * * matches a single path segment ([^/]*), ** matches any depth (.*).
- * Also supports ?, [...], [!...], {a,b,c}.
- * Returns a string - callers wrap in ^...$ anchors.
- */
-export function pathGlobToRegex(pattern: string): string {
+function globToRegexString(pattern: string, pathAware: boolean): string {
   let result = '';
   let i = 0;
   while (i < pattern.length) {
     const ch = pattern[i];
-    if (ch === '*' && pattern[i + 1] === '*') {
-      // Consume all consecutive * chars
-      while (pattern[i + 1] === '*') i++;
-      result += '.*';
-    } else if (ch === '*') {
-      result += '[^/]*';
+    if (ch === '*') {
+      if (pathAware && pattern[i + 1] !== '*') {
+        result += '[^/]*';
+      } else {
+        // Consume all consecutive * chars → match any depth
+        while (pattern[i + 1] === '*') i++;
+        result += '.*';
+      }
     } else if (ch === '?') {
-      result += '[^/]';
+      result += pathAware ? '[^/]' : '.';
     } else if (ch === '[') {
       i++;
       if (i < pattern.length && pattern[i] === '!') {
@@ -99,4 +56,23 @@ export function pathGlobToRegex(pattern: string): string {
     i++;
   }
   return result;
+}
+
+/**
+ * General glob → RegExp. Supports *, ?, [...], [!...], {a,b,c}.
+ * Returns a compiled RegExp with ^...$ anchors.
+ * Used for trusted context name matching.
+ */
+export function globToRegex(pattern: string): RegExp {
+  return new RegExp(`^${globToRegexString(pattern, false)}$`);
+}
+
+/**
+ * Path-aware glob → regex string (not compiled).
+ * * matches a single path segment ([^/]*), ** matches any depth (.*).
+ * Also supports ?, [...], [!...], {a,b,c}.
+ * Returns a string - callers wrap in ^...$ anchors.
+ */
+export function pathGlobToRegex(pattern: string): string {
+  return globToRegexString(pattern, true);
 }
