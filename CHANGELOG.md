@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-05-31
+
 ### Changed
 
 - **scanner**: ruby and php now use the same content scanner as python/node/perl - inline code (`-e`/`-r`) and script files (`.rb`/`.php`) are scanned, so a safe script file is auto-allowed instead of prompting

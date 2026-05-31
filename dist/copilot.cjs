@@ -11364,168 +11364,21 @@ function parseCommand(input) {
 // src/evaluator.ts
 var import_os5 = require("os");
 
-// src/script-scanner.ts
-var import_fs = require("fs");
-var import_path2 = require("path");
-var PYTHON_PATTERNS = [
-  // Dangerous
-  { regex: /\bos\.system\s*\(/, level: "dangerous", reason: "os.system() executes shell commands" },
-  { regex: /\bos\.popen\s*\(/, level: "dangerous", reason: "os.popen() executes shell commands" },
-  { regex: /\bos\.exec[a-z]*\s*\(/, level: "dangerous", reason: "os.exec*() replaces the process" },
-  { regex: /\bsubprocess\b/, level: "dangerous", reason: "subprocess can execute shell commands" },
-  { regex: /\bshutil\.rmtree\s*\(/, level: "dangerous", reason: "shutil.rmtree() deletes directory trees" },
-  { regex: /\b__import__\s*\(/, level: "dangerous", reason: "__import__() loads arbitrary modules" },
-  { regex: /(?<!\.\s*)(?<!\w)\bexec\s*\(/, level: "dangerous", reason: "exec() executes arbitrary code" },
-  { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() evaluates arbitrary expressions" },
-  { regex: /(?<!re\.)(?<!\w)\bcompile\s*\(/, level: "dangerous", reason: "compile() compiles arbitrary code" },
-  { regex: /\bctypes\b/, level: "dangerous", reason: "ctypes allows calling C functions directly" },
-  { regex: /\bpickle\.loads?\s*\(/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
-  { regex: /\bpickle\.Unpickler\b/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
-  // Cautious
-  { regex: /\bopen\s*\([^)]*['"][wax]/, level: "cautious", reason: "opens file for writing" },
-  { regex: /\bPath\s*[\.(].*\.write_text\s*\(/, level: "cautious", reason: "writes to file via Path" },
-  { regex: /\bPath\s*[\.(].*\.write_bytes\s*\(/, level: "cautious", reason: "writes to file via Path" },
-  { regex: /\bsocket\b/, level: "cautious", reason: "uses network sockets" },
-  { regex: /\brequests\.(post|put|delete)\s*\(/, level: "cautious", reason: "makes mutating HTTP request" },
-  { regex: /\burllib\.request\b/, level: "cautious", reason: "makes HTTP requests" },
-  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" }
-];
-var TYPESCRIPT_PATTERNS = [
-  // Dangerous
-  { regex: /\bchild_process\b/, level: "dangerous", reason: "child_process can execute shell commands" },
-  { regex: /\bexecSync\s*\(/, level: "dangerous", reason: "execSync() executes shell commands" },
-  { regex: /\bspawnSync\s*\(/, level: "dangerous", reason: "spawnSync() executes shell commands" },
-  { regex: /\.spawn\s*\(/, level: "dangerous", reason: ".spawn() executes shell commands" },
-  { regex: /\bfs\.rmSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmSync with recursive deletes directory trees" },
-  { regex: /\bfs\.rmdirSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmdirSync with recursive deletes directory trees" },
-  { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() executes arbitrary code" },
-  { regex: /\bnew\s+Function\s*\(/, level: "dangerous", reason: "new Function() compiles arbitrary code" },
-  { regex: /\bprocess\.exit\s*\(/, level: "dangerous", reason: "process.exit() terminates the process" },
-  { regex: /\brimraf\b/, level: "dangerous", reason: "rimraf deletes directory trees" },
-  // Cautious — match both `fs.writeFileSync(` and chained `require('fs').writeFileSync(`
-  { regex: /\.writeFileSync\s*\(/, level: "cautious", reason: "writes to file" },
-  { regex: /\.writeFile\s*\(/, level: "cautious", reason: "writes to file" },
-  { regex: /\.appendFile(Sync)?\s*\(/, level: "cautious", reason: "appends to file" },
-  { regex: /\.createWriteStream\s*\(/, level: "cautious", reason: "opens write stream" },
-  { regex: /\.unlinkSync\s*\(/, level: "cautious", reason: "deletes file" },
-  { regex: /\.unlink\s*\(/, level: "cautious", reason: "deletes file" },
-  { regex: /\.renameSync\s*\(/, level: "cautious", reason: "renames/moves file" },
-  { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: "cautious", reason: "makes mutating HTTP request" },
-  { regex: /\bfetch\s*\(/, level: "cautious", reason: "makes HTTP request" },
-  { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" },
-  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" }
-];
-var PERL_PATTERNS = [
-  // Dangerous
-  { regex: /\bsystem\s*\(/, level: "dangerous", reason: "system() executes shell commands" },
-  { regex: /\bexec\s*\(/, level: "dangerous", reason: "exec() replaces the process with a shell command" },
-  { regex: /`[^`]+`/, level: "dangerous", reason: "backtick execution runs shell commands" },
-  { regex: /\bqx\s*[{(]/, level: "dangerous", reason: "qx{} executes shell commands" },
-  { regex: /\bunlink\b/, level: "dangerous", reason: "unlink deletes files" },
-  { regex: /\beval\s+"/, level: "dangerous", reason: 'eval "" executes arbitrary code (string eval)' },
-  { regex: /\brequire\s+\$/, level: "dangerous", reason: "require with variable loads arbitrary modules" },
-  // Cautious
-  { regex: /\bopen\s*\([^)]*['"]?\s*>{1,2}/, level: "cautious", reason: "opens file for writing" },
-  { regex: /\bsocket\b/i, level: "cautious", reason: "uses network sockets" },
-  { regex: /\bIO::Socket\b/, level: "cautious", reason: "uses network sockets" },
-  { regex: /\bLWP::UserAgent\b/, level: "cautious", reason: "makes HTTP requests" },
-  { regex: /\bHTTP::Request\b/, level: "cautious", reason: "makes HTTP requests" },
-  { regex: /\brename\s*\(/, level: "cautious", reason: "renames files" },
-  { regex: /\brmdir\s*\(/, level: "cautious", reason: "removes directories" },
-  { regex: /\bFile::Path::remove_tree\b/, level: "cautious", reason: "removes directory trees" }
-];
-var PATTERNS_BY_LANGUAGE = {
-  python: PYTHON_PATTERNS,
-  typescript: TYPESCRIPT_PATTERNS,
-  perl: PERL_PATTERNS
-};
-var MAX_SCRIPT_SIZE = 1024 * 1024;
-function scanScriptCode(code, language) {
-  const patterns = PATTERNS_BY_LANGUAGE[language];
-  for (const pattern of patterns) {
-    if (pattern.level === "dangerous" && pattern.regex.test(code)) {
-      return { level: "dangerous", reason: pattern.reason };
-    }
-  }
-  for (const pattern of patterns) {
-    if (pattern.level === "cautious" && pattern.regex.test(code)) {
-      return { level: "cautious", reason: pattern.reason };
-    }
-  }
-  return null;
-}
-function readScriptFile(filePath, cwd) {
-  const fullPath = (0, import_path2.isAbsolute)(filePath) ? filePath : (0, import_path2.resolve)(cwd, filePath);
-  try {
-    const stat = (0, import_fs.statSync)(fullPath);
-    if (stat.size > MAX_SCRIPT_SIZE) {
-      return { error: "script too large to scan" };
-    }
-    const content = (0, import_fs.readFileSync)(fullPath, "utf-8");
-    return { content };
-  } catch (err) {
-    const code = err.code;
-    if (code === "EACCES") return { error: "script not readable (permission denied)" };
-    return { error: "script not found" };
-  }
-}
-
 // src/glob.ts
-function globToRegex(pattern) {
-  let regex = "";
-  let i = 0;
-  while (i < pattern.length) {
-    const ch = pattern[i];
-    if (ch === "*") {
-      while (pattern[i + 1] === "*") i++;
-      regex += ".*";
-    } else if (ch === "?") {
-      regex += ".";
-    } else if (ch === "[") {
-      i++;
-      if (i < pattern.length && pattern[i] === "!") {
-        regex += "[^";
-        i++;
-      } else {
-        regex += "[";
-      }
-      while (i < pattern.length && pattern[i] !== "]") {
-        regex += pattern[i];
-        i++;
-      }
-      if (i < pattern.length) {
-        regex += "]";
-      }
-    } else if (ch === "{") {
-      const end = pattern.indexOf("}", i);
-      if (end !== -1) {
-        const alternatives = pattern.slice(i + 1, end).split(",").map((s) => s.replace(/[.+^$|\\()]/g, "\\$&"));
-        regex += `(${alternatives.join("|")})`;
-        i = end;
-      } else {
-        regex += "\\{";
-      }
-    } else if (".+^$|\\()[]".includes(ch)) {
-      regex += "\\" + ch;
-    } else {
-      regex += ch;
-    }
-    i++;
-  }
-  return new RegExp(`^${regex}$`);
-}
-function pathGlobToRegex(pattern) {
+function globToRegexString(pattern, pathAware) {
   let result = "";
   let i = 0;
   while (i < pattern.length) {
     const ch = pattern[i];
-    if (ch === "*" && pattern[i + 1] === "*") {
-      while (pattern[i + 1] === "*") i++;
-      result += ".*";
-    } else if (ch === "*") {
-      result += "[^/]*";
+    if (ch === "*") {
+      if (pathAware && pattern[i + 1] !== "*") {
+        result += "[^/]*";
+      } else {
+        while (pattern[i + 1] === "*") i++;
+        result += ".*";
+      }
     } else if (ch === "?") {
-      result += "[^/]";
+      result += pathAware ? "[^/]" : ".";
     } else if (ch === "[") {
       i++;
       if (i < pattern.length && pattern[i] === "!") {
@@ -11559,20 +11412,26 @@ function pathGlobToRegex(pattern) {
   }
   return result;
 }
+function globToRegex(pattern) {
+  return new RegExp(`^${globToRegexString(pattern, false)}$`);
+}
+function pathGlobToRegex(pattern) {
+  return globToRegexString(pattern, true);
+}
 
 // src/targets.ts
-var import_path5 = require("path");
+var import_path4 = require("path");
 var import_os4 = require("os");
 
 // src/rules.ts
-var import_fs2 = require("fs");
+var import_fs = require("fs");
 var import_yaml = __toESM(require_dist(), 1);
 var import_os3 = require("os");
-var import_path4 = require("path");
+var import_path3 = require("path");
 
 // src/defaults.ts
 var import_os2 = require("os");
-var import_path3 = require("path");
+var import_path2 = require("path");
 var SAFE_DEV_TOOLS = [
   "jest",
   "vitest",
@@ -11698,52 +11557,6 @@ function registryOpsPattern() {
     reason: "modifies package registry"
   };
 }
-var INLINE_LANG_CONFIG = {
-  Ruby: {
-    ext: "rb",
-    patterns: [
-      "`",
-      "%x[\\(\\{\\[]",
-      "\\bsystem\\s*\\(",
-      "\\bexec\\s*\\(",
-      "IO\\.popen",
-      "Kernel\\.",
-      "\\bspawn\\s*\\(",
-      `File\\.open\\s*\\([^)]*['"][wax+]`,
-      "File\\.write",
-      "open-uri",
-      "Net::HTTP"
-    ]
-  },
-  PHP: {
-    ext: "php",
-    patterns: [
-      "`",
-      "shell_exec",
-      "\\b(?:system|passthru|popen|proc_open)\\s*\\(",
-      "\\bexec\\s*\\(",
-      "file_put_contents",
-      "fwrite",
-      `fopen\\s*\\([^)]*['"][wax+]`,
-      "curl_exec",
-      "fsockopen"
-    ]
-  }
-};
-function inlineExecPatterns(lang, flags) {
-  const { ext, patterns } = INLINE_LANG_CONFIG[lang];
-  const reason = `Inline ${lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${ext} and run it.`;
-  const flagAlt = flags.map((f) => f.replace(/^\^/, "").replace(/\$$/, "")).join("|");
-  const compound = `(?:^|\\s)(?:${flagAlt})[\\s=][^\\n]{0,16000}?(?:${patterns.join("|")})`;
-  return [
-    { match: { argsMatch: [compound] }, decision: "ask", reason },
-    {
-      match: { anyArgMatches: flags },
-      decision: "allow",
-      description: `Plausibly read-only inline ${lang} script`
-    }
-  ];
-}
 function pkgManagerRule(command, extraSafeCmds = []) {
   const safeCmds = [...SAFE_PKG_MANAGER_CMDS, ...extraSafeCmds];
   return {
@@ -11790,7 +11603,7 @@ var DEFAULT_CONFIG = {
   notifyOnAsk: true,
   notifyOnDeny: true,
   audit: true,
-  auditPath: (0, import_path3.join)((0, import_os2.homedir)(), ".claude", "warden-audit.jsonl"),
+  auditPath: (0, import_path2.join)((0, import_os2.homedir)(), ".claude", "warden-audit.jsonl"),
   auditAllowDecisions: false,
   trustedRemotes: [],
   targetPolicies: [],
@@ -12312,11 +12125,9 @@ var DEFAULT_CONFIG = {
         argPatterns: [VERSION_HELP_FLAGS]
       })),
       // --- Scripting languages ---
-      // perl/python/node have custom evaluators in evaluator.ts that handle inline
-      // -c/-e and file scanning via script-scanner.ts. ruby/php have no scanner.
+      // perl/python/node/ruby/php have custom evaluators in script-eval.ts that handle
+      // inline code (-c/-e/-r) and file scanning via script-scanner.ts.
       { command: "perl", default: "ask" },
-      { command: "ruby", default: "ask", argPatterns: [...inlineExecPatterns("Ruby", ["^-e$", "^--eval"]), VERSION_HELP_FLAGS] },
-      { command: "php", default: "ask", argPatterns: [...inlineExecPatterns("PHP", ["^-r$"]), VERSION_HELP_FLAGS] },
       // --- Java ecosystem ---
       { command: "java", default: "ask", argPatterns: [VERSION_HELP_FLAGS] },
       { command: "javac", default: "allow" },
@@ -12422,8 +12233,8 @@ function warn(message) {
   process.stderr.write(message);
 }
 var USER_CONFIG_PATHS = [
-  (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden.yaml"),
-  (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "warden.json")
+  (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden.yaml"),
+  (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden.json")
 ];
 var PROJECT_CONFIG_NAMES = [
   ".claude/warden.yaml",
@@ -12446,7 +12257,7 @@ function loadConfig(cwd) {
   let workspaceRaw = null;
   if (cwd) {
     for (const name of PROJECT_CONFIG_NAMES) {
-      const result = tryLoadFile((0, import_path4.join)(cwd, name));
+      const result = tryLoadFile((0, import_path3.join)(cwd, name));
       if (result) {
         workspaceLayer = extractLayer(result);
         workspaceRaw = result;
@@ -12464,9 +12275,9 @@ function loadConfig(cwd) {
   return config;
 }
 function tryLoadFile(filePath) {
-  if (!(0, import_fs2.existsSync)(filePath)) return null;
+  if (!(0, import_fs.existsSync)(filePath)) return null;
   try {
-    const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
+    const raw = (0, import_fs.readFileSync)(filePath, "utf-8");
     const parsed = filePath.endsWith(".yaml") || filePath.endsWith(".yml") ? (0, import_yaml.parse)(raw) : JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
       return parsed;
@@ -12713,7 +12524,7 @@ function hasGlobChars(s) {
 function evaluatePathPolicy(policy, cmd, cwd) {
   const recursive = policy.recursive ?? true;
   const expandedPath = expandHome(expandCwd(policy.path, cwd));
-  const policyPath = (0, import_path5.normalize)((0, import_path5.resolve)(cwd, expandedPath));
+  const policyPath = (0, import_path4.normalize)((0, import_path4.resolve)(cwd, expandedPath));
   const pathWithoutTemplate = policy.path.replace(/\{\{cwd\}\}/g, "");
   const useGlob = hasGlobChars(pathWithoutTemplate);
   let globRegex = null;
@@ -12728,7 +12539,7 @@ function evaluatePathPolicy(policy, cmd, cwd) {
   }
   for (const arg of cmd.args) {
     if (arg.startsWith("-")) continue;
-    const argPath = (0, import_path5.normalize)((0, import_path5.resolve)(cwd, expandHome(arg)));
+    const argPath = (0, import_path4.normalize)((0, import_path4.resolve)(cwd, expandHome(arg)));
     if (globRegex) {
       if (globRegex.test(argPath)) return true;
     } else {
@@ -12906,616 +12717,96 @@ function evaluateTargetPolicies(cmd, cwd, config) {
   };
 }
 
-// src/evaluator.ts
-function safeRegexTest(pattern, input) {
-  try {
-    return new RegExp(pattern).test(input);
-  } catch {
-    warn(`[warden] Warning: invalid regex pattern: ${pattern}
-`);
-    return false;
-  }
-}
-function expandTilde(path) {
-  return path.startsWith("~/") ? (0, import_os5.homedir)() + path.slice(1) : path;
-}
-function commandMatchesName(cmd, name) {
-  if (name.includes("*")) {
-    const expanded = expandTilde(name);
-    const regexStr = pathGlobToRegex(expanded);
-    try {
-      const re = new RegExp(`^${regexStr}$`);
-      const target = name.includes("/") ? expandTilde(cmd.originalCommand) : cmd.command;
-      return re.test(target);
-    } catch {
-      return false;
-    }
-  }
-  if (name.startsWith("/")) {
-    return expandTilde(cmd.originalCommand) === name;
-  }
-  if (name.startsWith("~/")) {
-    return expandTilde(cmd.originalCommand) === (0, import_os5.homedir)() + name.slice(1);
-  }
-  return cmd.command === name;
-}
-var MAX_RECURSION_DEPTH = 10;
-function evaluate(parsed, config, depth = 0, cwd) {
-  if (depth > MAX_RECURSION_DEPTH) {
-    return { decision: "ask", reason: "too many nested commands", details: [] };
-  }
-  if (parsed.parseError) {
-    return { decision: "ask", reason: "unparseable command", details: [] };
-  }
-  if (parsed.commands.length === 0) {
-    return { decision: "allow", reason: "Empty command", details: [] };
-  }
-  if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
-    for (const subCmd of parsed.subshellCommands) {
-      const subParsed = parseCommand(subCmd);
-      const subResult = evaluate(subParsed, config, depth + 1, cwd);
-      if (subResult.decision === "deny") {
-        return { decision: "deny", reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
-      }
-      if (subResult.decision === "ask") {
-        return { decision: "ask", reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
-      }
-    }
-  } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
-    return { decision: "ask", reason: "contains subshell", details: [] };
-  }
-  const details = [];
-  for (const cmd of parsed.commands) {
-    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments, cwd));
-  }
-  const decisions = details.map((d) => d.decision);
-  if (decisions.includes("deny")) {
-    const denied = details.filter((d) => d.decision === "deny");
-    return {
-      decision: "deny",
-      reason: denied.map((d) => `${d.command}: ${d.reason}`).join("; "),
-      details
-    };
-  }
-  if (decisions.includes("ask")) {
-    const asked = details.filter((d) => d.decision === "ask");
-    return {
-      decision: "ask",
-      reason: asked.map((d) => `${d.command}: ${d.reason}`).join("; "),
-      details
-    };
-  }
-  return { decision: "allow", reason: "ok", details };
-}
-function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
-  const { command, args } = cmd;
-  const detail = (d) => {
-    if (cmd.resolvedFrom) d.resolvedFrom = cmd.resolvedFrom;
-    return d;
-  };
-  for (const layer of config.layers) {
-    if (layer.alwaysDeny.some((name) => commandMatchesName(cmd, name))) {
-      return detail({ command, args, decision: "deny", reason: "blocked by policy", matchedRule: "alwaysDeny" });
-    }
-    if (layer.alwaysAllow.some((name) => commandMatchesName(cmd, name))) {
-      return detail({ command, args, decision: "allow", reason: "safe", matchedRule: "alwaysAllow" });
-    }
-  }
-  if (cwd && config.targetPolicies?.length) {
-    const targetResult = evaluateTargetPolicies(cmd, cwd, config);
-    if (targetResult) return detail(targetResult);
-  }
-  if (cmd.resolvedFrom && chainAssignments && config.defaultDecision !== "deny") {
-    const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
-    if (varMatch) {
-      const assignment = chainAssignments.get(varMatch[1]);
-      if (assignment && !assignment.isDynamic && assignment.value !== null) {
-        if (!collectMergedRule(cmd, config)) {
-          return detail({ command, args, decision: "allow", reason: `chain-local binary (${assignment.value})`, matchedRule: "chainResolved" });
-        }
-      }
-    }
-  }
-  if (cmd.originalPath && !cmd.originalPath.startsWith("/") && !cmd.originalPath.startsWith("~/") && config.defaultDecision !== "deny") {
-    if (!collectMergedRule(cmd, config)) {
-      return detail({ command, args, decision: "allow", reason: `local binary (${cmd.originalPath})`, matchedRule: "localBinary" });
-    }
-  }
-  if (command === "rm" && cmd.effectiveCwd) {
-    const tempResult = evaluateRmTempDir(cmd, config);
-    if (tempResult) return detail(tempResult);
-  }
-  if (command === "rm" && chainAssignments?.size) {
-    const rmResult = evaluateRmChainLocal(cmd, chainAssignments, config, cwd);
-    if (rmResult) return detail(rmResult);
-  }
-  const remotes = config.trustedRemotes || [];
-  if (command === "ssh" || command === "scp" || command === "rsync") {
-    const targets = remotes.filter((t) => t.context === "ssh");
-    if (targets.length) {
-      const sshResult = evaluateSSHCommand(cmd, config, targets, depth);
-      if (sshResult) return sshResult;
-    }
-  }
-  if (command === "docker") {
-    const targets = remotes.filter((t) => t.context === "docker");
-    if (targets.length) {
-      const dockerResult = evaluateDockerExec(cmd, config, targets, depth);
-      if (dockerResult) return dockerResult;
-    }
-  }
-  if (command === "kubectl") {
-    const targets = remotes.filter((t) => t.context === "kubectl");
-    if (targets.length) {
-      const kubectlResult = evaluateKubectlExec(cmd, config, targets, depth);
-      if (kubectlResult) return kubectlResult;
-    }
-  }
-  if (command === "sprite") {
-    const targets = remotes.filter((t) => t.context === "sprite");
-    if (targets.length) {
-      const spriteResult = evaluateSpriteExec(cmd, config, targets, depth);
-      if (spriteResult) return spriteResult;
-    }
-  }
-  if (command === "fly" || command === "flyctl") {
-    const targets = remotes.filter((t) => t.context === "fly");
-    if (targets.length) {
-      const flyResult = evaluateFlyCommand(cmd, config, targets, depth);
-      if (flyResult) return flyResult;
-    }
-  }
-  if (command === "uv") {
-    const uvResult = evaluateUvCommand(cmd, config, depth);
-    if (uvResult) return uvResult;
-  }
-  if (command === "xargs") {
-    return evaluateXargsCommand(cmd, config, depth);
-  }
-  if (command === "find") {
-    return evaluateFindCommand(cmd, config, depth);
-  }
-  if (command === "npx" || command === "bunx" || command === "pnpx") {
-    const pkgResult = evaluatePkgRunnerSubcommand(cmd, config, depth, cwd);
-    if (pkgResult) return pkgResult;
-  }
-  if (command === "python" || command === "python3") {
-    const pyResult = evaluatePythonCommand(cmd, config, depth, cwd);
-    if (pyResult) return pyResult;
-  }
-  if (command === "node" || command === "tsx" || command === "ts-node") {
-    const nodeResult = evaluateNodeCommand(cmd, config, depth, cwd);
-    if (nodeResult) return nodeResult;
-  }
-  if (command === "perl") {
-    const perlResult = evaluatePerlCommand(cmd, config, depth, cwd);
-    if (perlResult) return perlResult;
-  }
-  const mergedRule = collectMergedRule(cmd, config);
-  if (mergedRule) {
-    return evaluateRule(cmd, mergedRule);
-  }
-  return { command, args, decision: config.defaultDecision, reason: "unknown command", matchedRule: "default" };
-}
-function isTempDir(path) {
-  if (path === "/tmp" || path.startsWith("/tmp/")) return true;
-  if (path === "/var/tmp" || path.startsWith("/var/tmp/")) return true;
-  const envTmpdir = process.env.TMPDIR;
-  if (envTmpdir) {
-    const normalized = envTmpdir.endsWith("/") ? envTmpdir : envTmpdir + "/";
-    if (path === envTmpdir || path.startsWith(normalized)) return true;
-  }
-  return false;
-}
-function evaluateRmTempDir(cmd, config) {
-  const { command, args } = cmd;
-  if (config.defaultDecision === "deny") return null;
-  const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
-  if (!hasRecursive) return null;
-  if (!cmd.effectiveCwd || !isTempDir(cmd.effectiveCwd)) return null;
-  const targets = args.filter((a) => !a.startsWith("-"));
-  if (targets.length === 0) return null;
-  for (const t of targets) {
-    if (t.startsWith("/")) return null;
-    if (t.includes("..")) return null;
-  }
-  for (const layer of config.layers) {
-    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
-    if (rule) {
-      if (rule.default === "deny") return null;
-      const ruleResult = evaluateRule(cmd, rule);
-      if (ruleResult.decision === "deny") return null;
-      break;
-    }
-  }
-  return { command, args, decision: "allow", reason: `temp directory cleanup (${cmd.effectiveCwd})`, matchedRule: "tempDirRm" };
-}
-var VAR_REF_REGEX2 = /^"?\$\{?(\w+)\}?"?$/;
-function extractVarName(text) {
-  const m = text.match(VAR_REF_REGEX2);
-  return m ? m[1] : null;
-}
-function evaluateRmChainLocal(cmd, chainAssignments, config, cwd) {
-  const { command, args } = cmd;
-  if (config.defaultDecision === "deny") return null;
-  const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
-  if (!hasRecursive) return null;
-  const targets = args.filter((a) => !a.startsWith("-"));
-  if (targets.length === 0) return null;
-  for (const target of targets) {
-    const varName = extractVarName(target);
-    if (!varName) return null;
-    if (!chainAssignments.has(varName)) return null;
-  }
-  for (const layer of config.layers) {
-    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
-    if (rule) {
-      if (rule.default === "deny") return null;
-      const ruleResult = evaluateRule(cmd, rule);
-      if (ruleResult.decision === "deny") return null;
-      break;
-    }
-  }
-  if (cwd && config.targetPolicies?.length) {
-    const resolvedArgs = args.map((arg) => {
-      const varName = extractVarName(arg);
-      if (varName) {
-        const assignment = chainAssignments.get(varName);
-        if (assignment?.value) return assignment.value;
-      }
-      return arg;
-    });
-    const resolvedCmd = { ...cmd, args: resolvedArgs };
-    const targetResult = evaluateTargetPolicies(resolvedCmd, cwd, config);
-    if (targetResult && targetResult.decision === "deny") {
-      return { command, args, decision: "deny", reason: targetResult.reason, matchedRule: targetResult.matchedRule };
-    }
-  }
-  return { command, args, decision: "allow", reason: "chain-local cleanup", matchedRule: "chainLocalRm" };
-}
-function collectMergedRule(cmd, config) {
-  const matchingRules = [];
-  for (const layer of config.layers) {
-    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
-    if (rule) {
-      matchingRules.push(rule);
-      if (rule.override) break;
-    }
-  }
-  if (matchingRules.length === 0) return null;
-  if (matchingRules.length === 1) return matchingRules[0];
-  const mergedPatterns = [];
-  for (const rule of matchingRules) {
-    if (rule.argPatterns) {
-      mergedPatterns.push(...rule.argPatterns);
-    }
-  }
-  return {
-    command: matchingRules[0].command,
-    default: matchingRules[0].default,
-    argPatterns: mergedPatterns
-  };
-}
-function evaluateRule(cmd, rule) {
-  const { command, args } = cmd;
-  const argsJoined = args.join(" ");
-  for (const pattern of rule.argPatterns || []) {
-    const m = pattern.match;
-    let matched = true;
-    if (m.noArgs !== void 0) {
-      matched = matched && m.noArgs === (args.length === 0);
-    }
-    if (m.argsMatch && matched) {
-      matched = m.argsMatch.some((re) => safeRegexTest(re, argsJoined));
-    }
-    if (m.anyArgMatches && matched) {
-      matched = args.some((arg) => m.anyArgMatches.some((re) => safeRegexTest(re, arg)));
-    }
-    if (m.argCount && matched) {
-      if (m.argCount.min !== void 0) matched = matched && args.length >= m.argCount.min;
-      if (m.argCount.max !== void 0) matched = matched && args.length <= m.argCount.max;
-    }
-    if (m.not) matched = !matched;
-    if (matched) {
-      return {
-        command,
-        args,
-        decision: pattern.decision,
-        reason: pattern.reason || pattern.description || `Matched pattern for "${command}"`,
-        matchedRule: `${command}:argPattern`
-      };
-    }
-  }
+// src/args.ts
+function makeCommand(command, args) {
   return {
     command,
+    originalCommand: command,
     args,
-    decision: rule.default,
-    reason: "needs review",
-    matchedRule: `${command}:default`
+    envPrefixes: [],
+    raw: [command, ...args].join(" ")
   };
 }
-var UV_RUN_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
-  "--with",
-  "--from",
-  "--python",
-  "--package",
-  "--index",
-  "--extra-index-url",
-  "--cache-dir",
-  "--index-strategy",
-  "--keyring-provider"
-]);
-var UV_RUN_FLAGS_NO_VALUE = /* @__PURE__ */ new Set([
-  "--no-cache",
-  "--locked",
-  "--frozen",
-  "--isolated",
-  "--verbose",
-  "--quiet",
-  "--no-project"
-]);
-function parseUvRunSubcommand(args) {
-  let i = 1;
+function skipLeadingFlags(args, spec) {
+  let i = 0;
   while (i < args.length) {
     const arg = args[i];
     if (arg === "--") {
-      i++;
-      break;
+      return { index: i + 1, unresolved: false };
     }
-    if (!arg.startsWith("-")) {
+    if (!arg.startsWith("-") || arg === "-") {
       break;
     }
     if (arg.startsWith("--") && arg.includes("=")) {
-      const flagName = arg.slice(0, arg.indexOf("="));
-      if (UV_RUN_FLAGS_WITH_VALUE.has(flagName) || UV_RUN_FLAGS_NO_VALUE.has(flagName)) {
+      const flag = arg.slice(0, arg.indexOf("="));
+      if (spec.withValue.has(flag) || spec.noValue?.has(flag)) {
         i++;
         continue;
       }
-      return { subcommand: null, unresolved: true };
-    }
-    if (UV_RUN_FLAGS_WITH_VALUE.has(arg)) {
-      if (i + 1 >= args.length) return { subcommand: null, unresolved: true };
-      i += 2;
-      continue;
-    }
-    if (UV_RUN_FLAGS_NO_VALUE.has(arg)) {
+      if (spec.strictUnknown) return { index: i, unresolved: true };
       i++;
       continue;
     }
-    return { subcommand: null, unresolved: true };
-  }
-  if (i >= args.length) {
-    return { subcommand: null, unresolved: false };
-  }
-  const subcmd = args[i];
-  const subArgs = args.slice(i + 1);
-  return {
-    unresolved: false,
-    subcommand: {
-      command: subcmd.includes("/") ? subcmd.split("/").pop() : subcmd,
-      originalCommand: subcmd,
-      args: subArgs,
-      envPrefixes: [],
-      raw: [subcmd, ...subArgs].join(" ")
+    if (spec.withValue.has(arg)) {
+      if (i + 1 >= args.length) return { index: i, unresolved: true };
+      i += 2;
+      continue;
     }
+    if (spec.noValue?.has(arg) || !spec.strictUnknown) {
+      i++;
+      continue;
+    }
+    return { index: i, unresolved: true };
+  }
+  return { index: i, unresolved: false };
+}
+
+// src/remote-exec.ts
+function findMatchingTarget(value, targets) {
+  return targets.find((t) => globToRegex(t.name).test(value)) || null;
+}
+function shellQuote(arg) {
+  if (/[\s"'\\$`!#&|;()<>]/.test(arg)) {
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+  return arg;
+}
+var INTERACTIVE_SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh"]);
+function configWithContextOverrides(config, target) {
+  const overrideLayers = [];
+  if (target?.overrides) overrideLayers.push(target.overrides);
+  if (config.trustedContextOverrides) overrideLayers.push(config.trustedContextOverrides);
+  if (overrideLayers.length === 0) return config;
+  return {
+    ...config,
+    layers: [...overrideLayers, ...config.layers]
   };
 }
-function evaluateUvCommand(cmd, config, depth = 0) {
-  const { command, args } = cmd;
-  if (args[0] !== "run") return null;
-  const { subcommand, unresolved } = parseUvRunSubcommand(args);
-  if (unresolved || !subcommand) {
-    if (unresolved) {
-      return {
-        command,
-        args,
-        decision: "ask",
-        reason: "uv run: inner command could not be resolved safely",
-        matchedRule: "uv:run"
-      };
-    }
-    return null;
+function evaluateRemoteCommand(remoteArgs, config, target, depth = 0) {
+  if (target?.allowAll) {
+    return { decision: "allow", reason: "allowAll target", details: [] };
+  }
+  const overriddenConfig = configWithContextOverrides(config, target);
+  if (remoteArgs.length === 0) {
+    return { decision: "allow", reason: "interactive", details: [] };
+  }
+  const remoteCmd = remoteArgs[0];
+  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs.length === 1) {
+    return { decision: "allow", reason: "interactive shell", details: [] };
+  }
+  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs[1] === "-c" && remoteArgs.length >= 3) {
+    const innerCommand = remoteArgs.slice(2).join(" ");
+    const parsed2 = parseCommand(innerCommand);
+    return evaluate(parsed2, overriddenConfig, depth + 1);
   }
   const parsed = {
-    commands: [subcommand],
+    commands: [makeCommand(remoteCmd, remoteArgs.slice(1))],
     hasSubshell: false,
     subshellCommands: [],
     parseError: false,
     chainAssignments: /* @__PURE__ */ new Map()
   };
-  const result = evaluate(parsed, config, depth + 1);
-  return {
-    command,
-    args,
-    decision: result.decision,
-    reason: `uv run: ${result.reason}`,
-    matchedRule: "uv:run"
-  };
-}
-var XARGS_SHORT_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set(["E", "I", "L", "n", "P", "s", "S", "d", "a"]);
-var XARGS_SHORT_FLAGS_NO_VALUE = /* @__PURE__ */ new Set(["0", "e", "o", "p", "r", "t", "x"]);
-var XARGS_LONG_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
-  "--eof",
-  "--replace",
-  "--max-lines",
-  "--max-args",
-  "--max-procs",
-  "--max-chars",
-  "--arg-file",
-  "--delimiter"
-]);
-var XARGS_LONG_FLAGS_NO_VALUE = /* @__PURE__ */ new Set([
-  "--null",
-  "--exit",
-  "--open-tty",
-  "--interactive",
-  "--no-run-if-empty",
-  "--verbose",
-  "--show-limits"
-]);
-function parseXargsSubcommand(args) {
-  let i = 0;
-  while (i < args.length) {
-    const arg = args[i];
-    if (arg === "--") {
-      i++;
-      break;
-    }
-    if (!arg.startsWith("-") || arg === "-") {
-      break;
-    }
-    if (arg.startsWith("--")) {
-      const eqIndex = arg.indexOf("=");
-      const longFlag = eqIndex === -1 ? arg : arg.slice(0, eqIndex);
-      if (XARGS_LONG_FLAGS_WITH_VALUE.has(longFlag)) {
-        if (eqIndex !== -1) {
-          i++;
-          continue;
-        }
-        if (i + 1 >= args.length) return { subcommand: null, unresolved: true };
-        i += 2;
-        continue;
-      }
-      if (XARGS_LONG_FLAGS_NO_VALUE.has(longFlag)) {
-        i++;
-        continue;
-      }
-      return { subcommand: null, unresolved: true };
-    }
-    const short = arg[1];
-    if (XARGS_SHORT_FLAGS_WITH_VALUE.has(short)) {
-      if (arg.length > 2) {
-        i++;
-        continue;
-      }
-      if (i + 1 >= args.length) return { subcommand: null, unresolved: true };
-      i += 2;
-      continue;
-    }
-    const grouped = arg.slice(1).split("");
-    const allKnownNoValue = grouped.every((ch) => XARGS_SHORT_FLAGS_NO_VALUE.has(ch));
-    if (allKnownNoValue) {
-      i++;
-      continue;
-    }
-    return { subcommand: null, unresolved: true };
-  }
-  if (i >= args.length) {
-    return {
-      unresolved: false,
-      subcommand: {
-        command: "echo",
-        originalCommand: "echo",
-        args: [],
-        envPrefixes: [],
-        raw: "echo"
-      }
-    };
-  }
-  const subcommand = args[i];
-  const subArgs = args.slice(i + 1);
-  return {
-    unresolved: false,
-    subcommand: {
-      command: subcommand,
-      originalCommand: subcommand,
-      args: subArgs,
-      envPrefixes: [],
-      raw: [subcommand, ...subArgs].join(" ")
-    }
-  };
-}
-function evaluateXargsCommand(cmd, config, depth = 0) {
-  const { command, args } = cmd;
-  const { subcommand, unresolved } = parseXargsSubcommand(args);
-  if (unresolved || !subcommand) {
-    return {
-      command,
-      args,
-      decision: "ask",
-      reason: "xargs subcommand could not be resolved safely",
-      matchedRule: "xargs:subcommand"
-    };
-  }
-  const isShellExec = (subcommand.command === "sh" || subcommand.command === "bash" || subcommand.command === "zsh") && subcommand.args.length >= 2 && subcommand.args[0] === "-c";
-  let parsed;
-  if (isShellExec) {
-    const innerResult = parseCommand(subcommand.args[1]);
-    if (innerResult.parseError) {
-      parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: /* @__PURE__ */ new Map() };
-    } else {
-      parsed = innerResult;
-    }
-  } else {
-    parsed = { commands: [subcommand], hasSubshell: false, subshellCommands: [], parseError: false, chainAssignments: /* @__PURE__ */ new Map() };
-  }
-  const result = evaluate(parsed, config, depth + 1);
-  return {
-    command,
-    args,
-    decision: result.decision,
-    reason: `xargs subcommand "${subcommand.command}": ${result.reason}`,
-    matchedRule: "xargs:subcommand"
-  };
-}
-function parseFindExecCommands(args) {
-  const commands = [];
-  let i = 0;
-  while (i < args.length) {
-    if (args[i] === "-exec" || args[i] === "-execdir") {
-      i++;
-      const cmdArgs = [];
-      while (i < args.length && args[i] !== ";" && args[i] !== "+") {
-        if (args[i] !== "{}") {
-          cmdArgs.push(args[i]);
-        }
-        i++;
-      }
-      i++;
-      if (cmdArgs.length > 0) {
-        commands.push({
-          command: cmdArgs[0],
-          originalCommand: cmdArgs[0],
-          args: cmdArgs.slice(1),
-          envPrefixes: [],
-          raw: cmdArgs.join(" ")
-        });
-      }
-    } else {
-      i++;
-    }
-  }
-  return commands;
-}
-function evaluateFindCommand(cmd, config, depth = 0) {
-  const { command, args } = cmd;
-  if (args.some((a) => a === "-delete")) {
-    return { command, args, decision: "ask", reason: "find -delete can remove files", matchedRule: "find:delete" };
-  }
-  if (args.some((a) => a === "-ok" || a === "-okdir")) {
-    return { command, args, decision: "ask", reason: "find -ok/-okdir can execute commands interactively", matchedRule: "find:ok" };
-  }
-  const execCommands = parseFindExecCommands(args);
-  if (execCommands.length === 0) {
-    return { command, args, decision: "allow", reason: "find without dangerous flags", matchedRule: "find:safe" };
-  }
-  for (const execCmd of execCommands) {
-    const parsed = {
-      commands: [execCmd],
-      hasSubshell: false,
-      subshellCommands: [],
-      parseError: false,
-      chainAssignments: /* @__PURE__ */ new Map()
-    };
-    const result = evaluate(parsed, config, depth + 1);
-    if (result.decision === "deny") {
-      return { command, args, decision: "deny", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
-    }
-    if (result.decision === "ask") {
-      return { command, args, decision: "ask", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
-    }
-  }
-  return { command, args, decision: "allow", reason: "find -exec commands are safe", matchedRule: "find:exec" };
+  return evaluate(parsed, overriddenConfig, depth + 1);
 }
 var SSH_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
   "-b",
@@ -13539,9 +12830,6 @@ var SSH_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
   "-W",
   "-w"
 ]);
-function findMatchingTarget(value, targets) {
-  return targets.find((t) => globToRegex(t.name).test(value)) || null;
-}
 function parseSSHArgs(args) {
   let host = null;
   const remoteArgs = [];
@@ -13655,49 +12943,6 @@ var DOCKER_EXEC_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
   "--workdir",
   "--detach-keys"
 ]);
-var INTERACTIVE_SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh"]);
-function shellQuote(arg) {
-  if (/[\s"'\\$`!#&|;()<>]/.test(arg)) {
-    return `'${arg.replace(/'/g, "'\\''")}'`;
-  }
-  return arg;
-}
-function configWithContextOverrides(config, target) {
-  const overrideLayers = [];
-  if (target?.overrides) overrideLayers.push(target.overrides);
-  if (config.trustedContextOverrides) overrideLayers.push(config.trustedContextOverrides);
-  if (overrideLayers.length === 0) return config;
-  return {
-    ...config,
-    layers: [...overrideLayers, ...config.layers]
-  };
-}
-function evaluateRemoteCommand(remoteArgs, config, target, depth = 0) {
-  if (target?.allowAll) {
-    return { decision: "allow", reason: "allowAll target", details: [] };
-  }
-  const overriddenConfig = configWithContextOverrides(config, target);
-  if (remoteArgs.length === 0) {
-    return { decision: "allow", reason: "interactive", details: [] };
-  }
-  const remoteCmd = remoteArgs[0];
-  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs.length === 1) {
-    return { decision: "allow", reason: "interactive shell", details: [] };
-  }
-  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs[1] === "-c" && remoteArgs.length >= 3) {
-    const innerCommand = remoteArgs.slice(2).join(" ");
-    const parsed2 = parseCommand(innerCommand);
-    return evaluate(parsed2, overriddenConfig, depth + 1);
-  }
-  const parsed = {
-    commands: [{ command: remoteCmd, originalCommand: remoteCmd, args: remoteArgs.slice(1), envPrefixes: [], raw: remoteArgs.join(" ") }],
-    hasSubshell: false,
-    subshellCommands: [],
-    parseError: false,
-    chainAssignments: /* @__PURE__ */ new Map()
-  };
-  return evaluate(parsed, overriddenConfig, depth + 1);
-}
 function parseDockerExecArgs(args) {
   let target = null;
   const remoteArgs = [];
@@ -13922,8 +13167,8 @@ function parseFlySSHArgs(args) {
         if (cmdValue) {
           const parsed = parseCommand(cmdValue);
           if (!parsed.parseError && parsed.commands.length > 0) {
-            const cmd = parsed.commands[0];
-            remoteArgs.push(cmd.command, ...cmd.args);
+            const inner = parsed.commands[0];
+            remoteArgs.push(inner.command, ...inner.args);
           }
         }
         i += 2;
@@ -13974,33 +13219,270 @@ function evaluateFlyCommand(cmd, config, targets, depth = 0) {
     matchedRule: "trustedRemotes:fly"
   };
 }
-var COMMANDS_WITH_SCRIPT_EVALUATORS = /* @__PURE__ */ new Set(["node", "tsx", "ts-node", "python", "python3", "perl"]);
-function evaluatePkgRunnerSubcommand(cmd, config, depth, cwd) {
+function tryRemoteExec(cmd, config, depth) {
+  const remotes = config.trustedRemotes || [];
+  const { command } = cmd;
+  if (command === "ssh" || command === "scp" || command === "rsync") {
+    const targets = remotes.filter((t) => t.context === "ssh");
+    return targets.length ? evaluateSSHCommand(cmd, config, targets, depth) : null;
+  }
+  if (command === "docker") {
+    const targets = remotes.filter((t) => t.context === "docker");
+    return targets.length ? evaluateDockerExec(cmd, config, targets, depth) : null;
+  }
+  if (command === "kubectl") {
+    const targets = remotes.filter((t) => t.context === "kubectl");
+    return targets.length ? evaluateKubectlExec(cmd, config, targets, depth) : null;
+  }
+  if (command === "sprite") {
+    const targets = remotes.filter((t) => t.context === "sprite");
+    return targets.length ? evaluateSpriteExec(cmd, config, targets, depth) : null;
+  }
+  if (command === "fly" || command === "flyctl") {
+    const targets = remotes.filter((t) => t.context === "fly");
+    return targets.length ? evaluateFlyCommand(cmd, config, targets, depth) : null;
+  }
+  return null;
+}
+
+// src/subcommand-runner.ts
+function asParseResult(cmd) {
+  return {
+    commands: [cmd],
+    hasSubshell: false,
+    subshellCommands: [],
+    parseError: false,
+    chainAssignments: /* @__PURE__ */ new Map()
+  };
+}
+var UV_RUN_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
+  "--with",
+  "--from",
+  "--python",
+  "--package",
+  "--index",
+  "--extra-index-url",
+  "--cache-dir",
+  "--index-strategy",
+  "--keyring-provider"
+]);
+var UV_RUN_FLAGS_NO_VALUE = /* @__PURE__ */ new Set([
+  "--no-cache",
+  "--locked",
+  "--frozen",
+  "--isolated",
+  "--verbose",
+  "--quiet",
+  "--no-project"
+]);
+function parseUvRunSubcommand(args) {
+  const rest = args.slice(1);
+  const { index, unresolved } = skipLeadingFlags(rest, {
+    withValue: UV_RUN_FLAGS_WITH_VALUE,
+    noValue: UV_RUN_FLAGS_NO_VALUE,
+    strictUnknown: true
+  });
+  if (unresolved) return { subcommand: null, unresolved: true };
+  if (index >= rest.length) return { subcommand: null, unresolved: false };
+  const subcmd = rest[index];
+  const subArgs = rest.slice(index + 1);
+  return {
+    unresolved: false,
+    subcommand: {
+      command: subcmd.includes("/") ? subcmd.split("/").pop() : subcmd,
+      originalCommand: subcmd,
+      args: subArgs,
+      envPrefixes: [],
+      raw: [subcmd, ...subArgs].join(" ")
+    }
+  };
+}
+function evaluateUvCommand(cmd, config, depth = 0) {
   const { command, args } = cmd;
+  if (args[0] !== "run") return null;
+  const { subcommand, unresolved } = parseUvRunSubcommand(args);
+  if (unresolved || !subcommand) {
+    if (unresolved) {
+      return {
+        command,
+        args,
+        decision: "ask",
+        reason: "uv run: inner command could not be resolved safely",
+        matchedRule: "uv:run"
+      };
+    }
+    return null;
+  }
+  const result = evaluate(asParseResult(subcommand), config, depth + 1);
+  return {
+    command,
+    args,
+    decision: result.decision,
+    reason: `uv run: ${result.reason}`,
+    matchedRule: "uv:run"
+  };
+}
+var XARGS_SHORT_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set(["E", "I", "L", "n", "P", "s", "S", "d", "a"]);
+var XARGS_SHORT_FLAGS_NO_VALUE = /* @__PURE__ */ new Set(["0", "e", "o", "p", "r", "t", "x"]);
+var XARGS_LONG_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
+  "--eof",
+  "--replace",
+  "--max-lines",
+  "--max-args",
+  "--max-procs",
+  "--max-chars",
+  "--arg-file",
+  "--delimiter"
+]);
+var XARGS_LONG_FLAGS_NO_VALUE = /* @__PURE__ */ new Set([
+  "--null",
+  "--exit",
+  "--open-tty",
+  "--interactive",
+  "--no-run-if-empty",
+  "--verbose",
+  "--show-limits"
+]);
+function parseXargsSubcommand(args) {
   let i = 0;
   while (i < args.length) {
-    if (args[i] === "--package" || args[i] === "-p" || args[i] === "--call" || args[i] === "-c") {
+    const arg = args[i];
+    if (arg === "--") {
+      i++;
+      break;
+    }
+    if (!arg.startsWith("-") || arg === "-") {
+      break;
+    }
+    if (arg.startsWith("--")) {
+      const eqIndex = arg.indexOf("=");
+      const longFlag = eqIndex === -1 ? arg : arg.slice(0, eqIndex);
+      if (XARGS_LONG_FLAGS_WITH_VALUE.has(longFlag)) {
+        if (eqIndex !== -1) {
+          i++;
+          continue;
+        }
+        if (i + 1 >= args.length) return { subcommand: null, unresolved: true };
+        i += 2;
+        continue;
+      }
+      if (XARGS_LONG_FLAGS_NO_VALUE.has(longFlag)) {
+        i++;
+        continue;
+      }
+      return { subcommand: null, unresolved: true };
+    }
+    const short = arg[1];
+    if (XARGS_SHORT_FLAGS_WITH_VALUE.has(short)) {
+      if (arg.length > 2) {
+        i++;
+        continue;
+      }
+      if (i + 1 >= args.length) return { subcommand: null, unresolved: true };
       i += 2;
       continue;
     }
-    if (args[i].startsWith("-")) {
+    const grouped = arg.slice(1).split("");
+    const allKnownNoValue = grouped.every((ch) => XARGS_SHORT_FLAGS_NO_VALUE.has(ch));
+    if (allKnownNoValue) {
       i++;
       continue;
     }
-    break;
+    return { subcommand: null, unresolved: true };
   }
-  if (i >= args.length) return null;
-  const subcmd = args[i];
-  if (!COMMANDS_WITH_SCRIPT_EVALUATORS.has(subcmd)) return null;
-  const subArgs = args.slice(i + 1);
-  const subParsedCmd = {
-    command: subcmd,
-    originalCommand: subcmd,
-    args: subArgs,
-    envPrefixes: [],
-    raw: [subcmd, ...subArgs].join(" ")
+  if (i >= args.length) {
+    return { unresolved: false, subcommand: makeCommand("echo", []) };
+  }
+  return {
+    unresolved: false,
+    subcommand: makeCommand(args[i], args.slice(i + 1))
   };
-  const subResult = evaluateCommand(subParsedCmd, config, depth + 1, void 0, cwd);
+}
+function evaluateXargsCommand(cmd, config, depth = 0) {
+  const { command, args } = cmd;
+  const { subcommand, unresolved } = parseXargsSubcommand(args);
+  if (unresolved || !subcommand) {
+    return {
+      command,
+      args,
+      decision: "ask",
+      reason: "xargs subcommand could not be resolved safely",
+      matchedRule: "xargs:subcommand"
+    };
+  }
+  const isShellExec = (subcommand.command === "sh" || subcommand.command === "bash" || subcommand.command === "zsh") && subcommand.args.length >= 2 && subcommand.args[0] === "-c";
+  let parsed;
+  if (isShellExec) {
+    const innerResult = parseCommand(subcommand.args[1]);
+    parsed = innerResult.parseError ? asParseResult(subcommand) : innerResult;
+  } else {
+    parsed = asParseResult(subcommand);
+  }
+  const result = evaluate(parsed, config, depth + 1);
+  return {
+    command,
+    args,
+    decision: result.decision,
+    reason: `xargs subcommand "${subcommand.command}": ${result.reason}`,
+    matchedRule: "xargs:subcommand"
+  };
+}
+function parseFindExecCommands(args) {
+  const commands = [];
+  let i = 0;
+  while (i < args.length) {
+    if (args[i] === "-exec" || args[i] === "-execdir") {
+      i++;
+      const cmdArgs = [];
+      while (i < args.length && args[i] !== ";" && args[i] !== "+") {
+        if (args[i] !== "{}") {
+          cmdArgs.push(args[i]);
+        }
+        i++;
+      }
+      i++;
+      if (cmdArgs.length > 0) {
+        commands.push(makeCommand(cmdArgs[0], cmdArgs.slice(1)));
+      }
+    } else {
+      i++;
+    }
+  }
+  return commands;
+}
+function evaluateFindCommand(cmd, config, depth = 0) {
+  const { command, args } = cmd;
+  if (args.some((a) => a === "-delete")) {
+    return { command, args, decision: "ask", reason: "find -delete can remove files", matchedRule: "find:delete" };
+  }
+  if (args.some((a) => a === "-ok" || a === "-okdir")) {
+    return { command, args, decision: "ask", reason: "find -ok/-okdir can execute commands interactively", matchedRule: "find:ok" };
+  }
+  const execCommands = parseFindExecCommands(args);
+  if (execCommands.length === 0) {
+    return { command, args, decision: "allow", reason: "find without dangerous flags", matchedRule: "find:safe" };
+  }
+  for (const execCmd of execCommands) {
+    const result = evaluate(asParseResult(execCmd), config, depth + 1);
+    if (result.decision === "deny") {
+      return { command, args, decision: "deny", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
+    }
+    if (result.decision === "ask") {
+      return { command, args, decision: "ask", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
+    }
+  }
+  return { command, args, decision: "allow", reason: "find -exec commands are safe", matchedRule: "find:exec" };
+}
+var COMMANDS_WITH_SCRIPT_EVALUATORS = /* @__PURE__ */ new Set(["node", "tsx", "ts-node", "python", "python3", "perl"]);
+var PKG_RUNNER_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set(["--package", "-p", "--call", "-c"]);
+function evaluatePkgRunnerSubcommand(cmd, config, depth, cwd) {
+  const { command, args } = cmd;
+  const { index } = skipLeadingFlags(args, { withValue: PKG_RUNNER_FLAGS_WITH_VALUE });
+  if (index >= args.length) return null;
+  const subcmd = args[index];
+  if (!COMMANDS_WITH_SCRIPT_EVALUATORS.has(subcmd)) return null;
+  const subArgs = args.slice(index + 1);
+  const subResult = evaluateCommand(makeCommand(subcmd, subArgs), config, depth + 1, void 0, cwd);
   return {
     command,
     args,
@@ -14009,6 +13491,159 @@ function evaluatePkgRunnerSubcommand(cmd, config, depth, cwd) {
     matchedRule: `${command}:subcommand`
   };
 }
+function trySubcommandRunner(cmd, config, depth, cwd) {
+  switch (cmd.command) {
+    case "uv":
+      return evaluateUvCommand(cmd, config, depth);
+    case "xargs":
+      return evaluateXargsCommand(cmd, config, depth);
+    case "find":
+      return evaluateFindCommand(cmd, config, depth);
+    case "npx":
+    case "bunx":
+    case "pnpx":
+      return evaluatePkgRunnerSubcommand(cmd, config, depth, cwd);
+  }
+  return null;
+}
+
+// src/script-scanner.ts
+var import_fs2 = require("fs");
+var import_path5 = require("path");
+var PYTHON_PATTERNS = [
+  // Dangerous
+  { regex: /\bos\.system\s*\(/, level: "dangerous", reason: "os.system() executes shell commands" },
+  { regex: /\bos\.popen\s*\(/, level: "dangerous", reason: "os.popen() executes shell commands" },
+  { regex: /\bos\.exec[a-z]*\s*\(/, level: "dangerous", reason: "os.exec*() replaces the process" },
+  { regex: /\bsubprocess\b/, level: "dangerous", reason: "subprocess can execute shell commands" },
+  { regex: /\bshutil\.rmtree\s*\(/, level: "dangerous", reason: "shutil.rmtree() deletes directory trees" },
+  { regex: /\b__import__\s*\(/, level: "dangerous", reason: "__import__() loads arbitrary modules" },
+  { regex: /(?<!\.\s*)(?<!\w)\bexec\s*\(/, level: "dangerous", reason: "exec() executes arbitrary code" },
+  { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() evaluates arbitrary expressions" },
+  { regex: /(?<!re\.)(?<!\w)\bcompile\s*\(/, level: "dangerous", reason: "compile() compiles arbitrary code" },
+  { regex: /\bctypes\b/, level: "dangerous", reason: "ctypes allows calling C functions directly" },
+  { regex: /\bpickle\.loads?\s*\(/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
+  { regex: /\bpickle\.Unpickler\b/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
+  // Cautious
+  { regex: /\bopen\s*\([^)]*['"][wax]/, level: "cautious", reason: "opens file for writing" },
+  { regex: /\bPath\s*[\.(].*\.write_text\s*\(/, level: "cautious", reason: "writes to file via Path" },
+  { regex: /\bPath\s*[\.(].*\.write_bytes\s*\(/, level: "cautious", reason: "writes to file via Path" },
+  { regex: /\bsocket\b/, level: "cautious", reason: "uses network sockets" },
+  { regex: /\brequests\.(post|put|delete)\s*\(/, level: "cautious", reason: "makes mutating HTTP request" },
+  { regex: /\burllib\.request\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" }
+];
+var TYPESCRIPT_PATTERNS = [
+  // Dangerous
+  { regex: /\bchild_process\b/, level: "dangerous", reason: "child_process can execute shell commands" },
+  { regex: /\bexecSync\s*\(/, level: "dangerous", reason: "execSync() executes shell commands" },
+  { regex: /\bspawnSync\s*\(/, level: "dangerous", reason: "spawnSync() executes shell commands" },
+  { regex: /\.spawn\s*\(/, level: "dangerous", reason: ".spawn() executes shell commands" },
+  { regex: /\bfs\.rmSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmSync with recursive deletes directory trees" },
+  { regex: /\bfs\.rmdirSync\s*\([^)]*recursive/, level: "dangerous", reason: "fs.rmdirSync with recursive deletes directory trees" },
+  { regex: /(?<!\.\s*)(?<!\w)\beval\s*\(/, level: "dangerous", reason: "eval() executes arbitrary code" },
+  { regex: /\bnew\s+Function\s*\(/, level: "dangerous", reason: "new Function() compiles arbitrary code" },
+  { regex: /\bprocess\.exit\s*\(/, level: "dangerous", reason: "process.exit() terminates the process" },
+  { regex: /\brimraf\b/, level: "dangerous", reason: "rimraf deletes directory trees" },
+  // Cautious — match both `fs.writeFileSync(` and chained `require('fs').writeFileSync(`
+  { regex: /\.writeFileSync\s*\(/, level: "cautious", reason: "writes to file" },
+  { regex: /\.writeFile\s*\(/, level: "cautious", reason: "writes to file" },
+  { regex: /\.appendFile(Sync)?\s*\(/, level: "cautious", reason: "appends to file" },
+  { regex: /\.createWriteStream\s*\(/, level: "cautious", reason: "opens write stream" },
+  { regex: /\.unlinkSync\s*\(/, level: "cautious", reason: "deletes file" },
+  { regex: /\.unlink\s*\(/, level: "cautious", reason: "deletes file" },
+  { regex: /\.renameSync\s*\(/, level: "cautious", reason: "renames/moves file" },
+  { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: "cautious", reason: "makes mutating HTTP request" },
+  { regex: /\bfetch\s*\(/, level: "cautious", reason: "makes HTTP request" },
+  { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" },
+  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" }
+];
+var PERL_PATTERNS = [
+  // Dangerous
+  { regex: /\bsystem\s*\(/, level: "dangerous", reason: "system() executes shell commands" },
+  { regex: /\bexec\s*\(/, level: "dangerous", reason: "exec() replaces the process with a shell command" },
+  { regex: /`[^`]+`/, level: "dangerous", reason: "backtick execution runs shell commands" },
+  { regex: /\bqx\s*[{(]/, level: "dangerous", reason: "qx{} executes shell commands" },
+  { regex: /\bunlink\b/, level: "dangerous", reason: "unlink deletes files" },
+  { regex: /\beval\s+"/, level: "dangerous", reason: 'eval "" executes arbitrary code (string eval)' },
+  { regex: /\brequire\s+\$/, level: "dangerous", reason: "require with variable loads arbitrary modules" },
+  // Cautious
+  { regex: /\bopen\s*\([^)]*['"]?\s*>{1,2}/, level: "cautious", reason: "opens file for writing" },
+  { regex: /\bsocket\b/i, level: "cautious", reason: "uses network sockets" },
+  { regex: /\bIO::Socket\b/, level: "cautious", reason: "uses network sockets" },
+  { regex: /\bLWP::UserAgent\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\bHTTP::Request\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\brename\s*\(/, level: "cautious", reason: "renames files" },
+  { regex: /\brmdir\s*\(/, level: "cautious", reason: "removes directories" },
+  { regex: /\bFile::Path::remove_tree\b/, level: "cautious", reason: "removes directory trees" }
+];
+var RUBY_PATTERNS = [
+  // Dangerous
+  { regex: /`[^`]+`/, level: "dangerous", reason: "backtick execution runs shell commands" },
+  { regex: /%x[(\{[]/, level: "dangerous", reason: "%x{} executes shell commands" },
+  { regex: /\bsystem\s*\(/, level: "dangerous", reason: "system() executes shell commands" },
+  { regex: /\bexec\s*\(/, level: "dangerous", reason: "exec() replaces the process with a shell command" },
+  { regex: /\bIO\.popen\b/, level: "dangerous", reason: "IO.popen executes shell commands" },
+  { regex: /\bKernel\./, level: "dangerous", reason: "Kernel methods can execute shell commands" },
+  { regex: /\bspawn\s*\(/, level: "dangerous", reason: "spawn() executes shell commands" },
+  // Cautious
+  { regex: /\bFile\.open\s*\([^)]*['"][wax+]/, level: "cautious", reason: "opens file for writing" },
+  { regex: /\bFile\.write\b/, level: "cautious", reason: "writes to file" },
+  { regex: /\bopen-uri\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\bNet::HTTP\b/, level: "cautious", reason: "makes HTTP requests" }
+];
+var PHP_PATTERNS = [
+  // Dangerous
+  { regex: /`[^`]+`/, level: "dangerous", reason: "backtick execution runs shell commands" },
+  { regex: /\bshell_exec\b/, level: "dangerous", reason: "shell_exec() executes shell commands" },
+  { regex: /\b(?:system|passthru|popen|proc_open)\s*\(/, level: "dangerous", reason: "executes shell commands" },
+  { regex: /\bexec\s*\(/, level: "dangerous", reason: "exec() executes shell commands" },
+  // Cautious
+  { regex: /\bfile_put_contents\b/, level: "cautious", reason: "writes to file" },
+  { regex: /\bfwrite\b/, level: "cautious", reason: "writes to file" },
+  { regex: /\bfopen\s*\([^)]*['"][wax+]/, level: "cautious", reason: "opens file for writing" },
+  { regex: /\bcurl_exec\b/, level: "cautious", reason: "makes HTTP requests" },
+  { regex: /\bfsockopen\b/, level: "cautious", reason: "opens network connection" }
+];
+var PATTERNS_BY_LANGUAGE = {
+  python: PYTHON_PATTERNS,
+  typescript: TYPESCRIPT_PATTERNS,
+  perl: PERL_PATTERNS,
+  ruby: RUBY_PATTERNS,
+  php: PHP_PATTERNS
+};
+var MAX_SCRIPT_SIZE = 1024 * 1024;
+function scanScriptCode(code, language) {
+  const patterns = PATTERNS_BY_LANGUAGE[language];
+  for (const pattern of patterns) {
+    if (pattern.level === "dangerous" && pattern.regex.test(code)) {
+      return { level: "dangerous", reason: pattern.reason };
+    }
+  }
+  for (const pattern of patterns) {
+    if (pattern.level === "cautious" && pattern.regex.test(code)) {
+      return { level: "cautious", reason: pattern.reason };
+    }
+  }
+  return null;
+}
+function readScriptFile(filePath, cwd) {
+  const fullPath = (0, import_path5.isAbsolute)(filePath) ? filePath : (0, import_path5.resolve)(cwd, filePath);
+  try {
+    const stat = (0, import_fs2.statSync)(fullPath);
+    if (stat.size > MAX_SCRIPT_SIZE) {
+      return { error: "script too large to scan" };
+    }
+    const content = (0, import_fs2.readFileSync)(fullPath, "utf-8");
+    return { content };
+  } catch (err) {
+    const code = err.code;
+    if (code === "EACCES") return { error: "script not readable (permission denied)" };
+    return { error: "script not found" };
+  }
+}
+
+// src/script-eval.ts
 function userRulesWouldRestrict(cmd, config) {
   const rule = collectMergedRule(cmd, config);
   return !!rule && rule.default === "deny";
@@ -14028,6 +13663,15 @@ function scanScriptFile(cmd, filePath, language, matchedRule, config, cwd) {
     return { command: cmd.command, args: cmd.args, decision: "ask", reason: fileResult.error, matchedRule };
   }
   return mapScanResult(cmd, scanScriptCode(fileResult.content, language), matchedRule, config);
+}
+function allowIfVersionFlag(cmd, flags, rule) {
+  if (cmd.args.some((a) => flags.includes(a))) {
+    return { command: cmd.command, args: cmd.args, decision: "allow", reason: "version/help flag", matchedRule: rule };
+  }
+  return null;
+}
+function askRepl(cmd, rule) {
+  return { command: cmd.command, args: cmd.args, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
 }
 var SAFE_PYTHON_MODULES = /* @__PURE__ */ new Set([
   "pytest",
@@ -14054,12 +13698,11 @@ var SAFE_PYTHON_MODULES = /* @__PURE__ */ new Set([
   "tokenize",
   "sysconfig"
 ]);
-function evaluatePythonCommand(cmd, config, depth = 0, cwd) {
+function evaluatePythonCommand(cmd, config, cwd) {
   const { command, args } = cmd;
   const rule = "python:script";
-  if (args.some((a) => a === "--version" || a === "--help" || a === "-V")) {
-    return { command, args, decision: "allow", reason: "version/help flag", matchedRule: rule };
-  }
+  const version = allowIfVersionFlag(cmd, ["--version", "--help", "-V"], rule);
+  if (version) return version;
   const cIdx = args.indexOf("-c");
   if (cIdx !== -1) {
     const code = args[cIdx + 1];
@@ -14084,18 +13727,15 @@ function evaluatePythonCommand(cmd, config, depth = 0, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "python", rule, config, cwd);
   }
-  if (args.length === 0) {
-    return { command, args, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
-  }
+  if (args.length === 0) return askRepl(cmd, rule);
   return null;
 }
 var NODE_SCRIPT_EXTENSIONS = /\.(js|mjs|cjs|ts|mts|cts|tsx|jsx)$/;
-function evaluateNodeCommand(cmd, config, depth = 0, cwd) {
+function evaluateNodeCommand(cmd, config, cwd) {
   const { command, args } = cmd;
   const rule = "node:script";
-  if (args.some((a) => a === "--version" || a === "--help" || a === "-v" || a === "-h")) {
-    return { command, args, decision: "allow", reason: "version/help flag", matchedRule: rule };
-  }
+  const version = allowIfVersionFlag(cmd, ["--version", "--help", "-v", "-h"], rule);
+  if (version) return version;
   const inlineJs = { lang: "JavaScript", ext: "js" };
   const evalIdx = args.findIndex((a) => a === "-e" || a === "--eval" || a === "-p" || a === "--print");
   if (evalIdx !== -1) {
@@ -14117,17 +13757,14 @@ function evaluateNodeCommand(cmd, config, depth = 0, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "typescript", rule, config, cwd);
   }
-  if (args.length === 0) {
-    return { command, args, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
-  }
+  if (args.length === 0) return askRepl(cmd, rule);
   return null;
 }
-function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
+function evaluatePerlCommand(cmd, config, cwd) {
   const { command, args } = cmd;
   const rule = "perl:script";
-  if (args.some((a) => a === "--version" || a === "--help" || a === "-v")) {
-    return { command, args, decision: "allow", reason: "version/help flag", matchedRule: rule };
-  }
+  const version = allowIfVersionFlag(cmd, ["--version", "--help", "-v"], rule);
+  if (version) return version;
   if (args.some((a) => /^-[a-z]*i/.test(a))) {
     return {
       command,
@@ -14149,10 +13786,335 @@ function evaluatePerlCommand(cmd, config, depth = 0, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "perl", rule, config, cwd);
   }
-  if (args.length === 0) {
-    return { command, args, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
+  if (args.length === 0) return askRepl(cmd, rule);
+  return null;
+}
+function evaluateRubyCommand(cmd, config, cwd) {
+  const { command, args } = cmd;
+  const rule = "ruby:script";
+  const version = allowIfVersionFlag(cmd, ["--version", "--help", "-v", "-h"], rule);
+  if (version) return version;
+  const evalIdx = args.findIndex((a) => a === "-e" || a === "--eval");
+  if (evalIdx !== -1) {
+    const code = args[evalIdx + 1];
+    if (!code) {
+      return { command, args, decision: "ask", reason: "missing code after eval flag", matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, "ruby"), rule, config, { lang: "Ruby", ext: "rb" });
+  }
+  const scriptArg = args.find((a) => !a.startsWith("-") && a.endsWith(".rb"));
+  if (scriptArg) {
+    return scanScriptFile(cmd, scriptArg, "ruby", rule, config, cwd);
+  }
+  if (args.length === 0) return askRepl(cmd, rule);
+  return null;
+}
+function evaluatePhpCommand(cmd, config, cwd) {
+  const { command, args } = cmd;
+  const rule = "php:script";
+  const version = allowIfVersionFlag(cmd, ["--version", "--help", "-v", "-h"], rule);
+  if (version) return version;
+  const rIdx = args.indexOf("-r");
+  if (rIdx !== -1) {
+    const code = args[rIdx + 1];
+    if (!code) {
+      return { command, args, decision: "ask", reason: "missing code after -r", matchedRule: rule };
+    }
+    return mapScanResult(cmd, scanScriptCode(code, "php"), rule, config, { lang: "PHP", ext: "php" });
+  }
+  const scriptArg = args.find((a) => !a.startsWith("-") && a.endsWith(".php"));
+  if (scriptArg) {
+    return scanScriptFile(cmd, scriptArg, "php", rule, config, cwd);
+  }
+  if (args.length === 0) return askRepl(cmd, rule);
+  return null;
+}
+function tryScriptEval(cmd, config, cwd) {
+  switch (cmd.command) {
+    case "python":
+    case "python3":
+      return evaluatePythonCommand(cmd, config, cwd);
+    case "node":
+    case "tsx":
+    case "ts-node":
+      return evaluateNodeCommand(cmd, config, cwd);
+    case "perl":
+      return evaluatePerlCommand(cmd, config, cwd);
+    case "ruby":
+      return evaluateRubyCommand(cmd, config, cwd);
+    case "php":
+      return evaluatePhpCommand(cmd, config, cwd);
   }
   return null;
+}
+
+// src/evaluator.ts
+function safeRegexTest(pattern, input) {
+  try {
+    return new RegExp(pattern).test(input);
+  } catch {
+    warn(`[warden] Warning: invalid regex pattern: ${pattern}
+`);
+    return false;
+  }
+}
+function expandTilde(path) {
+  return path.startsWith("~/") ? (0, import_os5.homedir)() + path.slice(1) : path;
+}
+function commandMatchesName(cmd, name) {
+  if (name.includes("*")) {
+    const expanded = expandTilde(name);
+    const regexStr = pathGlobToRegex(expanded);
+    try {
+      const re = new RegExp(`^${regexStr}$`);
+      const target = name.includes("/") ? expandTilde(cmd.originalCommand) : cmd.command;
+      return re.test(target);
+    } catch {
+      return false;
+    }
+  }
+  if (name.startsWith("/")) {
+    return expandTilde(cmd.originalCommand) === name;
+  }
+  if (name.startsWith("~/")) {
+    return expandTilde(cmd.originalCommand) === (0, import_os5.homedir)() + name.slice(1);
+  }
+  return cmd.command === name;
+}
+var MAX_RECURSION_DEPTH = 10;
+function evaluate(parsed, config, depth = 0, cwd) {
+  if (depth > MAX_RECURSION_DEPTH) {
+    return { decision: "ask", reason: "too many nested commands", details: [] };
+  }
+  if (parsed.parseError) {
+    return { decision: "ask", reason: "unparseable command", details: [] };
+  }
+  if (parsed.commands.length === 0) {
+    return { decision: "allow", reason: "Empty command", details: [] };
+  }
+  if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
+    for (const subCmd of parsed.subshellCommands) {
+      const subParsed = parseCommand(subCmd);
+      const subResult = evaluate(subParsed, config, depth + 1, cwd);
+      if (subResult.decision === "deny") {
+        return { decision: "deny", reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
+      }
+      if (subResult.decision === "ask") {
+        return { decision: "ask", reason: `Subshell command: ${subResult.reason}`, details: subResult.details };
+      }
+    }
+  } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
+    return { decision: "ask", reason: "contains subshell", details: [] };
+  }
+  const details = [];
+  for (const cmd of parsed.commands) {
+    details.push(evaluateCommand(cmd, config, depth, parsed.chainAssignments, cwd));
+  }
+  const decisions = details.map((d) => d.decision);
+  if (decisions.includes("deny")) {
+    const denied = details.filter((d) => d.decision === "deny");
+    return {
+      decision: "deny",
+      reason: denied.map((d) => `${d.command}: ${d.reason}`).join("; "),
+      details
+    };
+  }
+  if (decisions.includes("ask")) {
+    const asked = details.filter((d) => d.decision === "ask");
+    return {
+      decision: "ask",
+      reason: asked.map((d) => `${d.command}: ${d.reason}`).join("; "),
+      details
+    };
+  }
+  return { decision: "allow", reason: "ok", details };
+}
+var scopedAlwaysPolicy = ({ cmd, config }) => {
+  for (const layer of config.layers) {
+    if (layer.alwaysDeny.some((pattern) => commandMatchesName(cmd, pattern))) {
+      return { command: cmd.command, args: cmd.args, decision: "deny", reason: "blocked by policy", matchedRule: "alwaysDeny" };
+    }
+    if (layer.alwaysAllow.some((pattern) => commandMatchesName(cmd, pattern))) {
+      return { command: cmd.command, args: cmd.args, decision: "allow", reason: "safe", matchedRule: "alwaysAllow" };
+    }
+  }
+  return null;
+};
+var targetPolicyLayer = ({ cmd, config, cwd }) => cwd && config.targetPolicies?.length ? evaluateTargetPolicies(cmd, cwd, config) : null;
+var chainResolvedBinary = ({ cmd, config, chain }) => {
+  if (!cmd.resolvedFrom || !chain) return null;
+  const varMatch = cmd.resolvedFrom.match(/^\$\{?(\w+)\}?$/);
+  if (!varMatch) return null;
+  const assignment = chain.get(varMatch[1]);
+  if (!assignment || assignment.isDynamic || assignment.value === null) return null;
+  if (collectMergedRule(cmd, config)) return null;
+  return { command: cmd.command, args: cmd.args, decision: "allow", reason: `chain-local binary (${assignment.value})`, matchedRule: "chainResolved" };
+};
+var localBinary = ({ cmd, config }) => {
+  if (!cmd.originalPath || cmd.originalPath.startsWith("/") || cmd.originalPath.startsWith("~/")) return null;
+  if (collectMergedRule(cmd, config)) return null;
+  return { command: cmd.command, args: cmd.args, decision: "allow", reason: `local binary (${cmd.originalPath})`, matchedRule: "localBinary" };
+};
+var tempDirRmLayer = ({ cmd, config }) => cmd.command === "rm" && cmd.effectiveCwd ? evaluateRmTempDir(cmd, config) : null;
+var chainLocalRmLayer = ({ cmd, config, chain, cwd }) => cmd.command === "rm" && chain?.size ? evaluateRmChainLocal(cmd, chain, config, cwd) : null;
+var specializedLayer = ({ cmd, config, depth, cwd }) => tryRemoteExec(cmd, config, depth) ?? trySubcommandRunner(cmd, config, depth, cwd) ?? tryScriptEval(cmd, config, cwd);
+var commandRulesLayer = ({ cmd, config }) => {
+  const merged = collectMergedRule(cmd, config);
+  return merged ? evaluateRule(cmd, merged) : null;
+};
+var PRE_LAYERS = [scopedAlwaysPolicy, targetPolicyLayer];
+var AUTO_ALLOW_LAYERS = [chainResolvedBinary, localBinary, tempDirRmLayer, chainLocalRmLayer];
+var RESOLVE_LAYERS = [specializedLayer, commandRulesLayer];
+function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
+  const ctx = { cmd, config, depth, chain: chainAssignments, cwd };
+  const autoAllow = config.defaultDecision === "deny" ? [] : AUTO_ALLOW_LAYERS;
+  for (const layer of [...PRE_LAYERS, ...autoAllow, ...RESOLVE_LAYERS]) {
+    const result = layer(ctx);
+    if (result) return cmd.resolvedFrom ? { ...result, resolvedFrom: cmd.resolvedFrom } : result;
+  }
+  return {
+    command: cmd.command,
+    args: cmd.args,
+    decision: config.defaultDecision,
+    reason: "unknown command",
+    matchedRule: "default",
+    ...cmd.resolvedFrom ? { resolvedFrom: cmd.resolvedFrom } : {}
+  };
+}
+function isTempDir(path) {
+  if (path === "/tmp" || path.startsWith("/tmp/")) return true;
+  if (path === "/var/tmp" || path.startsWith("/var/tmp/")) return true;
+  const envTmpdir = process.env.TMPDIR;
+  if (envTmpdir) {
+    const normalized = envTmpdir.endsWith("/") ? envTmpdir : envTmpdir + "/";
+    if (path === envTmpdir || path.startsWith(normalized)) return true;
+  }
+  return false;
+}
+function evaluateRmTempDir(cmd, config) {
+  const { command, args } = cmd;
+  const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
+  if (!hasRecursive) return null;
+  if (!cmd.effectiveCwd || !isTempDir(cmd.effectiveCwd)) return null;
+  const targets = args.filter((a) => !a.startsWith("-"));
+  if (targets.length === 0) return null;
+  for (const t of targets) {
+    if (t.startsWith("/")) return null;
+    if (t.includes("..")) return null;
+  }
+  for (const layer of config.layers) {
+    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
+    if (rule) {
+      if (rule.default === "deny") return null;
+      const ruleResult = evaluateRule(cmd, rule);
+      if (ruleResult.decision === "deny") return null;
+      break;
+    }
+  }
+  return { command, args, decision: "allow", reason: `temp directory cleanup (${cmd.effectiveCwd})`, matchedRule: "tempDirRm" };
+}
+var VAR_REF_REGEX2 = /^"?\$\{?(\w+)\}?"?$/;
+function extractVarName(text) {
+  const m = text.match(VAR_REF_REGEX2);
+  return m ? m[1] : null;
+}
+function evaluateRmChainLocal(cmd, chainAssignments, config, cwd) {
+  const { command, args } = cmd;
+  const hasRecursive = args.some((a) => /^-[a-zA-Z]*r[a-zA-Z]*$/.test(a));
+  if (!hasRecursive) return null;
+  const targets = args.filter((a) => !a.startsWith("-"));
+  if (targets.length === 0) return null;
+  for (const target of targets) {
+    const varName = extractVarName(target);
+    if (!varName) return null;
+    if (!chainAssignments.has(varName)) return null;
+  }
+  for (const layer of config.layers) {
+    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
+    if (rule) {
+      if (rule.default === "deny") return null;
+      const ruleResult = evaluateRule(cmd, rule);
+      if (ruleResult.decision === "deny") return null;
+      break;
+    }
+  }
+  if (cwd && config.targetPolicies?.length) {
+    const resolvedArgs = args.map((arg) => {
+      const varName = extractVarName(arg);
+      if (varName) {
+        const assignment = chainAssignments.get(varName);
+        if (assignment?.value) return assignment.value;
+      }
+      return arg;
+    });
+    const resolvedCmd = { ...cmd, args: resolvedArgs };
+    const targetResult = evaluateTargetPolicies(resolvedCmd, cwd, config);
+    if (targetResult && targetResult.decision === "deny") {
+      return { command, args, decision: "deny", reason: targetResult.reason, matchedRule: targetResult.matchedRule };
+    }
+  }
+  return { command, args, decision: "allow", reason: "chain-local cleanup", matchedRule: "chainLocalRm" };
+}
+function collectMergedRule(cmd, config) {
+  const matchingRules = [];
+  for (const layer of config.layers) {
+    const rule = layer.rules.find((r) => commandMatchesName(cmd, r.command));
+    if (rule) {
+      matchingRules.push(rule);
+      if (rule.override) break;
+    }
+  }
+  if (matchingRules.length === 0) return null;
+  if (matchingRules.length === 1) return matchingRules[0];
+  const mergedPatterns = [];
+  for (const rule of matchingRules) {
+    if (rule.argPatterns) {
+      mergedPatterns.push(...rule.argPatterns);
+    }
+  }
+  return {
+    command: matchingRules[0].command,
+    default: matchingRules[0].default,
+    argPatterns: mergedPatterns
+  };
+}
+function evaluateRule(cmd, rule) {
+  const { command, args } = cmd;
+  const argsJoined = args.join(" ");
+  for (const pattern of rule.argPatterns || []) {
+    const m = pattern.match;
+    let matched = true;
+    if (m.noArgs !== void 0) {
+      matched = matched && m.noArgs === (args.length === 0);
+    }
+    if (m.argsMatch && matched) {
+      matched = m.argsMatch.some((re) => safeRegexTest(re, argsJoined));
+    }
+    if (m.anyArgMatches && matched) {
+      matched = args.some((arg) => m.anyArgMatches.some((re) => safeRegexTest(re, arg)));
+    }
+    if (m.argCount && matched) {
+      if (m.argCount.min !== void 0) matched = matched && args.length >= m.argCount.min;
+      if (m.argCount.max !== void 0) matched = matched && args.length <= m.argCount.max;
+    }
+    if (m.not) matched = !matched;
+    if (matched) {
+      return {
+        command,
+        args,
+        decision: pattern.decision,
+        reason: pattern.reason || pattern.description || `Matched pattern for "${command}"`,
+        matchedRule: `${command}:argPattern`
+      };
+    }
+  }
+  return {
+    command,
+    args,
+    decision: rule.default,
+    reason: "needs review",
+    matchedRule: `${command}:default`
+  };
 }
 
 // src/core.ts
@@ -14165,6 +14127,16 @@ function wardenEvalWithConfig(command, config, cwd) {
   return evaluate(parsed, config, 0, cwd);
 }
 
+// src/stdin.ts
+async function readStdin(maxSize) {
+  let raw = "";
+  for await (const chunk of process.stdin) {
+    raw += chunk;
+    if (raw.length > maxSize) return { tooLarge: true };
+  }
+  return { data: raw };
+}
+
 // src/copilot.ts
 var MAX_STDIN_SIZE = 1024 * 1024;
 function output(decision, reason) {
@@ -14175,14 +14147,12 @@ function output(decision, reason) {
   process.stdout.write(JSON.stringify(result));
 }
 async function main() {
-  let raw = "";
-  for await (const chunk of process.stdin) {
-    raw += chunk;
-    if (raw.length > MAX_STDIN_SIZE) {
-      output("ask", "[warden] Input exceeds size limit");
-      process.exit(0);
-    }
+  const stdin = await readStdin(MAX_STDIN_SIZE);
+  if ("tooLarge" in stdin) {
+    output("ask", "[warden] Input exceeds size limit");
+    process.exit(0);
   }
+  const raw = stdin.data;
   let input;
   try {
     input = JSON.parse(raw);
