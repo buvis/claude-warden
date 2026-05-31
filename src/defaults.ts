@@ -63,70 +63,6 @@ function registryOpsPattern(): ArgPattern {
   };
 }
 
-type InlineLang = 'Ruby' | 'PHP';
-
-// Per-language config for inline interpreter scripts. `patterns` are regex fragments for
-// identifiers that indicate a script is not read-only (shell-out, file-write, network).
-// They are OR-alternated and interpolated into a compound `argsMatch` regex that also
-// requires the inline flag (-e/-r) to be present. This is a heuristic — obfuscation,
-// string concat tricks can bypass it — but it covers the common foot-guns that would
-// surprise a user who expected a quick one-liner to be read-only.
-//
-// Python, JavaScript, and Perl are NOT here: they have custom evaluators in evaluator.ts
-// that scan inline code via script-scanner.ts, which gives richer pattern coverage.
-const INLINE_LANG_CONFIG: Record<InlineLang, { ext: string; patterns: string[] }> = {
-  Ruby: {
-    ext: 'rb',
-    patterns: [
-      '`',
-      '%x[\\(\\{\\[]',
-      '\\bsystem\\s*\\(',
-      '\\bexec\\s*\\(',
-      'IO\\.popen',
-      'Kernel\\.',
-      '\\bspawn\\s*\\(',
-      "File\\.open\\s*\\([^)]*['\"][wax+]",
-      'File\\.write',
-      'open-uri',
-      'Net::HTTP',
-    ],
-  },
-  PHP: {
-    ext: 'php',
-    patterns: [
-      '`',
-      'shell_exec',
-      '\\b(?:system|passthru|popen|proc_open)\\s*\\(',
-      '\\bexec\\s*\\(',
-      'file_put_contents',
-      'fwrite',
-      "fopen\\s*\\([^)]*['\"][wax+]",
-      'curl_exec',
-      'fsockopen',
-    ],
-  },
-};
-
-function inlineExecPatterns(lang: InlineLang, flags: string[]): ArgPattern[] {
-  const { ext, patterns } = INLINE_LANG_CONFIG[lang];
-  const reason = `Inline ${lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${ext} and run it.`;
-  // Strip ^/$ anchors from each flag regex so it can be embedded in the compound alternation.
-  // Use `[\s=]` after the flag to also catch `--eval=script` form (no space).
-  // Bounded lazy quantifier caps backtracking; 16k is well past any realistic inline body
-  // while still preventing pathological-input slowdowns.
-  const flagAlt = flags.map(f => f.replace(/^\^/, '').replace(/\$$/, '')).join('|');
-  const compound = `(?:^|\\s)(?:${flagAlt})[\\s=][^\\n]{0,16000}?(?:${patterns.join('|')})`;
-
-  return [
-    { match: { argsMatch: [compound] }, decision: 'ask', reason },
-    {
-      match: { anyArgMatches: flags },
-      decision: 'allow',
-      description: `Plausibly read-only inline ${lang} script`,
-    },
-  ];
-}
-
 function pkgManagerRule(command: string, extraSafeCmds: string[] = []): CommandRule {
   const safeCmds = [...SAFE_PKG_MANAGER_CMDS, ...extraSafeCmds];
   return {
@@ -535,11 +471,9 @@ export const DEFAULT_CONFIG: WardenConfig = {
       })),
 
       // --- Scripting languages ---
-      // perl/python/node have custom evaluators in evaluator.ts that handle inline
-      // -c/-e and file scanning via script-scanner.ts. ruby/php have no scanner.
+      // perl/python/node/ruby/php have custom evaluators in script-eval.ts that handle
+      // inline code (-c/-e/-r) and file scanning via script-scanner.ts.
       { command: 'perl', default: 'ask' },
-      { command: 'ruby', default: 'ask', argPatterns: [...inlineExecPatterns('Ruby', ['^-e$', '^--eval']), VERSION_HELP_FLAGS] },
-      { command: 'php',  default: 'ask', argPatterns: [...inlineExecPatterns('PHP', ['^-r$']), VERSION_HELP_FLAGS] },
 
       // --- Java ecosystem ---
       { command: 'java', default: 'ask', argPatterns: [VERSION_HELP_FLAGS] },
