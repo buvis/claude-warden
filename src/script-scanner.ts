@@ -27,6 +27,7 @@ const PYTHON_PATTERNS: ScanPattern[] = [
   { regex: /\bctypes\b/, level: 'dangerous', reason: 'ctypes allows calling C functions directly' },
   { regex: /\bpickle\.loads?\s*\(/, level: 'dangerous', reason: 'pickle deserialization can execute arbitrary code' },
   { regex: /\bpickle\.Unpickler\b/, level: 'dangerous', reason: 'pickle deserialization can execute arbitrary code' },
+  { regex: /\bimportlib\b/, level: 'dangerous', reason: 'importlib loads arbitrary modules' },
 
   // Cautious
   { regex: /\bopen\s*\([^)]*['"][wax]/, level: 'cautious', reason: 'opens file for writing' },
@@ -36,6 +37,10 @@ const PYTHON_PATTERNS: ScanPattern[] = [
   { regex: /\brequests\.(post|put|delete)\s*\(/, level: 'cautious', reason: 'makes mutating HTTP request' },
   { regex: /\burllib\.request\b/, level: 'cautious', reason: 'makes HTTP requests' },
   { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: 'cautious', reason: 'modifies filesystem' },
+  { regex: /\.unlink\s*\(/, level: 'cautious', reason: 'deletes a file' },
+  { regex: /\.rmdir\s*\(/, level: 'cautious', reason: 'removes a directory' },
+  { regex: /\bos\.replace\s*\(/, level: 'cautious', reason: 'renames/overwrites a file' },
+  { regex: /\bshutil\.move\s*\(/, level: 'cautious', reason: 'moves a file' },
 ];
 
 // ─── TypeScript/JavaScript patterns ───
@@ -65,6 +70,9 @@ const TYPESCRIPT_PATTERNS: ScanPattern[] = [
   { regex: /\bfetch\s*\(/, level: 'cautious', reason: 'makes HTTP request' },
   { regex: /\bhttps?\.request\s*\(/, level: 'cautious', reason: 'makes HTTP request' },
   { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: 'cautious', reason: 'opens network connection' },
+  { regex: /\.rmSync\s*\(/, level: 'cautious', reason: 'deletes file/directory' },
+  { regex: /\.rmdirSync\s*\(/, level: 'cautious', reason: 'removes directory' },
+  { regex: /\.rm\s*\(/, level: 'cautious', reason: 'deletes file/directory' },
 ];
 
 // ─── Perl patterns ───

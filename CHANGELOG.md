@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **script-scanner**: widened deletion/danger detection — Python `pathlib` `.unlink()`/`.rmdir()`, `importlib`, `os.replace()`, `shutil.move()`, and non-recursive JS `fs.rm`/`fs.rmSync`/`fs.rmdirSync` now classify as cautious/dangerous, so these scripts prompt instead of being silently allowed
+
 ## [0.12.0] - 2026-06-09
 
 ### Added
