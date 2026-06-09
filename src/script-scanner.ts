@@ -72,6 +72,7 @@ const TYPESCRIPT_PATTERNS: ScanPattern[] = [
   { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: 'cautious', reason: 'opens network connection' },
   { regex: /\.rmSync\s*\(/, level: 'cautious', reason: 'deletes file/directory' },
   { regex: /\.rmdirSync\s*\(/, level: 'cautious', reason: 'removes directory' },
+  { regex: /\.rmdir\s*\(/, level: 'cautious', reason: 'removes directory' },
   { regex: /\.rm\s*\(/, level: 'cautious', reason: 'deletes file/directory' },
 ];
 
