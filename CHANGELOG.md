@@ -10,6 +10,10 @@
 
 - **script-eval**: the script allow path now requires positive safe-shape evidence, not just the absence of a danger pattern — a script with no recognized safe shape now asks instead of being silently allowed. Unrecognized one-liners (e.g. `node -p "1+1"`, `ruby -e "puts 1"`, `php -r "echo 1;"`, perl `s///` substitutions) now prompt; a user `default: deny` still wins
 
+### Fixed
+
+- **script-scanner**: Python `open(*args)` splat calls are no longer treated as a safe single-arg read — the file mode is hidden in the unpacked args and could be a write, so these now ask instead of being silently allowed
+
 ## [0.12.0] - 2026-06-09
 
 ### Added

@@ -173,7 +173,7 @@ const SAFE_SHAPE_PATTERNS: Partial<Record<Language, RegExp[]>> = {
     /^\w+\s*=\s*[^()]*$/,        // no-call assignment (no parens in RHS)
     /^(import|from)\s+\w/,
     /\bjson\.(loads|load|dumps|dump)\s*\(/,
-    /^open\s*\([^,)]+\)\s*$/,            // single-arg open (defaults to read)
+    /^open\s*\([^,)*]+\)\s*$/,            // single-arg open (defaults to read); excludes splat args
     /^open\s*\([^)]*,\s*['"]r['"]?\s*\)/, // open with explicit read-mode literal; a variable mode stays unknown
     /\.(read_text|read|readlines)\s*\(/,
   ],
