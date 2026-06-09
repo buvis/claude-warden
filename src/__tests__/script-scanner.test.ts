@@ -390,6 +390,10 @@ describe('scanScriptCode (typescript)', () => {
     expect(r.reason.length).toBeGreaterThan(0);
   });
 
+  it('typescript async fs.rmdir() is cautious', () => {
+    expect(scanScriptCode('fs.rmdir("dir", cb)', 'typescript').verdict).toBe('cautious');
+  });
+
   it('detects fs.rm() as cautious', () => {
     const r = scan('fs.rm("x", cb)');
     expect(r.verdict).toBe('cautious');
