@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **defaults**: composio CLI safety rules — auto-allow read-only subcommands (search/whoami/apps/...), `--get-schema`/`--dry-run`, and `execute` calls whose slug verb reads (GET/LIST/SEARCH/FETCH/...) plus `COMPOSIO_SEARCH_TOOLS` discovery; mutating slugs and link/listen/proxy/run still ask (from upstream 5d718a6)
+
 ## [0.11.1] - 2026-05-31
 
 ### Changed
