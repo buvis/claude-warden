@@ -268,24 +268,40 @@ describe('evaluator', () => {
     const CP = 'child' + '_process';
     const SHEXEC = 'shell' + '_exec';
 
+    // Allow requires positive safe-shape evidence (verdict `safe`), not merely the
+    // absence of a danger pattern. These all match the safe-shape allowlist.
     it.each([
       [`python -c "print(1)"`,                            'Python'],
       [`python3 -c "print(1)"`,                           'Python'],
       [`python3 -c "import json; print(json.dumps({}))"`, 'Python'],
       [`node -e "console.log(1)"`,                        'JavaScript'],
-      [`node --eval "1+1"`,                               'JavaScript'],
-      [`node -p "1+1"`,                                   'JavaScript'],
       [`node -e "console.log(JSON.parse(x).foo)"`,        'JavaScript'],
       [`perl -e "print 1"`,                               'Perl'],
-      [`perl -pe "s/foo/bar/g"`,                          'Perl'],
       [`perl -ne "print if /foo/"`,                       'Perl'],
       [`perl -ane "print $F[0]"`,                         'Perl'],
-      [`perl -pE "s/foo/bar/g"`,                          'Perl'],
-      [`ruby -e "puts 1"`,                                'Ruby'],
-      [`php -r "echo 1;"`,                                'PHP'],
-    ])('allows plausibly read-only inline script %s', (cmd) => {
+    ])('allows safe-shape inline script %s', (cmd) => {
       const r = eval_(cmd);
       expect(r.decision).toBe('allow');
+    });
+
+    // Post-flip: scripts with no positive safe-shape resolve to `unknown` → `ask`,
+    // even with no danger pattern. Absence of evidence is no longer an allow.
+    // The inline educational nudge applies (jq / scripts/*.ext / language).
+    const UNRECOGNIZED_CASES: [string, string, string][] = [
+      [`node --eval "1+1"`,            'JavaScript', 'js'],
+      [`node -p "1+1"`,                'JavaScript', 'js'],
+      [`perl -pe "s/foo/bar/g"`,       'Perl', 'pl'],
+      [`perl -pE "s/foo/bar/g"`,       'Perl', 'pl'],
+      [`ruby -e "puts 1"`,             'Ruby', 'rb'],
+      [`php -r "echo 1;"`,             'PHP', 'php'],
+    ];
+
+    it.each(UNRECOGNIZED_CASES)('asks for unrecognized inline script %s', (cmd, lang, ext) => {
+      const r = eval_(cmd);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain('jq');
+      expect(r.reason).toContain(`scripts/*.${ext}`);
+      expect(r.reason).toContain(lang);
     });
 
     const DANGEROUS_CASES: [string, string, string][] = [
