@@ -517,6 +517,73 @@ describe('scanScriptCode (perl)', () => {
   });
 });
 
+// ─── scanScriptCode evasion signals ───
+
+describe('scanScriptCode evasion signals', () => {
+  // Genuinely-new evasion signals → unknown with named reason
+
+  it('python getattr dynamic dispatch returns unknown with getattr reason', () => {
+    const r = scanScriptCode("getattr(os, 'sys' + 'tem')('id')", 'python');
+    expect(r.verdict).toBe('unknown');
+    expect(r.reason.toLowerCase()).toContain('getattr');
+  });
+
+  it('python chr-built string returns unknown with chr reason', () => {
+    const r = scanScriptCode('name = chr(112) + chr(114) + chr(105)', 'python');
+    expect(r.verdict).toBe('unknown');
+    expect(r.reason.toLowerCase()).toContain('chr');
+  });
+
+  it('typescript globalThis bracket access returns unknown with globalThis reason', () => {
+    const r = scanScriptCode("globalThis['fetch']('http://x')", 'typescript');
+    expect(r.verdict).toBe('unknown');
+    expect(r.reason.toLowerCase()).toContain('globalthis');
+  });
+
+  it('typescript require with variable argument returns unknown with require reason', () => {
+    const r = scanScriptCode('const m = require(modName)', 'typescript');
+    expect(r.verdict).toBe('unknown');
+    expect(r.reason.toLowerCase()).toContain('require');
+  });
+
+  // Already-dangerous: existing patterns catch these before evasion check
+
+  it('python exec(base64.b64decode()) is caught as dangerous, not unknown', () => {
+    const r = scanScriptCode('exec(base64.b64decode(s))', 'python');
+    expect(r.verdict).toBe('dangerous');
+  });
+
+  it('typescript eval(Buffer.from().toString()) is caught as dangerous, not unknown', () => {
+    const r = scanScriptCode("eval(Buffer.from(x, 'base64').toString())", 'typescript');
+    expect(r.verdict).toBe('dangerous');
+  });
+
+  it('typescript new Function() is caught as dangerous, not unknown', () => {
+    const r = scanScriptCode("new Function('return 1')()", 'typescript');
+    expect(r.verdict).toBe('dangerous');
+  });
+
+  // Negatives: must NOT trigger evasion detection
+
+  it('python print("hello") returns unknown with no evasion reason', () => {
+    const r = scanScriptCode('print("hello")', 'python');
+    expect(r.verdict).toBe('unknown');
+    expect(r.reason.toLowerCase()).not.toContain('getattr');
+    expect(r.reason.toLowerCase()).not.toContain('chr');
+    expect(r.reason.toLowerCase()).not.toContain('globalthis');
+    expect(r.reason.toLowerCase()).not.toContain('require');
+  });
+
+  it('typescript require with string literal is NOT the dynamic require evasion signal', () => {
+    const r = scanScriptCode("const m = require('fs')", 'typescript');
+    expect(r.verdict).toBe('unknown');
+    expect(r.reason.toLowerCase()).not.toContain('getattr');
+    expect(r.reason.toLowerCase()).not.toContain('chr');
+    expect(r.reason.toLowerCase()).not.toContain('globalthis');
+    expect(r.reason.toLowerCase()).not.toContain('require');
+  });
+});
+
 // ─── readScriptFile ───
 
 describe('readScriptFile', () => {
