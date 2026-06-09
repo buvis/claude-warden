@@ -208,6 +208,49 @@ describe('scanScriptCode (python)', () => {
     expect(r.verdict).toBe('cautious');
   });
 
+  it('detects pathlib unlink', () => {
+    const r = scan("from pathlib import Path; Path('/x').unlink()");
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  it('detects pathlib rmdir', () => {
+    const r = scan("Path('/x').rmdir()");
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  it('detects importlib as dangerous', () => {
+    const r = scan("import importlib; importlib.import_module('os')");
+    expect(r.verdict).toBe('dangerous');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  it('detects os.replace() as cautious', () => {
+    const r = scan("os.replace('a', 'b')");
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  it('detects shutil.move() as cautious', () => {
+    const r = scan("import shutil; shutil.move('a', 'b')");
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  // Word-boundary negative tests: substring matches that must NOT fire
+  it('does not flag identifier containing importlib as a substring', () => {
+    expect(scan('importlibrary = 1').verdict).toBe('unknown');
+  });
+
+  it('does not flag os.replace on a receiver whose name ends in "os"', () => {
+    expect(scan("cos.replace_thing('a')").verdict).toBe('unknown');
+  });
+
+  it('does not flag shutil.move on a receiver whose name ends in "shutil"', () => {
+    expect(scan("myshutil.move_along('a')").verdict).toBe('unknown');
+  });
+
   // No match
   it('returns unknown for code with no matching patterns', () => {
     expect(scan('print("hello")').verdict).toBe('unknown');
@@ -333,6 +376,35 @@ describe('scanScriptCode (typescript)', () => {
   it('detects https.request()', () => {
     const r = scan('https.request(options, cb)');
     expect(r.verdict).toBe('cautious');
+  });
+
+  it('detects fs.rmSync without recursive option as cautious', () => {
+    const r = scan("fs.rmSync('x')");
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  it('detects fs.rmdirSync without recursive option as cautious', () => {
+    const r = scan("fs.rmdirSync('x')");
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  it('detects fs.rm() as cautious', () => {
+    const r = scan('fs.rm("x", cb)');
+    expect(r.verdict).toBe('cautious');
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+
+  // Regression guards: recursive variants must stay dangerous
+  it('regression: fs.rmSync with recursive stays dangerous', () => {
+    const r = scan('fs.rmSync(dir, { recursive: true })');
+    expect(r.verdict).toBe('dangerous');
+  });
+
+  it('regression: fs.rmdirSync with recursive stays dangerous', () => {
+    const r = scan('fs.rmdirSync(dir, { recursive: true })');
+    expect(r.verdict).toBe('dangerous');
   });
 
   // No match
