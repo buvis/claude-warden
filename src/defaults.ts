@@ -115,6 +115,11 @@ export const DEFAULT_CONFIG: WardenConfig = {
   notifyOnDeny: true,
   audit: true,
   auditPath: join(homedir(), '.claude', 'warden-audit.jsonl'),
+  // Stays false by design (PRD 00011): this flag is global, so true would log every
+  // allow across all ~100 always-allow commands (every ls/cat/grep), adding hot-path I/O
+  // and churning the 5MB rotation. The script-allow safety hole is closed by the scanner's
+  // positive safe-shape gate, not by logging; users who want allow-path visibility opt in
+  // with one line. See docs/guide/defaults.md "Script content scanning".
   auditAllowDecisions: false,
   trustedRemotes: [],
   targetPolicies: [],
