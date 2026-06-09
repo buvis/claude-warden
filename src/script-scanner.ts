@@ -167,6 +167,29 @@ const EVASION_SIGNALS_BY_LANGUAGE: Record<Language, { regex: RegExp; reason: str
   php: PHP_EVASION_SIGNALS,
 };
 
+const SAFE_SHAPE_PATTERNS: Partial<Record<Language, RegExp[]>> = {
+  python: [
+    /^print\s*\(/,
+    /^\w+\s*=\s*[^()]*$/,        // no-call assignment (no parens in RHS)
+    /^(import|from)\s+\w/,
+    /\bjson\.(loads|load|dumps|dump)\s*\(/,
+    /^open\s*\(/,                        // open reaching here is read (write is cautious, caught earlier)
+    /\.(read_text|read|readlines)\s*\(/,
+  ],
+  typescript: [
+    /^console\.(log|error|warn|info|debug)\s*\(/,
+    /^(const|let|var)\s+\w+\s*=\s*[^()]*$/,   // no-call assignment (no parens in RHS)
+    /^(import|export)\s/,
+    /\bJSON\.(parse|stringify)\s*\(/,
+    /\.(readFileSync|readFile)\s*\(/,
+  ],
+  perl: [
+    /^print\b/,
+    /^my\s+[\$@%]\w+\s*=\s*[^()]*$/,
+    /^use\s+\w/,
+  ],
+};
+
 export function scanScriptCode(code: string, language: Language): { verdict: Verdict; reason: string } {
   const patterns = PATTERNS_BY_LANGUAGE[language];
 
@@ -188,6 +211,18 @@ export function scanScriptCode(code: string, language: Language): { verdict: Ver
   for (const signal of evasionSignals) {
     if (signal.regex.test(code)) {
       return { verdict: 'unknown', reason: signal.reason };
+    }
+  }
+
+  // Check for safe shapes
+  const safePatterns = SAFE_SHAPE_PATTERNS[language];
+  if (safePatterns && safePatterns.length > 0) {
+    const statements = code
+      .split(/\n|;/g)
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('#') && !s.startsWith('//'));
+    if (statements.length > 0 && statements.every(stmt => safePatterns.some(p => p.test(stmt)))) {
+      return { verdict: 'safe', reason: 'recognized read-only / compute / safe-shape script' };
     }
   }
 
