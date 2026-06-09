@@ -24,7 +24,7 @@ describe('scanScriptCode contract', () => {
     expect(cautious.reason.length).toBeGreaterThan(0);
     expect(cautious.verdict).toBe('cautious');
 
-    const unknown = scanScriptCode('print("hello")', 'python');
+    const unknown = scanScriptCode('result.exec()', 'python');
     expect(unknown).not.toBeNull();
     expect(unknown).not.toBeUndefined();
     expect(typeof unknown.verdict).toBe('string');
@@ -33,18 +33,18 @@ describe('scanScriptCode contract', () => {
     expect(unknown.verdict).toBe('unknown');
   });
 
-  it('benign python code returns unknown, not safe', () => {
-    expect(scanScriptCode('print("hello")', 'python').verdict).toBe('unknown');
-    expect(scanScriptCode('x = 1 + 2', 'python').verdict).toBe('unknown');
+  it('benign python code returns safe', () => {
+    expect(scanScriptCode('print("hello")', 'python').verdict).toBe('safe');
+    expect(scanScriptCode('x = 1 + 2', 'python').verdict).toBe('safe');
   });
 
-  it('benign typescript code returns unknown, not safe', () => {
-    expect(scanScriptCode('console.log("hello")', 'typescript').verdict).toBe('unknown');
-    expect(scanScriptCode('const x = 1 + 2', 'typescript').verdict).toBe('unknown');
+  it('benign typescript code returns safe', () => {
+    expect(scanScriptCode('console.log("hello")', 'typescript').verdict).toBe('safe');
+    expect(scanScriptCode('const x = 1 + 2', 'typescript').verdict).toBe('safe');
   });
 
-  it('benign perl code returns unknown, not safe', () => {
-    expect(scanScriptCode('my $x = 1 + 2', 'perl').verdict).toBe('unknown');
+  it('benign perl code returns safe', () => {
+    expect(scanScriptCode('my $x = 1 + 2', 'perl').verdict).toBe('safe');
   });
 
   it('reason is non-empty for every verdict tier', () => {
@@ -155,12 +155,12 @@ describe('scanScriptCode (python)', () => {
 
   it('allows open() with read mode', () => {
     const r = scan("open('file.txt', 'r')");
-    expect(r.verdict).toBe('unknown');
+    expect(r.verdict).toBe('safe');
   });
 
   it('allows open() with no explicit mode (defaults to read)', () => {
     const r = scan("open('file.txt')");
-    expect(r.verdict).toBe('unknown');
+    expect(r.verdict).toBe('safe');
   });
 
   it('detects Path.write_text()', () => {
@@ -240,7 +240,7 @@ describe('scanScriptCode (python)', () => {
 
   // Word-boundary negative tests: substring matches that must NOT fire
   it('does not flag identifier containing importlib as a substring', () => {
-    expect(scan('importlibrary = 1').verdict).toBe('unknown');
+    expect(scan('importlibrary = 1').verdict).toBe('safe');
   });
 
   it('does not flag os.replace on a receiver whose name ends in "os"', () => {
@@ -251,11 +251,11 @@ describe('scanScriptCode (python)', () => {
     expect(scan("myshutil.move_along('a')").verdict).toBe('unknown');
   });
 
-  // No match
-  it('returns unknown for code with no matching patterns', () => {
-    expect(scan('print("hello")').verdict).toBe('unknown');
-    expect(scan('import json\njson.loads(data)').verdict).toBe('unknown');
-    expect(scan('x = 1 + 2').verdict).toBe('unknown');
+  // Safe shape
+  it('returns safe for recognized-benign code', () => {
+    expect(scan('print("hello")').verdict).toBe('safe');
+    expect(scan('import json\njson.loads(data)').verdict).toBe('safe');
+    expect(scan('x = 1 + 2').verdict).toBe('safe');
   });
 
   // Priority: dangerous wins over cautious
@@ -407,11 +407,11 @@ describe('scanScriptCode (typescript)', () => {
     expect(r.verdict).toBe('dangerous');
   });
 
-  // No match
-  it('returns unknown for code with no matching patterns', () => {
-    expect(scan('console.log("hello")').verdict).toBe('unknown');
-    expect(scan('const x = 1 + 2').verdict).toBe('unknown');
-    expect(scan('fs.readFileSync("f")').verdict).toBe('unknown');
+  // Safe shape
+  it('returns safe for recognized-benign code', () => {
+    expect(scan('console.log("hello")').verdict).toBe('safe');
+    expect(scan('const x = 1 + 2').verdict).toBe('safe');
+    expect(scan('fs.readFileSync("f")').verdict).toBe('safe');
   });
 });
 
@@ -509,11 +509,11 @@ describe('scanScriptCode (perl)', () => {
     expect(r.verdict).toBe('cautious');
   });
 
-  // No match
-  it('returns unknown for code with no matching patterns', () => {
-    expect(scan('print "hello\\n"').verdict).toBe('unknown');
-    expect(scan('my $x = 1 + 2').verdict).toBe('unknown');
-    expect(scan('use strict').verdict).toBe('unknown');
+  // Safe shape
+  it('returns safe for recognized-benign code', () => {
+    expect(scan('print "hello\\n"').verdict).toBe('safe');
+    expect(scan('my $x = 1 + 2').verdict).toBe('safe');
+    expect(scan('use strict').verdict).toBe('safe');
   });
 });
 
@@ -565,13 +565,9 @@ describe('scanScriptCode evasion signals', () => {
 
   // Negatives: must NOT trigger evasion detection
 
-  it('python print("hello") returns unknown with no evasion reason', () => {
+  it('python print("hello") returns safe, not an evasion signal', () => {
     const r = scanScriptCode('print("hello")', 'python');
-    expect(r.verdict).toBe('unknown');
-    expect(r.reason.toLowerCase()).not.toContain('getattr');
-    expect(r.reason.toLowerCase()).not.toContain('chr');
-    expect(r.reason.toLowerCase()).not.toContain('globalthis');
-    expect(r.reason.toLowerCase()).not.toContain('require');
+    expect(r.verdict).toBe('safe');
   });
 
   it('typescript require with string literal is NOT the dynamic require evasion signal', () => {
@@ -581,6 +577,114 @@ describe('scanScriptCode evasion signals', () => {
     expect(r.reason.toLowerCase()).not.toContain('chr');
     expect(r.reason.toLowerCase()).not.toContain('globalthis');
     expect(r.reason.toLowerCase()).not.toContain('require');
+  });
+});
+
+// ─── scanScriptCode safe-shape ───
+
+describe('scanScriptCode safe-shape', () => {
+  // Positives: every statement is a recognized-benign construct → safe
+
+  it('python print() is safe', () => {
+    expect(scanScriptCode('print("hello")', 'python').verdict).toBe('safe');
+  });
+
+  it('python no-call assignment is safe', () => {
+    expect(scanScriptCode('x = 1 + 2', 'python').verdict).toBe('safe');
+  });
+
+  it('python import + json.loads() is safe', () => {
+    expect(scanScriptCode('import json\njson.loads(data)', 'python').verdict).toBe('safe');
+  });
+
+  it('python open() with read mode is safe', () => {
+    expect(scanScriptCode("open('file.txt', 'r')", 'python').verdict).toBe('safe');
+  });
+
+  it('python open() with no explicit mode is safe', () => {
+    expect(scanScriptCode("open('file.txt')", 'python').verdict).toBe('safe');
+  });
+
+  it('typescript console.log() is safe', () => {
+    expect(scanScriptCode('console.log("hello")', 'typescript').verdict).toBe('safe');
+  });
+
+  it('typescript no-call assignment is safe', () => {
+    expect(scanScriptCode('const x = 1 + 2', 'typescript').verdict).toBe('safe');
+  });
+
+  it('typescript fs.readFileSync() is safe', () => {
+    expect(scanScriptCode('fs.readFileSync("f")', 'typescript').verdict).toBe('safe');
+  });
+
+  it('perl print is safe', () => {
+    expect(scanScriptCode('print "hello\\n"', 'perl').verdict).toBe('safe');
+  });
+
+  it('perl no-call assignment is safe', () => {
+    expect(scanScriptCode('my $x = 1 + 2', 'perl').verdict).toBe('safe');
+  });
+
+  it('perl use statement is safe', () => {
+    expect(scanScriptCode('use strict', 'perl').verdict).toBe('safe');
+  });
+
+  // Negatives: unrecognized construct → unknown (safe-shape never fires)
+
+  it('python unrecognized method call is unknown', () => {
+    expect(scanScriptCode('result.exec()', 'python').verdict).toBe('unknown');
+  });
+
+  it('python re.compile() is unknown', () => {
+    expect(scanScriptCode('re.compile(r"pattern")', 'python').verdict).toBe('unknown');
+  });
+
+  it('typescript require() with string literal is unknown (not a recognized safe construct)', () => {
+    expect(scanScriptCode("const m = require('fs')", 'typescript').verdict).toBe('unknown');
+  });
+
+  // Negatives: dangerous/cautious/evasion always wins over safe-shape
+
+  it('python subprocess.run() is dangerous, not safe', () => {
+    expect(scanScriptCode("subprocess.run(['ls'])", 'python').verdict).toBe('dangerous');
+  });
+
+  it('python open() with write mode is cautious, not safe', () => {
+    expect(scanScriptCode("open('file.txt', 'w')", 'python').verdict).toBe('cautious');
+  });
+
+  it('python getattr() evasion is unknown, not safe', () => {
+    expect(scanScriptCode("getattr(os, name)", 'python').verdict).toBe('unknown');
+  });
+
+  // Mixed: one unrecognized statement disqualifies the whole script
+
+  it('python script with one unrecognized statement is unknown, not safe', () => {
+    expect(scanScriptCode('print("hi")\nresult.exec()', 'python').verdict).toBe('unknown');
+  });
+
+  // Positive: multi-statement all-safe scripts
+
+  it('multi-statement all-safe python script is safe (import, assignment, print)', () => {
+    expect(scanScriptCode('import json\nx = 1\nprint(x)', 'python').verdict).toBe('safe');
+  });
+
+  it('multi-statement all-safe typescript script is safe (assignment, console.log)', () => {
+    expect(scanScriptCode('const x = 1\nconsole.log(x)', 'typescript').verdict).toBe('safe');
+  });
+
+  // Negative: benign-looking but unrecognized constructs stay unknown
+
+  it('unrecognized call Array.from is not safe', () => {
+    expect(scanScriptCode('Array.from([1, 2, 3])', 'typescript').verdict).toBe('unknown');
+  });
+
+  it('attribute access without assignment is not safe', () => {
+    expect(scanScriptCode('obj.attr.value', 'python').verdict).toBe('unknown');
+  });
+
+  it('del statement disqualifies script even when other statements are safe', () => {
+    expect(scanScriptCode('print("ok")\ndel x', 'python').verdict).toBe('unknown');
   });
 });
 
