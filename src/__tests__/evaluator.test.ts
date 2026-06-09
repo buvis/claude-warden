@@ -1981,8 +1981,11 @@ describe('script safety scanning', () => {
       expect(eval_('ruby --version').decision).toBe('allow');
     });
 
-    it('allows ruby -e with safe code', () => {
-      expect(eval_('ruby -e "puts 1"').decision).toBe('allow');
+    // Ruby has no safe-shape allowlist (ruby `eval` is absent from the danger table,
+    // so allowlisting `puts`/`print` shapes would let `puts eval(x)` pass as safe).
+    // Post-flip, an unrecognized ruby one-liner is `unknown` → ask.
+    it('asks for ruby -e with unrecognized code', () => {
+      expect(eval_('ruby -e "puts 1"').decision).toBe('ask');
     });
 
     it('asks for ruby -e with dangerous code', () => {
@@ -1991,10 +1994,9 @@ describe('script safety scanning', () => {
       expect(r.reason).toContain('Ruby');
     });
 
-    // New behavior: ruby script files are now scanned (previously fell through to ask).
-    it('allows ruby with safe .rb file', () => {
+    it('asks for ruby with unrecognized .rb file', () => {
       const r = evalWithCwd('ruby safe.rb', scriptDir);
-      expect(r.decision).toBe('allow');
+      expect(r.decision).toBe('ask');
     });
 
     it('asks for ruby with dangerous .rb file', () => {
@@ -2015,8 +2017,11 @@ describe('script safety scanning', () => {
       expect(eval_('php --version').decision).toBe('allow');
     });
 
-    it('allows php -r with safe code', () => {
-      expect(eval_('php -r "echo 1;"').decision).toBe('allow');
+    // PHP has no safe-shape allowlist (php `eval` is absent from the danger table,
+    // so allowlisting `echo`/`print` shapes would let `echo eval(x)` pass as safe).
+    // Post-flip, an unrecognized php one-liner is `unknown` → ask.
+    it('asks for php -r with unrecognized code', () => {
+      expect(eval_('php -r "echo 1;"').decision).toBe('ask');
     });
 
     it('asks for php -r with dangerous code', () => {
@@ -2025,10 +2030,9 @@ describe('script safety scanning', () => {
       expect(r.reason).toContain('PHP');
     });
 
-    // New behavior: php script files are now scanned (previously fell through to ask).
-    it('allows php with safe .php file', () => {
+    it('asks for php with unrecognized .php file', () => {
       const r = evalWithCwd('php safe.php', scriptDir);
-      expect(r.decision).toBe('allow');
+      expect(r.decision).toBe('ask');
     });
 
     it('asks for php with dangerous .php file', () => {
