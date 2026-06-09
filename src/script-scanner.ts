@@ -144,6 +144,29 @@ const PATTERNS_BY_LANGUAGE: Record<Language, ScanPattern[]> = {
 
 const MAX_SCRIPT_SIZE = 1024 * 1024; // 1MB
 
+// Evasion signals for each language
+const PYTHON_EVASION_SIGNALS = [
+  { regex: /\bgetattr\s*\(/, reason: 'getattr enables dynamic attribute dispatch' },
+  { regex: /\bchr\s*\(/, reason: 'chr()-built strings can hide identifiers' },
+];
+
+const TYPESCRIPT_EVASION_SIGNALS = [
+  { regex: /\bglobalThis\s*\[/, reason: 'globalThis[...] is dynamic global access' },
+  { regex: /\brequire\s*\(\s*(?!['\"`])/, reason: 'require() with a variable loads a dynamic module' },
+];
+
+const PERL_EVASION_SIGNALS: { regex: RegExp; reason: string }[] = [];
+const RUBY_EVASION_SIGNALS: { regex: RegExp; reason: string }[] = [];
+const PHP_EVASION_SIGNALS: { regex: RegExp; reason: string }[] = [];
+
+const EVASION_SIGNALS_BY_LANGUAGE: Record<Language, { regex: RegExp; reason: string }[]> = {
+  python: PYTHON_EVASION_SIGNALS,
+  typescript: TYPESCRIPT_EVASION_SIGNALS,
+  perl: PERL_EVASION_SIGNALS,
+  ruby: RUBY_EVASION_SIGNALS,
+  php: PHP_EVASION_SIGNALS,
+};
+
 export function scanScriptCode(code: string, language: Language): { verdict: Verdict; reason: string } {
   const patterns = PATTERNS_BY_LANGUAGE[language];
 
@@ -157,6 +180,14 @@ export function scanScriptCode(code: string, language: Language): { verdict: Ver
   for (const pattern of patterns) {
     if (pattern.level === 'cautious' && pattern.regex.test(code)) {
       return { verdict: 'cautious', reason: pattern.reason };
+    }
+  }
+
+  // Check for evasion signals
+  const evasionSignals = EVASION_SIGNALS_BY_LANGUAGE[language] || [];
+  for (const signal of evasionSignals) {
+    if (signal.regex.test(code)) {
+      return { verdict: 'unknown', reason: signal.reason };
     }
   }
 
