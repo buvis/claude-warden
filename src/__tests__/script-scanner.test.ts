@@ -609,6 +609,14 @@ describe('scanScriptCode safe-shape', () => {
     expect(scanScriptCode('open(f, mode)', 'python').verdict).toBe('unknown');
   });
 
+  it('python open(*args) splat is NOT safe (mode hidden in unpacked args)', () => {
+    expect(scanScriptCode('open(*args)', 'python').verdict).toBe('unknown');
+  });
+
+  it('python two-statement splat open with write mode in args is NOT safe', () => {
+    expect(scanScriptCode("args = ['/etc/passwd', 'w']\nopen(*args)", 'python').verdict).toBe('unknown');
+  });
+
   it('typescript console.log() is safe', () => {
     expect(scanScriptCode('console.log("hello")', 'typescript').verdict).toBe('safe');
   });
