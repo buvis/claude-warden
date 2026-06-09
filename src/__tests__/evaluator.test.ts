@@ -1935,6 +1935,28 @@ describe('script safety scanning', () => {
     });
   });
 
+  describe('evasion signal integration', () => {
+    it('asks for python -c with getattr evasion', () => {
+      const r = eval_('python -c "getattr(os,\'system\')(\'id\')"');
+      expect(r.decision).toBe('ask');
+    });
+
+    it('asks for python -c with __import__ evasion', () => {
+      const r = eval_('python -c "__import__(\'os\').system(\'id\')"');
+      expect(r.decision).toBe('ask');
+    });
+
+    it('asks for node -e with decode-then-exec', () => {
+      const r = eval_('node -e "eval(Buffer.from(x,\'base64\').toString())"');
+      expect(r.decision).toBe('ask');
+    });
+
+    it('asks for python -c with splat-arg open (hidden write mode)', () => {
+      const r = eval_('python -c "args=[\'/tmp/x\',\'w\']; open(*args)"');
+      expect(r.decision).toBe('ask');
+    });
+  });
+
   describe('evaluatePerlCommand', () => {
     it('allows perl --version', () => {
       const r = eval_('perl --version');
