@@ -605,6 +605,10 @@ describe('scanScriptCode safe-shape', () => {
     expect(scanScriptCode("open('file.txt')", 'python').verdict).toBe('safe');
   });
 
+  it('python open() with a variable mode is NOT safe (ambiguous read/write)', () => {
+    expect(scanScriptCode('open(f, mode)', 'python').verdict).toBe('unknown');
+  });
+
   it('typescript console.log() is safe', () => {
     expect(scanScriptCode('console.log("hello")', 'typescript').verdict).toBe('safe');
   });
