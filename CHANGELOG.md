@@ -6,6 +6,10 @@
 
 - **script-scanner**: widened deletion/danger detection — Python `pathlib` `.unlink()`/`.rmdir()`, `importlib`, `os.replace()`, `shutil.move()`, and non-recursive JS `fs.rm`/`fs.rmSync`/`fs.rmdirSync` now classify as cautious/dangerous, so these scripts prompt instead of being silently allowed
 
+### Changed
+
+- **script-eval**: the script allow path now requires positive safe-shape evidence, not just the absence of a danger pattern — a script with no recognized safe shape now asks instead of being silently allowed. Unrecognized one-liners (e.g. `node -p "1+1"`, `ruby -e "puts 1"`, `php -r "echo 1;"`, perl `s///` substitutions) now prompt; a user `default: deny` still wins
+
 ## [0.12.0] - 2026-06-09
 
 ### Added

@@ -179,7 +179,7 @@ const SAFE_SHAPE_PATTERNS: Partial<Record<Language, RegExp[]>> = {
   ],
   typescript: [
     /^console\.(log|error|warn|info|debug)\s*\(/,
-    /^(const|let|var)\s+\w+\s*=\s*[^()]*$/,   // no-call assignment (no parens in RHS)
+    /^(const|let|var)\s+\w+\s*(:\s*[\w.<>\[\]|, ]+)?\s*=\s*[^()]*$/, // no-call assignment, optional type annotation (no parens in RHS)
     /^(import|export)\s/,
     /\bJSON\.(parse|stringify)\s*\(/,
     /\.(readFileSync|readFile)\s*\(/,

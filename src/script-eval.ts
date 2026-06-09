@@ -22,6 +22,13 @@ function userRulesWouldRestrict(cmd: ParsedCommand, config: WardenConfig): boole
  * Claude has a fresh prompt to pick the right tool, even after SessionStart guidance has
  * been compacted out of context.
  */
+/** Wrap a scan reason with the inline educational nudge for `-c`/`-e`-style invocations. */
+function withInlineNudge(reason: string, inline?: { lang: string; ext: string }): string {
+  return inline
+    ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${reason})`
+    : reason;
+}
+
 function mapScanResult(
   cmd: ParsedCommand,
   scanResult: ReturnType<typeof scanScriptCode>,
@@ -30,19 +37,22 @@ function mapScanResult(
   inline?: { lang: string; ext: string },
 ): CommandEvalDetail | null {
   if (scanResult.verdict === 'dangerous') {
-    const baseReason = `dangerous: ${scanResult.reason}`;
-    const reason = inline
-      ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})`
-      : baseReason;
+    const reason = withInlineNudge(`dangerous: ${scanResult.reason}`, inline);
     return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
   }
   if (scanResult.verdict === 'cautious') {
-    const reason = inline
-      ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${scanResult.reason})`
-      : scanResult.reason;
+    const reason = withInlineNudge(scanResult.reason, inline);
     return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
   }
-  // unknown or safe: allow path (respects user deny rules)
+  if (scanResult.verdict === 'unknown') {
+    // No positive safe-shape and no danger pattern: ask. Allow now requires a `safe`
+    // verdict, so absence of evidence is no longer a silent allow. A user `default: deny`
+    // is stricter than ask, so defer to it (preserves "user deny still wins").
+    if (userRulesWouldRestrict(cmd, config)) return null;
+    const reason = withInlineNudge(scanResult.reason, inline);
+    return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
+  }
+  // safe: allow path (respects user deny rules)
   if (userRulesWouldRestrict(cmd, config)) return null;
   return { command: cmd.command, args: cmd.args, decision: 'allow', reason: 'script content is safe', matchedRule };
 }
