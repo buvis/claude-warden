@@ -294,7 +294,7 @@ When you run an interpreter with inline code (`python -c`, `node -e`, `perl -e`,
 
 **Allow requires positive evidence.** A script is auto-allowed only when the scanner positively recognizes it as safe. The mere *absence* of a dangerous pattern is not enough; unrecognized code resolves to `unknown` and prompts you. This is deliberate: for a safety tool, "I don't recognize this" must mean "ask", not "allow".
 
-**Evasion signals cap the verdict at `unknown`.** Code that hides intent behind dynamic dispatch or decode-then-execute (`getattr`, `chr()`-built strings, `importlib` / `__import__`, `eval`/`exec` fed by base64/hex decode, `globalThis[...]`, `new Function`, `require` with a variable) never resolves to `safe`, even when no direct dangerous call is present.
+**Evasion signals cap the verdict at `unknown`.** Code that hides intent behind dynamic dispatch (`getattr`, `chr()`-built strings, `globalThis[...]`, `require` with a variable) never resolves to `safe`, even when no direct dangerous call is visible. A separate, stricter tier of **dangerous sinks** (`importlib` / `__import__`, `new Function`, bare `eval`/`exec`, and decode-then-execute patterns like `exec(base64.b64decode(...))`) returns `dangerous` instead of `unknown` — but the security outcome is the same: all of these resolve to ask.
 
 A user rule with `default: deny` always wins: a script the scanner would allow is still deferred to the deny rule. The scan only ever upgrades `ask` to `allow`, never downgrades a restriction. Set `auditAllowDecisions: true` in your `warden.yaml` to log every auto-allow for review.
 

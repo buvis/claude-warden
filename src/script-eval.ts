@@ -14,6 +14,13 @@ function userRulesWouldRestrict(cmd: ParsedCommand, config: WardenConfig): boole
   return !!rule && rule.default === 'deny';
 }
 
+/** Wrap a scan reason with the inline educational nudge for `-c`/`-e`-style invocations. */
+function withInlineNudge(reason: string, inline?: { lang: string; ext: string }): string {
+  return inline
+    ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${reason})`
+    : reason;
+}
+
 /**
  * Map scanScriptCode result to a CommandEvalDetail, or null if user rules should take precedence.
  *
@@ -22,13 +29,6 @@ function userRulesWouldRestrict(cmd: ParsedCommand, config: WardenConfig): boole
  * Claude has a fresh prompt to pick the right tool, even after SessionStart guidance has
  * been compacted out of context.
  */
-/** Wrap a scan reason with the inline educational nudge for `-c`/`-e`-style invocations. */
-function withInlineNudge(reason: string, inline?: { lang: string; ext: string }): string {
-  return inline
-    ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${reason})`
-    : reason;
-}
-
 function mapScanResult(
   cmd: ParsedCommand,
   scanResult: ReturnType<typeof scanScriptCode>,
