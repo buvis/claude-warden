@@ -29,18 +29,22 @@ function mapScanResult(
   config: WardenConfig,
   inline?: { lang: string; ext: string },
 ): CommandEvalDetail | null {
-  if (!scanResult) {
-    // Safe script - but respect user rules if they restrict this command
-    if (userRulesWouldRestrict(cmd, config)) return null;
-    return { command: cmd.command, args: cmd.args, decision: 'allow', reason: 'script content is safe', matchedRule };
+  if (scanResult.verdict === 'dangerous') {
+    const baseReason = `dangerous: ${scanResult.reason}`;
+    const reason = inline
+      ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})`
+      : baseReason;
+    return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
   }
-  const baseReason = scanResult.level === 'dangerous'
-    ? `dangerous: ${scanResult.reason}`
-    : scanResult.reason;
-  const reason = inline
-    ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})`
-    : baseReason;
-  return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
+  if (scanResult.verdict === 'cautious') {
+    const reason = inline
+      ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${scanResult.reason})`
+      : scanResult.reason;
+    return { command: cmd.command, args: cmd.args, decision: 'ask', reason, matchedRule };
+  }
+  // unknown or safe: allow path (respects user deny rules)
+  if (userRulesWouldRestrict(cmd, config)) return null;
+  return { command: cmd.command, args: cmd.args, decision: 'allow', reason: 'script content is safe', matchedRule };
 }
 
 /** Try to read and scan a script file, returning a CommandEvalDetail or null if user rules take precedence. */

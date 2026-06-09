@@ -3,11 +3,7 @@ import { resolve, isAbsolute } from 'path';
 
 export type ScanLevel = 'dangerous' | 'cautious';
 export type Language = 'python' | 'typescript' | 'perl' | 'ruby' | 'php';
-
-export interface ScanResult {
-  level: ScanLevel;
-  reason: string;
-}
+export type Verdict = 'dangerous' | 'cautious' | 'safe' | 'unknown';
 
 interface ScanPattern {
   regex: RegExp;
@@ -140,23 +136,23 @@ const PATTERNS_BY_LANGUAGE: Record<Language, ScanPattern[]> = {
 
 const MAX_SCRIPT_SIZE = 1024 * 1024; // 1MB
 
-export function scanScriptCode(code: string, language: Language): ScanResult | null {
+export function scanScriptCode(code: string, language: Language): { verdict: Verdict; reason: string } {
   const patterns = PATTERNS_BY_LANGUAGE[language];
 
   // Check dangerous patterns first (higher severity wins)
   for (const pattern of patterns) {
     if (pattern.level === 'dangerous' && pattern.regex.test(code)) {
-      return { level: 'dangerous', reason: pattern.reason };
+      return { verdict: 'dangerous', reason: pattern.reason };
     }
   }
 
   for (const pattern of patterns) {
     if (pattern.level === 'cautious' && pattern.regex.test(code)) {
-      return { level: 'cautious', reason: pattern.reason };
+      return { verdict: 'cautious', reason: pattern.reason };
     }
   }
 
-  return null;
+  return { verdict: 'unknown', reason: 'no recognized danger or safe-shape pattern' };
 }
 
 export function readScriptFile(filePath: string, cwd: string): { content: string } | { error: string } {
