@@ -281,6 +281,23 @@ These commands have argument-aware rules. The **default** column shows what happ
 |---|---|---|
 | `claude` | ask | **allow**: `--version`, `--help`, read-only plugin commands (plugin list, help, validate, marketplace list/help) |
 
+## Script content scanning
+
+When you run an interpreter with inline code (`python -c`, `node -e`, `perl -e`, `ruby -e`, `php -r`) or a script file (`python script.py`, `node script.js`), Warden reads the code and scans it before deciding. The scan produces one of four verdicts:
+
+| Verdict | Decision | When |
+|---|---|---|
+| `dangerous` | ask | The code matches a known dangerous sink (`os.system`, `subprocess`, `eval`, `exec`, `child_process`, recursive deletes, etc.). |
+| `cautious` | ask | The code writes files, deletes paths, or makes mutating network calls. |
+| `unknown` | ask | The code matches no recognized shape, or it shows an evasion signal. |
+| `safe` | **allow** | Every statement matches a recognized read-only / print / compute / stdlib-parse shape, with no danger pattern and no evasion signal. |
+
+**Allow requires positive evidence.** A script is auto-allowed only when the scanner positively recognizes it as safe. The mere *absence* of a dangerous pattern is not enough; unrecognized code resolves to `unknown` and prompts you. This is deliberate: for a safety tool, "I don't recognize this" must mean "ask", not "allow".
+
+**Evasion signals cap the verdict at `unknown`.** Code that hides intent behind dynamic dispatch or decode-then-execute (`getattr`, `chr()`-built strings, `importlib` / `__import__`, `eval`/`exec` fed by base64/hex decode, `globalThis[...]`, `new Function`, `require` with a variable) never resolves to `safe`, even when no direct dangerous call is present.
+
+A user rule with `default: deny` always wins: a script the scanner would allow is still deferred to the deny rule. The scan only ever upgrades `ask` to `allow`, never downgrades a restriction. Set `auditAllowDecisions: true` in your `warden.yaml` to log every auto-allow for review.
+
 ## Unlisted commands
 
 Any command not listed above gets the global `defaultDecision`, which is **ask** unless overridden in your `warden.yaml`.
