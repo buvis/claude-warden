@@ -765,20 +765,6 @@ describe('walkNode incomplete signal', () => {
     expect(result.incomplete).toBeFalsy();
   });
 
-  it('unknown node sets incomplete but allowlisted nodes do not - both in one suite', () => {
-    const unknownResult = freshResult();
-    walkNode({ type: '__UnknownXYZ__' } as any, unknownResult as any);
-    expect(unknownResult.incomplete).toBe(true);
-
-    const testResult = freshResult();
-    walkNode({ type: 'TestCommand' } as any, testResult as any);
-    expect(testResult.incomplete).toBeFalsy();
-
-    const arithResult = freshResult();
-    walkNode({ type: 'ArithmeticCommand' } as any, arithResult as any);
-    expect(arithResult.incomplete).toBeFalsy();
-  });
-
   it('parseCommand returns incomplete falsy for a normal command', () => {
     const result = parseCommand('ls -la');
     expect(result.incomplete).toBeFalsy();
