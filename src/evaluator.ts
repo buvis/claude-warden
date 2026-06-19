@@ -65,6 +65,10 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
     return { decision: 'ask', reason: 'unparseable command', details: [] };
   }
 
+  if (parsed.incomplete) {
+    return { decision: 'ask', reason: 'unrecognized shell construct', details: [] };
+  }
+
   if (parsed.commands.length === 0) {
     return { decision: 'allow', reason: 'Empty command', details: [] };
   }

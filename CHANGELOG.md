@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **evaluator**: a command whose shell construct the parser cannot fully extract now asks instead of being silently allowed — an unhandled/unrecognized AST node forces a prompt rather than slipping through as allow
 - **script-eval**: the script allow path now requires positive safe-shape evidence, not just the absence of a danger pattern — a script with no recognized safe shape now asks instead of being silently allowed. Unrecognized one-liners (e.g. `node -p "1+1"`, `ruby -e "puts 1"`, `php -r "echo 1;"`, perl `s///` substitutions) now prompt; a user `default: deny` still wins
 
 ### Fixed
