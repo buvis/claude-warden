@@ -18,6 +18,7 @@ export interface WalkResult {
   chainAssignments: Map<string, ChainAssignment>;
   effectiveCwd?: string;
   incomplete?: boolean;
+  incompleteNodeTypes?: string[];
 }
 
 /**
@@ -425,6 +426,10 @@ export function walkNode(node: Node, result: WalkResult): void {
     default:
       if (!NO_COMMAND_NODE_TYPES.has(node.type)) {
         result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes(node.type)) {
+          result.incompleteNodeTypes.push(node.type);
+        }
       }
       break;
   }
@@ -473,5 +478,6 @@ export function parseCommand(input: string): ParseResult {
     parseError: false,
     chainAssignments: result.chainAssignments,
     incomplete: result.incomplete === true,
+    incompleteNodeTypes: result.incompleteNodeTypes,
   };
 }

@@ -66,7 +66,11 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
   }
 
   if (parsed.incomplete) {
-    return { decision: 'ask', reason: 'unrecognized shell construct', details: [] };
+    const types = parsed.incompleteNodeTypes;
+    const reason = types && types.length
+      ? `unrecognized shell construct: ${types.join(', ')}`
+      : 'unrecognized shell construct';
+    return { decision: 'ask', reason, details: [] };
   }
 
   if (parsed.commands.length === 0) {

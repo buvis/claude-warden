@@ -22,6 +22,8 @@ export interface ParseResult {
   chainAssignments: Map<string, ChainAssignment>;
   /** True when walkNode met a node type it could not fully extract. */
   incomplete?: boolean;
+  /** The node type(s) walkNode could not fully extract (the offending types). Populated only when `incomplete` is set. */
+  incompleteNodeTypes?: string[];
 }
 
 export type Decision = 'allow' | 'deny' | 'ask';
