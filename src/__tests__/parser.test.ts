@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseCommand, walkNode } from '../parser';
+import { parseCommand, walkNode, type WalkResult } from '../parser';
 
 describe('parseCommand', () => {
   it('parses a simple command', () => {
@@ -738,11 +738,11 @@ describe('chain cwd tracking', () => {
 });
 
 describe('walkNode incomplete signal', () => {
-  function freshResult() {
+  function freshResult(): WalkResult {
     return {
-      commands: [] as any[],
+      commands: [],
       hasSubshell: false,
-      subshellCommands: [] as string[],
+      subshellCommands: [],
       chainAssignments: new Map(),
     };
   }

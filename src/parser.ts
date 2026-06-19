@@ -11,13 +11,21 @@ import { basename, resolve } from 'path';
 import { homedir } from 'os';
 import type { ParsedCommand, ParseResult, ChainAssignment } from './types';
 
-interface WalkResult {
+export interface WalkResult {
   commands: ParsedCommand[];
   hasSubshell: boolean;
   subshellCommands: string[];
   chainAssignments: Map<string, ChainAssignment>;
   effectiveCwd?: string;
+  incomplete?: boolean;
 }
+
+/**
+ * Node types that legitimately carry no executable command. walkNode's default
+ * case treats every OTHER unhandled type as incomplete (fail loud), so adding a
+ * new no-command construct here is the one place to suppress a false ask.
+ */
+const NO_COMMAND_NODE_TYPES = new Set(['TestCommand', 'ArithmeticCommand']);
 
 const VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
 
@@ -237,7 +245,7 @@ function walkIfNode(ifNode: If, result: WalkResult): void {
   }
 }
 
-function walkNode(node: Node, result: WalkResult): void {
+export function walkNode(node: Node, result: WalkResult): void {
   switch (node.type) {
     case 'Statement': {
       const stmt = node as Statement;
@@ -279,6 +287,7 @@ function walkNode(node: Node, result: WalkResult): void {
           result.commands.push(...innerResult.commands);
           if (innerResult.hasSubshell) result.hasSubshell = true;
           result.subshellCommands.push(...innerResult.subshellCommands);
+          if (innerResult.incomplete) result.incomplete = true;
         }
       } else if (
         (parsed.command === 'sh' ||
@@ -413,8 +422,10 @@ function walkNode(node: Node, result: WalkResult): void {
       break;
     }
 
-    // TestCommand, ArithmeticCommand: no executable commands to extract
     default:
+      if (!NO_COMMAND_NODE_TYPES.has(node.type)) {
+        result.incomplete = true;
+      }
       break;
   }
 }
@@ -461,5 +472,6 @@ export function parseCommand(input: string): ParseResult {
     subshellCommands: result.subshellCommands,
     parseError: false,
     chainAssignments: result.chainAssignments,
+    incomplete: result.incomplete === true,
   };
 }

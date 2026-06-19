@@ -20,6 +20,8 @@ export interface ParseResult {
   subshellCommands: string[];
   parseError: boolean;
   chainAssignments: Map<string, ChainAssignment>;
+  /** True when walkNode met a node type it could not fully extract. */
+  incomplete?: boolean;
 }
 
 export type Decision = 'allow' | 'deny' | 'ask';
