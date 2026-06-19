@@ -2264,4 +2264,10 @@ describe('incomplete parse handling', () => {
     );
     expect(r.decision).toBe('allow');
   });
+
+  it('surfaces offending node type in ask reason when incompleteNodeTypes is set', () => {
+    const r = evaluate(makeParseResult({ incomplete: true, incompleteNodeTypes: ['Coproc'] }), DEFAULT_CONFIG);
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toBe('unrecognized shell construct: Coproc');
+  });
 });

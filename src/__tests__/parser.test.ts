@@ -753,10 +753,22 @@ describe('walkNode incomplete signal', () => {
     expect(result.incomplete).toBe(true);
   });
 
+  it('records the offending node type for an unknown node', () => {
+    const result = freshResult();
+    walkNode({ type: '__FutureNode__' } as any, result as any);
+    expect(result.incompleteNodeTypes).toEqual(['__FutureNode__']);
+  });
+
   it('does not flag a TestCommand node as incomplete', () => {
     const result = freshResult();
     walkNode({ type: 'TestCommand' } as any, result as any);
     expect(result.incomplete).toBeFalsy();
+  });
+
+  it('leaves incompleteNodeTypes absent for a recognized node', () => {
+    const result = freshResult();
+    walkNode({ type: 'TestCommand' } as any, result as any);
+    expect(result.incompleteNodeTypes).toBeFalsy();
   });
 
   it('does not flag an ArithmeticCommand node as incomplete', () => {
