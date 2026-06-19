@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { evaluate } from '../evaluator';
 import { parseCommand } from '../parser';
 import { DEFAULT_CONFIG } from '../defaults';
-import type { WardenConfig, ConfigLayer, TrustedTarget, TrustedRemote, RemoteContext } from '../types';
+import type { WardenConfig, ConfigLayer, TrustedTarget, TrustedRemote, RemoteContext, ParseResult } from '../types';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -2219,5 +2219,49 @@ describe('script safety scanning', () => {
       const rm = r.details.find(d => d.command === 'rm');
       expect(rm?.matchedRule).not.toBe('chainLocalRm');
     });
+  });
+});
+
+describe('incomplete parse handling', () => {
+  function makeParseResult(overrides: Partial<ParseResult> = {}): ParseResult {
+    return {
+      commands: [],
+      hasSubshell: false,
+      subshellCommands: [],
+      parseError: false,
+      chainAssignments: new Map(),
+      ...overrides,
+    };
+  }
+
+  it('asks with "unrecognized shell construct" when the parse is incomplete', () => {
+    const r = evaluate(makeParseResult({ incomplete: true }), DEFAULT_CONFIG);
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toBe('unrecognized shell construct');
+  });
+
+  it('asks on an incomplete parse even when commands were also extracted', () => {
+    const r = evaluate(
+      makeParseResult({ incomplete: true, commands: parseCommand('ls').commands }),
+      DEFAULT_CONFIG,
+    );
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toBe('unrecognized shell construct');
+  });
+
+  it('does not force ask when incomplete is false', () => {
+    const r = evaluate(
+      makeParseResult({ incomplete: false, commands: parseCommand('ls').commands }),
+      DEFAULT_CONFIG,
+    );
+    expect(r.decision).toBe('allow');
+  });
+
+  it('does not force ask when incomplete is unset', () => {
+    const r = evaluate(
+      makeParseResult({ commands: parseCommand('ls').commands }),
+      DEFAULT_CONFIG,
+    );
+    expect(r.decision).toBe('allow');
   });
 });
