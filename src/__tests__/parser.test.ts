@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseCommand } from '../parser';
+import { parseCommand, walkNode } from '../parser';
 
 describe('parseCommand', () => {
   it('parses a simple command', () => {
@@ -734,5 +734,63 @@ describe('chain cwd tracking', () => {
     const rm = cmds.find(c => c.command === 'rm');
     expect(ls?.effectiveCwd).toBe('/home');
     expect(rm?.effectiveCwd).toBe('/var');
+  });
+});
+
+describe('walkNode incomplete signal', () => {
+  function freshResult() {
+    return {
+      commands: [] as any[],
+      hasSubshell: false,
+      subshellCommands: [] as string[],
+      chainAssignments: new Map(),
+    };
+  }
+
+  it('flags an unknown AST node as incomplete', () => {
+    const result = freshResult();
+    walkNode({ type: '__FutureNode__' } as any, result as any);
+    expect(result.incomplete).toBe(true);
+  });
+
+  it('does not flag a TestCommand node as incomplete', () => {
+    const result = freshResult();
+    walkNode({ type: 'TestCommand' } as any, result as any);
+    expect(result.incomplete).toBeFalsy();
+  });
+
+  it('does not flag an ArithmeticCommand node as incomplete', () => {
+    const result = freshResult();
+    walkNode({ type: 'ArithmeticCommand' } as any, result as any);
+    expect(result.incomplete).toBeFalsy();
+  });
+
+  it('unknown node sets incomplete but allowlisted nodes do not - both in one suite', () => {
+    const unknownResult = freshResult();
+    walkNode({ type: '__UnknownXYZ__' } as any, unknownResult as any);
+    expect(unknownResult.incomplete).toBe(true);
+
+    const testResult = freshResult();
+    walkNode({ type: 'TestCommand' } as any, testResult as any);
+    expect(testResult.incomplete).toBeFalsy();
+
+    const arithResult = freshResult();
+    walkNode({ type: 'ArithmeticCommand' } as any, arithResult as any);
+    expect(arithResult.incomplete).toBeFalsy();
+  });
+
+  it('parseCommand returns incomplete falsy for a normal command', () => {
+    const result = parseCommand('ls -la');
+    expect(result.incomplete).toBeFalsy();
+  });
+
+  it('parseCommand returns incomplete falsy for a test construct [[ -f x ]]', () => {
+    const result = parseCommand('[[ -f x ]]');
+    expect(result.incomplete).toBeFalsy();
+  });
+
+  it('parseCommand returns incomplete falsy for empty input', () => {
+    const result = parseCommand('');
+    expect(result.incomplete).toBeFalsy();
   });
 });
