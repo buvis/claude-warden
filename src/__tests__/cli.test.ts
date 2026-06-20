@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'child_process';
-import { resolve } from 'path';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { resolve, join } from 'path';
 
 const CLI_BIN = resolve(__dirname, '../../dist/cli.cjs');
 
@@ -72,5 +74,139 @@ describe('CLI: warden eval', () => {
     const { stderr, exitCode } = cli('unknown');
     expect(exitCode).toBe(1);
     expect(stderr).toContain('Unknown subcommand');
+  });
+});
+
+// --- helpers for warden suggest tests ---
+
+function makeAuditEntry(ts: string, cmd: string, command: string, args: string[], decision: 'ask' | 'deny'): string {
+  return JSON.stringify({
+    ts,
+    sid: 's1',
+    cmd,
+    decision,
+    reason: 'unknown command',
+    details: [{ command, args, decision, reason: 'unknown command', matchedRule: 'default' }],
+    yolo: false,
+    elapsed_ms: 1,
+  });
+}
+
+describe('CLI: warden suggest', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'warden-suggest-'));
+    mkdirSync(join(tmpDir, '.claude'), { recursive: true });
+    const auditPath = join(tmpDir, 'audit.jsonl');
+    writeFileSync(
+      join(tmpDir, '.claude', 'warden.yaml'),
+      `auditPath: ${auditPath}\n`,
+    );
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('exits 0 on an empty audit log', () => {
+    writeFileSync(join(tmpDir, 'audit.jsonl'), '');
+    const { exitCode, stdout } = cli('suggest', '--cwd', tmpDir);
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe('No recurring ask/deny entries found.');
+  });
+
+  it('exits 0 when the audit log file is absent', () => {
+    // auditPath is configured but the file does not exist
+    const { exitCode, stdout } = cli('suggest', '--cwd', tmpDir);
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe('No recurring ask/deny entries found.');
+  });
+
+  it('prints a human report with recurring asks and a snippet section', () => {
+    const lines = [
+      makeAuditEntry('2026-06-01T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-01T11:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-01T12:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+    ];
+    writeFileSync(join(tmpDir, 'audit.jsonl'), lines.join('\n') + '\n');
+    const { exitCode, stdout } = cli('suggest', '--cwd', tmpDir);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('Top repeated asks:');
+    expect(stdout).toContain('mkdocs');
+    expect(stdout).toContain('build');
+    expect(stdout).toContain('3');
+    expect(stdout).toContain('Suggested warden.yaml additions:');
+  });
+
+  it('emits JSON with the stable report shape under --json', () => {
+    const lines = [
+      makeAuditEntry('2026-06-01T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-01T11:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+    ];
+    writeFileSync(join(tmpDir, 'audit.jsonl'), lines.join('\n') + '\n');
+    const { exitCode, stdout } = cli('suggest', '--json', '--cwd', tmpDir);
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    // stable required shape
+    expect(result).toHaveProperty('period');
+    expect(result.period).toHaveProperty('from');
+    expect(result.period).toHaveProperty('to');
+    expect(result).toHaveProperty('totalAskDeny');
+    expect(result).toHaveProperty('distinctGroups');
+    expect(result).toHaveProperty('top');
+    expect(result).toHaveProperty('snippet');
+    expect(Array.isArray(result.top)).toBe(true);
+    // non-empty log: snippet should be a non-empty string
+    expect(typeof result.snippet).toBe('string');
+    expect(result.snippet.length).toBeGreaterThan(0);
+    // count must reflect the fixture
+    expect(result.totalAskDeny).toBeGreaterThanOrEqual(2);
+  });
+
+  it('--top N limits the number of entries in the top list', () => {
+    // 3 distinct command groups, each asked once
+    const lines = [
+      makeAuditEntry('2026-06-01T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-01T11:00:00Z', 'poetry install', 'poetry', ['install'], 'ask'),
+      makeAuditEntry('2026-06-01T12:00:00Z', 'pre-commit run', 'pre-commit', ['run'], 'ask'),
+    ];
+    writeFileSync(join(tmpDir, 'audit.jsonl'), lines.join('\n') + '\n');
+    const { exitCode, stdout } = cli('suggest', '--json', '--top', '2', '--cwd', tmpDir);
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.top.length).toBeLessThanOrEqual(2);
+  });
+
+  it('--since filters out entries older than the duration', () => {
+    // one old entry, two recent entries for the same command
+    const lines = [
+      makeAuditEntry('2020-01-01T00:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-19T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-19T11:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+    ];
+    writeFileSync(join(tmpDir, 'audit.jsonl'), lines.join('\n') + '\n');
+    // use 7d window — the 2020 entry is far outside it
+    const { exitCode, stdout } = cli('suggest', '--json', '--since', '7d', '--cwd', tmpDir);
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    // only 2 entries should be counted (the 2020 one is excluded)
+    expect(result.totalAskDeny).toBe(2);
+    const group = result.top.find((g: any) => g.command === 'mkdocs');
+    expect(group).toBeDefined();
+    expect(group.count).toBe(2);
+  });
+
+  it('produces byte-identical output on repeated runs (determinism)', () => {
+    const lines = [
+      makeAuditEntry('2026-06-01T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry('2026-06-01T11:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+    ];
+    writeFileSync(join(tmpDir, 'audit.jsonl'), lines.join('\n') + '\n');
+    const first = cli('suggest', '--json', '--cwd', tmpDir);
+    const second = cli('suggest', '--json', '--cwd', tmpDir);
+    expect(first.exitCode).toBe(0);
+    expect(second.exitCode).toBe(0);
+    expect(first.stdout).toBe(second.stdout);
   });
 });
