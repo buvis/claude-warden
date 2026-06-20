@@ -30,13 +30,9 @@ export function warn(message: string): void {
 let warningSink: ConfigWarning[] | null = null;
 let currentFile = '';
 
-function report(path: string, message: string, suggestion?: string): void {
+function report(path: string, message: string): void {
   if (warningSink) {
-    const entry: ConfigWarning = { file: currentFile, path, message };
-    if (suggestion) {
-      entry.suggestion = suggestion;
-    }
-    warningSink.push(entry);
+    warningSink.push({ file: currentFile, path, message });
   }
   warn(`[warden] Warning: ${message}\n`);
 }
