@@ -179,22 +179,37 @@ describe('CLI: warden suggest', () => {
   });
 
   it('--since filters out entries older than the duration', () => {
-    // one old entry, two recent entries for the same command
+    // Timestamps are now-relative so the test binds to the filter intent
+    // (a 7d window) rather than to fixed calendar dates that rot over time.
+    const HOUR = 3_600_000;
+    const DAY = 86_400_000;
+    const tsAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
     const lines = [
-      makeAuditEntry('2020-01-01T00:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
-      makeAuditEntry('2026-06-19T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
-      makeAuditEntry('2026-06-19T11:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),
+      makeAuditEntry(tsAgo(365 * DAY), 'mkdocs build', 'mkdocs', ['build'], 'ask'), // ~1y ago, outside 7d
+      makeAuditEntry(tsAgo(2 * HOUR), 'mkdocs build', 'mkdocs', ['build'], 'ask'), // recent
+      makeAuditEntry(tsAgo(1 * HOUR), 'mkdocs build', 'mkdocs', ['build'], 'ask'), // recent
     ];
     writeFileSync(join(tmpDir, 'audit.jsonl'), lines.join('\n') + '\n');
-    // use 7d window — the 2020 entry is far outside it
     const { exitCode, stdout } = cli('suggest', '--json', '--since', '7d', '--cwd', tmpDir);
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
-    // only 2 entries should be counted (the 2020 one is excluded)
+    // only the 2 recent entries should be counted (the ~1y-old one is excluded)
     expect(result.totalAskDeny).toBe(2);
     const group = result.top.find((g: any) => g.command === 'mkdocs');
     expect(group).toBeDefined();
     expect(group.count).toBe(2);
+  });
+
+  it('exits 1 with a stderr error on an invalid --since value', () => {
+    const { exitCode, stderr } = cli('suggest', '--since', '7day', '--cwd', tmpDir);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Error: invalid --since value');
+  });
+
+  it('exits 1 with a stderr error on a non-numeric --top value', () => {
+    const { exitCode, stderr } = cli('suggest', '--top', 'abc', '--cwd', tmpDir);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Error: invalid --top value');
   });
 
   it('produces byte-identical output on repeated runs (determinism)', () => {
