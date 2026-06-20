@@ -1,4 +1,5 @@
 import type { CommandEvalDetail } from './types';
+import type { AskGroup } from './audit-analyze';
 
 export function generateAllowSnippet(details: CommandEvalDetail[]): string {
   const lines: string[] = [];
@@ -118,4 +119,128 @@ export function formatSystemMessage(
   }
 
   return { reason, systemMessage };
+}
+
+export interface SuggestionReportOptions {
+  top?: number;
+  json?: boolean;
+}
+
+function isSuggestable(g: AskGroup): boolean {
+  if (g.decisionSample !== 'ask') return false;
+  return (
+    g.matchedRuleSample === undefined ||
+    g.matchedRuleSample === 'default' ||
+    g.matchedRuleSample === `${g.command}:default`
+  );
+}
+
+function buildAllowlistSnippet(groups: AskGroup[]): string {
+  const commentLines: string[] = [];
+  const allowFragments: string[] = [];
+
+  // Separate suggestable vs review-manually groups, preserving input order
+  const suggestableByCommand = new Map<string, AskGroup[]>();
+  for (const g of groups) {
+    if (!isSuggestable(g)) {
+      const argPart = g.argShape ? ` ${g.argShape}` : '';
+      commentLines.push(`# review manually: ${g.command}${argPart} (${g.sampleReason})`);
+    } else {
+      const list = suggestableByCommand.get(g.command);
+      if (list) {
+        list.push(g);
+      } else {
+        suggestableByCommand.set(g.command, [g]);
+      }
+    }
+  }
+
+  // Build allow fragments per command in first-appearance order
+  for (const [command, cGroups] of suggestableByCommand) {
+    const ruleBearing = cGroups.some(g => g.matchedRuleSample === `${command}:default`);
+    const hasBareSuggestable = cGroups.some(g => g.argShape === '');
+    const nonEmptySubs = cGroups.filter(g => g.argShape !== '').map(g => g.argShape);
+    // deduplicate while preserving order
+    const subs: string[] = [];
+    for (const s of nonEmptySubs) {
+      if (!subs.includes(s)) subs.push(s);
+    }
+
+    if (ruleBearing) {
+      if (subs.length >= 1) {
+        for (const sub of subs) {
+          allowFragments.push(generateSubcommandSnippet(command, sub));
+        }
+      } else {
+        // bare ask but rule-gated: review manually comment
+        commentLines.push(`# review manually: ${command} asked bare but is rule-gated`);
+      }
+    } else {
+      if (hasBareSuggestable) {
+        allowFragments.push(generateFullAllowSnippet(command));
+      } else if (subs.length === 1) {
+        allowFragments.push(generateSubcommandSnippet(command, subs[0]));
+      } else {
+        // ≥2 subs, not rule-bearing, no bare
+        allowFragments.push(generateFullAllowSnippet(command));
+      }
+    }
+  }
+
+  if (commentLines.length === 0 && allowFragments.length === 0) return '';
+
+  const lines: string[] = [...commentLines];
+  if (allowFragments.length > 0) {
+    lines.push('rules:');
+    for (const frag of allowFragments) {
+      const body = frag.split('\n').slice(1);
+      for (const line of body) {
+        lines.push(line);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export function formatSuggestionReport(groups: AskGroup[], opts?: SuggestionReportOptions): string {
+  const topN = opts?.top ?? 10;
+  const topGroups = groups.slice(0, topN);
+
+  if (groups.length === 0) {
+    if (opts?.json) {
+      return JSON.stringify({ period: { from: null, to: null }, totalAskDeny: 0, distinctGroups: 0, top: [], snippet: '' });
+    }
+    return 'No recurring ask/deny entries found.';
+  }
+
+  let totalAskDeny = 0;
+  let from: string | null = null;
+  let to: string | null = null;
+  for (const g of groups) {
+    totalAskDeny += g.count;
+    if (from === null || Date.parse(g.firstSeen) < Date.parse(from)) from = g.firstSeen;
+    if (to === null || Date.parse(g.lastSeen) > Date.parse(to)) to = g.lastSeen;
+  }
+  const distinctGroups = groups.length;
+  const snippet = buildAllowlistSnippet(topGroups);
+
+  if (opts?.json) {
+    return JSON.stringify({ period: { from, to }, totalAskDeny, distinctGroups, top: topGroups, snippet });
+  }
+
+  const lines: string[] = [];
+  lines.push(`Warden suggest — ${from} .. ${to}`);
+  lines.push(`${totalAskDeny} recurring ask/deny occurrences across ${distinctGroups} commands`);
+  lines.push('');
+  lines.push('Top repeated asks:');
+  for (const g of topGroups) {
+    const argPart = g.argShape ? ` ${g.argShape}` : '';
+    lines.push(`  ${g.count}x  ${g.command}${argPart}   (${g.sampleReason})`);
+  }
+  lines.push('');
+  lines.push('Suggested warden.yaml additions:');
+  lines.push(snippet);
+
+  return lines.join('\n');
 }
