@@ -212,6 +212,12 @@ describe('CLI: warden suggest', () => {
     expect(stderr).toContain('Error: invalid --top value');
   });
 
+  it('exits 1 with a stderr error on --top 0 (non-positive)', () => {
+    const { exitCode, stderr } = cli('suggest', '--top', '0', '--cwd', tmpDir);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Error: invalid --top value');
+  });
+
   it('produces byte-identical output on repeated runs (determinism)', () => {
     const lines = [
       makeAuditEntry('2026-06-01T10:00:00Z', 'mkdocs build', 'mkdocs', ['build'], 'ask'),

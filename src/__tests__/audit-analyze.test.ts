@@ -553,4 +553,34 @@ describe('aggregateAsks', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].command).toBe('tool');
   });
+
+  it('tolerates a non-string cmd without throwing (no synthetic group)', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({ decision: 'ask', cmd: 42 as unknown as string, details: [] }),
+    ];
+    let groups: ReturnType<typeof aggregateAsks> = [];
+    expect(() => {
+      groups = aggregateAsks(entries);
+    }).not.toThrow();
+    expect(groups).toEqual([]);
+  });
+
+  it('skips a detail whose args contains a non-string element without throwing', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({
+        decision: 'ask',
+        cmd: 'tool sub',
+        details: [
+          { command: 'x', args: [42], decision: 'ask', reason: 'r' },
+        ] as unknown as AuditEntry['details'],
+      }),
+    ];
+    let groups: ReturnType<typeof aggregateAsks> = [];
+    expect(() => {
+      groups = aggregateAsks(entries);
+    }).not.toThrow();
+    // malformed detail skipped; entry has no usable non-allow detail -> synthetic group from cmd
+    expect(groups).toHaveLength(1);
+    expect(groups[0].command).toBe('tool');
+  });
 });
