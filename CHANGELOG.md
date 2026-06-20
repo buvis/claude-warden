@@ -4,6 +4,7 @@
 
 ### Added
 
+- **cli**: new `warden suggest` subcommand — reads the audit log and prints the most frequent recurring ask/deny commands with suggested `warden.yaml` additions. Safety-first: only un-gated asks become allow snippets; rule-gated, denied, or specially-evaluated commands are flagged `# review manually` instead. Supports `--json`, `--top N`, `--since <dur>`, and `--cwd`
 - **script-scanner**: widened deletion/danger detection — Python `pathlib` `.unlink()`/`.rmdir()`, `importlib`, `os.replace()`, `shutil.move()`, and non-recursive JS `fs.rm`/`fs.rmSync`/`fs.rmdir`/`fs.rmdirSync` now classify as cautious/dangerous, so these scripts prompt instead of being silently allowed
 
 ### Changed

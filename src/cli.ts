@@ -1,5 +1,7 @@
 import { wardenEval } from './core';
-import { setQuiet } from './rules';
+import { setQuiet, loadConfig } from './rules';
+import { readAuditLog, aggregateAsks, parseDurationMs } from './audit-analyze';
+import { formatSuggestionReport } from './suggest';
 import type { Decision } from './types';
 
 // CLI is interactive — surface config-loading warnings to stderr.
@@ -10,8 +12,14 @@ function printHelp(): void {
   process.stdout.write(
     [
       'Usage: warden eval [options] <command>',
+      '       warden suggest [options]',
       '',
-      'Evaluate a shell command against Warden safety rules.',
+      'Evaluate a shell command against Warden safety rules, or',
+      'suggest warden.yaml rules from the audit log.',
+      '',
+      'Commands:',
+      '  eval       Evaluate a shell command',
+      '  suggest    Suggest rules from audit log',
       '',
       'Options:',
       '  --cwd <dir>   Set working directory for config loading',
@@ -25,6 +33,8 @@ function printHelp(): void {
       '  warden eval "ls -la"',
       '  warden eval --json "git push --force"',
       '  warden eval --cwd /path/to/project "rm -rf dist"',
+      '  warden suggest --json --top 5',
+      '  warden suggest --since 7d',
       '',
     ].join('\n'),
   );
@@ -32,25 +42,12 @@ function printHelp(): void {
 
 const EXIT_CODES: Record<Decision, number> = { allow: 0, ask: 1, deny: 2 };
 
-function main(): void {
-  const argv = process.argv.slice(2);
-
-  if (argv.length === 0 || argv[0] === '-h' || argv[0] === '--help') {
-    printHelp();
-    process.exit(0);
-  }
-
-  if (argv[0] !== 'eval') {
-    process.stderr.write(`Unknown subcommand: ${argv[0]}\n`);
-    printHelp();
-    process.exit(1);
-  }
-
+function runEval(argv: string[]): void {
   let cwd = process.cwd();
   let json = false;
   let command: string | undefined;
 
-  for (let i = 1; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--cwd' && argv[i + 1]) {
       cwd = argv[i + 1];
@@ -80,6 +77,62 @@ function main(): void {
   }
 
   process.exit(EXIT_CODES[result.decision]);
+}
+
+function runSuggest(argv: string[]): void {
+  let cwd = process.cwd();
+  let json = false;
+  let top: number | undefined;
+  let since: string | undefined;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--cwd' && argv[i + 1]) {
+      cwd = argv[i + 1];
+      i++;
+    } else if (arg === '--json') {
+      json = true;
+    } else if (arg === '--top' && argv[i + 1]) {
+      top = parseInt(argv[i + 1], 10);
+      i++;
+    } else if (arg === '--since' && argv[i + 1]) {
+      since = argv[i + 1];
+      i++;
+    } else if (arg === '-h' || arg === '--help') {
+      printHelp();
+      process.exit(0);
+    }
+  }
+
+  const config = loadConfig(cwd);
+  const sinceMs = since ? parseDurationMs(since) ?? undefined : undefined;
+  const entries = readAuditLog(config.auditPath, { sinceMs });
+  const groups = aggregateAsks(entries);
+  const out = formatSuggestionReport(groups, { top, json });
+  process.stdout.write(out + (out.endsWith('\n') ? '' : '\n'));
+  process.exit(0);
+}
+
+function main(): void {
+  const argv = process.argv.slice(2);
+
+  if (argv.length === 0 || argv[0] === '-h' || argv[0] === '--help') {
+    printHelp();
+    process.exit(0);
+  }
+
+  const subcommand = argv[0];
+  const rest = argv.slice(1);
+
+  if (subcommand === 'eval') {
+    runEval(rest);
+  } else if (subcommand === 'suggest') {
+    runSuggest(rest);
+  } else {
+    process.stderr.write(`Unknown subcommand: ${subcommand}\n`);
+    printHelp();
+    process.exit(1);
+  }
 }
 
 main();
