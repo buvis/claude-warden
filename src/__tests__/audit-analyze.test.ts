@@ -158,6 +158,15 @@ describe('readAuditLog', () => {
     const result = readAuditLog(auditPath);
     expect(result).toHaveLength(1);
   });
+
+  it('coerces a non-string cmd to an empty string at the read boundary', () => {
+    const raw = JSON.parse(JSON.stringify(makeEntry({ decision: 'ask' })));
+    raw.cmd = 42;
+    writeFileSync(auditPath, JSON.stringify(raw) + '\n');
+    const result = readAuditLog(auditPath);
+    expect(result).toHaveLength(1);
+    expect(result[0].cmd).toBe('');
+  });
 });
 
 // ---------------------------------------------------------------------------
