@@ -288,6 +288,24 @@ describe('formatSuggestionReport', () => {
     expect(data.snippet).toContain('default: ask');
   });
 
+  // Scenario 6b: bare free-ask command (argShape '', matchedRuleSample 'default') -> scoped command-level default: allow, never alwaysAllow
+  it('emits a scoped command-level default: allow (never alwaysAllow) for a bare free-ask command', () => {
+    const groups: AskGroup[] = [
+      makeGroup({ command: 'mytool', argShape: '', count: 6, decisionSample: 'ask', matchedRuleSample: 'default' }),
+    ];
+    const result = formatSuggestionReport(groups, { json: true });
+    const data = JSON.parse(result);
+    expect(data.snippet).toContain('command: "mytool"');
+    expect(data.snippet).toContain('default: allow');
+    // Deliberate design choice: a bare suggestable command yields a scoped, overridable
+    // rules entry, NOT alwaysAllow (which would bypass all rule evaluation).
+    expect(data.snippet).not.toContain('alwaysAllow');
+    // Bare command -> blanket command-level allow, no subcommand argPatterns scoping.
+    expect(data.snippet).not.toContain('argPatterns');
+    // A free ask IS suggestable -> not routed to the review-manually comment path.
+    expect(data.snippet).not.toContain('# review manually');
+  });
+
   // Scenario 7: snippet from ≥2 distinct suggestable commands parses as valid yaml with rules array
   it('produces a valid warden.yaml snippet parseable as yaml with a rules array (≥2 commands)', () => {
     const groups: AskGroup[] = [
