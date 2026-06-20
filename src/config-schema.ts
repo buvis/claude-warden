@@ -31,7 +31,9 @@ export function nearestKey(
 ): string | undefined {
   let best = '';
   let bestDist = Infinity;
-  for (const candidate of known) {
+  // Iterate sorted so ties resolve to the lexicographically-first key — deterministic
+  // regardless of the known-set's insertion order. Do not drop the sort.
+  for (const candidate of [...known].sort()) {
     const d = editDistance(key, candidate);
     if (d <= maxDistance && d < bestDist) {
       best = candidate;
