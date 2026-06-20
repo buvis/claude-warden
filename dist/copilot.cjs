@@ -11011,6 +11011,7 @@ var Parser = class {
 // src/parser.ts
 var import_path = require("path");
 var import_os = require("os");
+var NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set(["TestCommand", "ArithmeticCommand"]);
 var VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
 function resolveVarRef(text, chainAssignments) {
   const m = text.match(VAR_REF_REGEX);
@@ -11214,6 +11215,7 @@ function walkNode(node, result) {
           result.commands.push(...innerResult.commands);
           if (innerResult.hasSubshell) result.hasSubshell = true;
           result.subshellCommands.push(...innerResult.subshellCommands);
+          if (innerResult.incomplete) result.incomplete = true;
         }
       } else if ((parsed.command === "sh" || parsed.command === "bash" || parsed.command === "zsh") && parsed.args.length >= 1) {
         const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
@@ -11317,8 +11319,14 @@ function walkNode(node, result) {
       walkCompoundList(node.body, result);
       break;
     }
-    // TestCommand, ArithmeticCommand: no executable commands to extract
     default:
+      if (!NO_COMMAND_NODE_TYPES.has(node.type)) {
+        result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes(node.type)) {
+          result.incompleteNodeTypes.push(node.type);
+        }
+      }
       break;
   }
 }
@@ -11357,7 +11365,9 @@ function parseCommand(input) {
     hasSubshell: result.hasSubshell,
     subshellCommands: result.subshellCommands,
     parseError: false,
-    chainAssignments: result.chainAssignments
+    chainAssignments: result.chainAssignments,
+    incomplete: result.incomplete === true,
+    incompleteNodeTypes: result.incompleteNodeTypes
   };
 }
 
@@ -11604,6 +11614,11 @@ var DEFAULT_CONFIG = {
   notifyOnDeny: true,
   audit: true,
   auditPath: (0, import_path2.join)((0, import_os2.homedir)(), ".claude", "warden-audit.jsonl"),
+  // Stays false by design (PRD 00011): this flag is global, so true would log every
+  // allow across all ~100 always-allow commands (every ls/cat/grep), adding hot-path I/O
+  // and churning the 5MB rotation. The script-allow safety hole is closed by the scanner's
+  // positive safe-shape gate, not by logging; users who want allow-path visibility opt in
+  // with one line. See docs/guide/defaults.md "Script content scanning".
   auditAllowDecisions: false,
   trustedRemotes: [],
   targetPolicies: [],
@@ -13536,6 +13551,7 @@ var PYTHON_PATTERNS = [
   { regex: /\bctypes\b/, level: "dangerous", reason: "ctypes allows calling C functions directly" },
   { regex: /\bpickle\.loads?\s*\(/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
   { regex: /\bpickle\.Unpickler\b/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
+  { regex: /\bimportlib\b/, level: "dangerous", reason: "importlib loads arbitrary modules" },
   // Cautious
   { regex: /\bopen\s*\([^)]*['"][wax]/, level: "cautious", reason: "opens file for writing" },
   { regex: /\bPath\s*[\.(].*\.write_text\s*\(/, level: "cautious", reason: "writes to file via Path" },
@@ -13543,7 +13559,11 @@ var PYTHON_PATTERNS = [
   { regex: /\bsocket\b/, level: "cautious", reason: "uses network sockets" },
   { regex: /\brequests\.(post|put|delete)\s*\(/, level: "cautious", reason: "makes mutating HTTP request" },
   { regex: /\burllib\.request\b/, level: "cautious", reason: "makes HTTP requests" },
-  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" }
+  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" },
+  { regex: /\.unlink\s*\(/, level: "cautious", reason: "deletes a file" },
+  { regex: /\.rmdir\s*\(/, level: "cautious", reason: "removes a directory" },
+  { regex: /\bos\.replace\s*\(/, level: "cautious", reason: "renames/overwrites a file" },
+  { regex: /\bshutil\.move\s*\(/, level: "cautious", reason: "moves a file" }
 ];
 var TYPESCRIPT_PATTERNS = [
   // Dangerous
@@ -13568,7 +13588,11 @@ var TYPESCRIPT_PATTERNS = [
   { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: "cautious", reason: "makes mutating HTTP request" },
   { regex: /\bfetch\s*\(/, level: "cautious", reason: "makes HTTP request" },
   { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" },
-  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" }
+  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" },
+  { regex: /\.rmSync\s*\(/, level: "cautious", reason: "deletes file/directory" },
+  { regex: /\.rmdirSync\s*\(/, level: "cautious", reason: "removes directory" },
+  { regex: /\.rmdir\s*\(/, level: "cautious", reason: "removes directory" },
+  { regex: /\.rm\s*\(/, level: "cautious", reason: "deletes file/directory" }
 ];
 var PERL_PATTERNS = [
   // Dangerous
@@ -13625,19 +13649,77 @@ var PATTERNS_BY_LANGUAGE = {
   php: PHP_PATTERNS
 };
 var MAX_SCRIPT_SIZE = 1024 * 1024;
+var PYTHON_EVASION_SIGNALS = [
+  { regex: /\bgetattr\s*\(/, reason: "getattr enables dynamic attribute dispatch" },
+  { regex: /\bchr\s*\(/, reason: "chr()-built strings can hide identifiers" }
+];
+var TYPESCRIPT_EVASION_SIGNALS = [
+  { regex: /\bglobalThis\s*\[/, reason: "globalThis[...] is dynamic global access" },
+  { regex: /\brequire\s*\(\s*(?!['\"`])/, reason: "require() with a variable loads a dynamic module" }
+];
+var PERL_EVASION_SIGNALS = [];
+var RUBY_EVASION_SIGNALS = [];
+var PHP_EVASION_SIGNALS = [];
+var EVASION_SIGNALS_BY_LANGUAGE = {
+  python: PYTHON_EVASION_SIGNALS,
+  typescript: TYPESCRIPT_EVASION_SIGNALS,
+  perl: PERL_EVASION_SIGNALS,
+  ruby: RUBY_EVASION_SIGNALS,
+  php: PHP_EVASION_SIGNALS
+};
+var SAFE_SHAPE_PATTERNS = {
+  python: [
+    /^print\s*\(/,
+    /^\w+\s*=\s*[^()]*$/,
+    // no-call assignment (no parens in RHS)
+    /^(import|from)\s+\w/,
+    /\bjson\.(loads|load|dumps|dump)\s*\(/,
+    /^open\s*\([^,)*]+\)\s*$/,
+    // single-arg open (defaults to read); excludes splat args
+    /^open\s*\([^)]*,\s*['"]r['"]?\s*\)/,
+    // open with explicit read-mode literal; a variable mode stays unknown
+    /\.(read_text|read|readlines)\s*\(/
+  ],
+  typescript: [
+    /^console\.(log|error|warn|info|debug)\s*\(/,
+    /^(const|let|var)\s+\w+\s*(:\s*[\w.<>\[\]|, ]+)?\s*=\s*[^()]*$/,
+    // no-call assignment, optional type annotation (no parens in RHS)
+    /^(import|export)\s/,
+    /\bJSON\.(parse|stringify)\s*\(/,
+    /\.(readFileSync|readFile)\s*\(/
+  ],
+  perl: [
+    /^print\b/,
+    /^my\s+[\$@%]\w+\s*=\s*[^()]*$/,
+    /^use\s+\w/
+  ]
+};
 function scanScriptCode(code, language) {
   const patterns = PATTERNS_BY_LANGUAGE[language];
   for (const pattern of patterns) {
     if (pattern.level === "dangerous" && pattern.regex.test(code)) {
-      return { level: "dangerous", reason: pattern.reason };
+      return { verdict: "dangerous", reason: pattern.reason };
     }
   }
   for (const pattern of patterns) {
     if (pattern.level === "cautious" && pattern.regex.test(code)) {
-      return { level: "cautious", reason: pattern.reason };
+      return { verdict: "cautious", reason: pattern.reason };
     }
   }
-  return null;
+  const evasionSignals = EVASION_SIGNALS_BY_LANGUAGE[language] || [];
+  for (const signal of evasionSignals) {
+    if (signal.regex.test(code)) {
+      return { verdict: "unknown", reason: signal.reason };
+    }
+  }
+  const safePatterns = SAFE_SHAPE_PATTERNS[language];
+  if (safePatterns && safePatterns.length > 0) {
+    const statements = code.split(/\n|;/g).map((s) => s.trim()).filter((s) => s.length > 0 && !s.startsWith("#") && !s.startsWith("//"));
+    if (statements.length > 0 && statements.every((stmt) => safePatterns.some((p) => p.test(stmt)))) {
+      return { verdict: "safe", reason: "recognized read-only / compute / safe-shape script" };
+    }
+  }
+  return { verdict: "unknown", reason: "no recognized danger or safe-shape pattern" };
 }
 function readScriptFile(filePath, cwd) {
   const fullPath = (0, import_path5.isAbsolute)(filePath) ? filePath : (0, import_path5.resolve)(cwd, filePath);
@@ -13660,14 +13742,25 @@ function userRulesWouldRestrict(cmd, config) {
   const rule = collectMergedRule(cmd, config);
   return !!rule && rule.default === "deny";
 }
+function withInlineNudge(reason, inline) {
+  return inline ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${reason})` : reason;
+}
 function mapScanResult(cmd, scanResult, matchedRule, config, inline) {
-  if (!scanResult) {
-    if (userRulesWouldRestrict(cmd, config)) return null;
-    return { command: cmd.command, args: cmd.args, decision: "allow", reason: "script content is safe", matchedRule };
+  if (scanResult.verdict === "dangerous") {
+    const reason = withInlineNudge(`dangerous: ${scanResult.reason}`, inline);
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
   }
-  const baseReason = scanResult.level === "dangerous" ? `dangerous: ${scanResult.reason}` : scanResult.reason;
-  const reason = inline ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})` : baseReason;
-  return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+  if (scanResult.verdict === "cautious") {
+    const reason = withInlineNudge(scanResult.reason, inline);
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+  }
+  if (scanResult.verdict === "unknown") {
+    if (userRulesWouldRestrict(cmd, config)) return null;
+    const reason = withInlineNudge(scanResult.reason, inline);
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+  }
+  if (userRulesWouldRestrict(cmd, config)) return null;
+  return { command: cmd.command, args: cmd.args, decision: "allow", reason: "script content is safe", matchedRule };
 }
 function scanScriptFile(cmd, filePath, language, matchedRule, config, cwd) {
   const fileResult = readScriptFile(filePath, cwd || process.cwd());
@@ -13900,6 +13993,11 @@ function evaluate(parsed, config, depth = 0, cwd) {
   }
   if (parsed.parseError) {
     return { decision: "ask", reason: "unparseable command", details: [] };
+  }
+  if (parsed.incomplete) {
+    const types = parsed.incompleteNodeTypes;
+    const reason = types && types.length ? `unrecognized shell construct: ${types.join(", ")}` : "unrecognized shell construct";
+    return { decision: "ask", reason, details: [] };
   }
   if (parsed.commands.length === 0) {
     return { decision: "allow", reason: "Empty command", details: [] };

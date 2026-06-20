@@ -11011,6 +11011,7 @@ var Parser = class {
 // src/parser.ts
 var import_path = require("path");
 var import_os = require("os");
+var NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set(["TestCommand", "ArithmeticCommand"]);
 var VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
 function resolveVarRef(text, chainAssignments) {
   const m = text.match(VAR_REF_REGEX);
@@ -11214,6 +11215,7 @@ function walkNode(node, result) {
           result.commands.push(...innerResult.commands);
           if (innerResult.hasSubshell) result.hasSubshell = true;
           result.subshellCommands.push(...innerResult.subshellCommands);
+          if (innerResult.incomplete) result.incomplete = true;
         }
       } else if ((parsed.command === "sh" || parsed.command === "bash" || parsed.command === "zsh") && parsed.args.length >= 1) {
         const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
@@ -11317,8 +11319,14 @@ function walkNode(node, result) {
       walkCompoundList(node.body, result);
       break;
     }
-    // TestCommand, ArithmeticCommand: no executable commands to extract
     default:
+      if (!NO_COMMAND_NODE_TYPES.has(node.type)) {
+        result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes(node.type)) {
+          result.incompleteNodeTypes.push(node.type);
+        }
+      }
       break;
   }
 }
@@ -11357,7 +11365,9 @@ function parseCommand(input) {
     hasSubshell: result.hasSubshell,
     subshellCommands: result.subshellCommands,
     parseError: false,
-    chainAssignments: result.chainAssignments
+    chainAssignments: result.chainAssignments,
+    incomplete: result.incomplete === true,
+    incompleteNodeTypes: result.incompleteNodeTypes
   };
 }
 
@@ -11604,6 +11614,11 @@ var DEFAULT_CONFIG = {
   notifyOnDeny: true,
   audit: true,
   auditPath: (0, import_path2.join)((0, import_os2.homedir)(), ".claude", "warden-audit.jsonl"),
+  // Stays false by design (PRD 00011): this flag is global, so true would log every
+  // allow across all ~100 always-allow commands (every ls/cat/grep), adding hot-path I/O
+  // and churning the 5MB rotation. The script-allow safety hole is closed by the scanner's
+  // positive safe-shape gate, not by logging; users who want allow-path visibility opt in
+  // with one line. See docs/guide/defaults.md "Script content scanning".
   auditAllowDecisions: false,
   trustedRemotes: [],
   targetPolicies: [],
@@ -13539,6 +13554,7 @@ var PYTHON_PATTERNS = [
   { regex: /\bctypes\b/, level: "dangerous", reason: "ctypes allows calling C functions directly" },
   { regex: /\bpickle\.loads?\s*\(/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
   { regex: /\bpickle\.Unpickler\b/, level: "dangerous", reason: "pickle deserialization can execute arbitrary code" },
+  { regex: /\bimportlib\b/, level: "dangerous", reason: "importlib loads arbitrary modules" },
   // Cautious
   { regex: /\bopen\s*\([^)]*['"][wax]/, level: "cautious", reason: "opens file for writing" },
   { regex: /\bPath\s*[\.(].*\.write_text\s*\(/, level: "cautious", reason: "writes to file via Path" },
@@ -13546,7 +13562,11 @@ var PYTHON_PATTERNS = [
   { regex: /\bsocket\b/, level: "cautious", reason: "uses network sockets" },
   { regex: /\brequests\.(post|put|delete)\s*\(/, level: "cautious", reason: "makes mutating HTTP request" },
   { regex: /\burllib\.request\b/, level: "cautious", reason: "makes HTTP requests" },
-  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" }
+  { regex: /\bos\.(remove|unlink|rmdir|rename)\s*\(/, level: "cautious", reason: "modifies filesystem" },
+  { regex: /\.unlink\s*\(/, level: "cautious", reason: "deletes a file" },
+  { regex: /\.rmdir\s*\(/, level: "cautious", reason: "removes a directory" },
+  { regex: /\bos\.replace\s*\(/, level: "cautious", reason: "renames/overwrites a file" },
+  { regex: /\bshutil\.move\s*\(/, level: "cautious", reason: "moves a file" }
 ];
 var TYPESCRIPT_PATTERNS = [
   // Dangerous
@@ -13571,7 +13591,11 @@ var TYPESCRIPT_PATTERNS = [
   { regex: /\bfetch\s*\([^)]*method\s*:\s*['"]?(POST|PUT|DELETE)/i, level: "cautious", reason: "makes mutating HTTP request" },
   { regex: /\bfetch\s*\(/, level: "cautious", reason: "makes HTTP request" },
   { regex: /\bhttps?\.request\s*\(/, level: "cautious", reason: "makes HTTP request" },
-  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" }
+  { regex: /\bnet\.(?:connect|createConnection)\s*\(/, level: "cautious", reason: "opens network connection" },
+  { regex: /\.rmSync\s*\(/, level: "cautious", reason: "deletes file/directory" },
+  { regex: /\.rmdirSync\s*\(/, level: "cautious", reason: "removes directory" },
+  { regex: /\.rmdir\s*\(/, level: "cautious", reason: "removes directory" },
+  { regex: /\.rm\s*\(/, level: "cautious", reason: "deletes file/directory" }
 ];
 var PERL_PATTERNS = [
   // Dangerous
@@ -13628,19 +13652,77 @@ var PATTERNS_BY_LANGUAGE = {
   php: PHP_PATTERNS
 };
 var MAX_SCRIPT_SIZE = 1024 * 1024;
+var PYTHON_EVASION_SIGNALS = [
+  { regex: /\bgetattr\s*\(/, reason: "getattr enables dynamic attribute dispatch" },
+  { regex: /\bchr\s*\(/, reason: "chr()-built strings can hide identifiers" }
+];
+var TYPESCRIPT_EVASION_SIGNALS = [
+  { regex: /\bglobalThis\s*\[/, reason: "globalThis[...] is dynamic global access" },
+  { regex: /\brequire\s*\(\s*(?!['\"`])/, reason: "require() with a variable loads a dynamic module" }
+];
+var PERL_EVASION_SIGNALS = [];
+var RUBY_EVASION_SIGNALS = [];
+var PHP_EVASION_SIGNALS = [];
+var EVASION_SIGNALS_BY_LANGUAGE = {
+  python: PYTHON_EVASION_SIGNALS,
+  typescript: TYPESCRIPT_EVASION_SIGNALS,
+  perl: PERL_EVASION_SIGNALS,
+  ruby: RUBY_EVASION_SIGNALS,
+  php: PHP_EVASION_SIGNALS
+};
+var SAFE_SHAPE_PATTERNS = {
+  python: [
+    /^print\s*\(/,
+    /^\w+\s*=\s*[^()]*$/,
+    // no-call assignment (no parens in RHS)
+    /^(import|from)\s+\w/,
+    /\bjson\.(loads|load|dumps|dump)\s*\(/,
+    /^open\s*\([^,)*]+\)\s*$/,
+    // single-arg open (defaults to read); excludes splat args
+    /^open\s*\([^)]*,\s*['"]r['"]?\s*\)/,
+    // open with explicit read-mode literal; a variable mode stays unknown
+    /\.(read_text|read|readlines)\s*\(/
+  ],
+  typescript: [
+    /^console\.(log|error|warn|info|debug)\s*\(/,
+    /^(const|let|var)\s+\w+\s*(:\s*[\w.<>\[\]|, ]+)?\s*=\s*[^()]*$/,
+    // no-call assignment, optional type annotation (no parens in RHS)
+    /^(import|export)\s/,
+    /\bJSON\.(parse|stringify)\s*\(/,
+    /\.(readFileSync|readFile)\s*\(/
+  ],
+  perl: [
+    /^print\b/,
+    /^my\s+[\$@%]\w+\s*=\s*[^()]*$/,
+    /^use\s+\w/
+  ]
+};
 function scanScriptCode(code, language) {
   const patterns = PATTERNS_BY_LANGUAGE[language];
   for (const pattern of patterns) {
     if (pattern.level === "dangerous" && pattern.regex.test(code)) {
-      return { level: "dangerous", reason: pattern.reason };
+      return { verdict: "dangerous", reason: pattern.reason };
     }
   }
   for (const pattern of patterns) {
     if (pattern.level === "cautious" && pattern.regex.test(code)) {
-      return { level: "cautious", reason: pattern.reason };
+      return { verdict: "cautious", reason: pattern.reason };
     }
   }
-  return null;
+  const evasionSignals = EVASION_SIGNALS_BY_LANGUAGE[language] || [];
+  for (const signal of evasionSignals) {
+    if (signal.regex.test(code)) {
+      return { verdict: "unknown", reason: signal.reason };
+    }
+  }
+  const safePatterns = SAFE_SHAPE_PATTERNS[language];
+  if (safePatterns && safePatterns.length > 0) {
+    const statements = code.split(/\n|;/g).map((s) => s.trim()).filter((s) => s.length > 0 && !s.startsWith("#") && !s.startsWith("//"));
+    if (statements.length > 0 && statements.every((stmt) => safePatterns.some((p) => p.test(stmt)))) {
+      return { verdict: "safe", reason: "recognized read-only / compute / safe-shape script" };
+    }
+  }
+  return { verdict: "unknown", reason: "no recognized danger or safe-shape pattern" };
 }
 function readScriptFile(filePath, cwd) {
   const fullPath = (0, import_path5.isAbsolute)(filePath) ? filePath : (0, import_path5.resolve)(cwd, filePath);
@@ -13663,14 +13745,25 @@ function userRulesWouldRestrict(cmd, config) {
   const rule = collectMergedRule(cmd, config);
   return !!rule && rule.default === "deny";
 }
+function withInlineNudge(reason, inline) {
+  return inline ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${reason})` : reason;
+}
 function mapScanResult(cmd, scanResult, matchedRule, config, inline) {
-  if (!scanResult) {
-    if (userRulesWouldRestrict(cmd, config)) return null;
-    return { command: cmd.command, args: cmd.args, decision: "allow", reason: "script content is safe", matchedRule };
+  if (scanResult.verdict === "dangerous") {
+    const reason = withInlineNudge(`dangerous: ${scanResult.reason}`, inline);
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
   }
-  const baseReason = scanResult.level === "dangerous" ? `dangerous: ${scanResult.reason}` : scanResult.reason;
-  const reason = inline ? `Inline ${inline.lang} is hard to audit. For JSON, prefer \`jq\`. For reuse, save to scripts/*.${inline.ext} and run it. (${baseReason})` : baseReason;
-  return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+  if (scanResult.verdict === "cautious") {
+    const reason = withInlineNudge(scanResult.reason, inline);
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+  }
+  if (scanResult.verdict === "unknown") {
+    if (userRulesWouldRestrict(cmd, config)) return null;
+    const reason = withInlineNudge(scanResult.reason, inline);
+    return { command: cmd.command, args: cmd.args, decision: "ask", reason, matchedRule };
+  }
+  if (userRulesWouldRestrict(cmd, config)) return null;
+  return { command: cmd.command, args: cmd.args, decision: "allow", reason: "script content is safe", matchedRule };
 }
 function scanScriptFile(cmd, filePath, language, matchedRule, config, cwd) {
   const fileResult = readScriptFile(filePath, cwd || process.cwd());
@@ -13903,6 +13996,11 @@ function evaluate(parsed, config, depth = 0, cwd) {
   }
   if (parsed.parseError) {
     return { decision: "ask", reason: "unparseable command", details: [] };
+  }
+  if (parsed.incomplete) {
+    const types = parsed.incompleteNodeTypes;
+    const reason = types && types.length ? `unrecognized shell construct: ${types.join(", ")}` : "unrecognized shell construct";
+    return { decision: "ask", reason, details: [] };
   }
   if (parsed.commands.length === 0) {
     return { decision: "allow", reason: "Empty command", details: [] };
@@ -14142,14 +14240,272 @@ function wardenEvalWithConfig(command, config, cwd) {
   return evaluate(parsed, config, 0, cwd);
 }
 
+// src/audit-analyze.ts
+var import_fs3 = require("fs");
+var VALID_DECISIONS2 = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
+function readAuditLog(auditPath, opts) {
+  const entries = [];
+  const files = [auditPath + ".1", auditPath];
+  for (const filePath of files) {
+    if (!(0, import_fs3.existsSync)(filePath)) continue;
+    const raw = (0, import_fs3.readFileSync)(filePath, "utf-8");
+    for (const line of raw.split("\n")) {
+      if (line.trim() === "") continue;
+      let obj;
+      try {
+        obj = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (obj === null || typeof obj !== "object") continue;
+      const rec = obj;
+      if (typeof rec.ts !== "string") continue;
+      if (!VALID_DECISIONS2.has(rec.decision)) continue;
+      const entry = {
+        ts: rec.ts,
+        sid: rec.sid ?? "",
+        cmd: rec.cmd ?? "",
+        decision: rec.decision,
+        reason: rec.reason ?? "",
+        details: Array.isArray(rec.details) ? rec.details : [],
+        yolo: rec.yolo ?? false,
+        elapsed_ms: rec.elapsed_ms ?? 0
+      };
+      entries.push(entry);
+    }
+  }
+  if (opts?.sinceMs !== void 0) {
+    const cutoff = Date.now() - opts.sinceMs;
+    return entries.filter((e) => Date.parse(e.ts) >= cutoff);
+  }
+  return entries;
+}
+function argShape(args) {
+  if (args.length === 0) return "";
+  if (args[0].startsWith("-")) return "";
+  return args[0];
+}
+var RESTRICTIVENESS = {
+  alwaysDeny: 100
+};
+function restrictivenessRank(matchedRule) {
+  if (matchedRule === void 0) return 0;
+  if (matchedRule === "default") return 1;
+  if (matchedRule.endsWith(":default")) return 2;
+  if (matchedRule in RESTRICTIVENESS) return RESTRICTIVENESS[matchedRule];
+  if (matchedRule.endsWith(":argPattern")) return 4;
+  return 3;
+}
+function aggregateAsks(entries) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    if (entry.decision === "allow") continue;
+    for (const detail of entry.details) {
+      if (detail.decision === "allow") continue;
+      const key = `${detail.command}\0${argShape(detail.args)}`;
+      const contrib = {
+        ts: entry.ts,
+        decision: detail.decision,
+        matchedRule: detail.matchedRule,
+        reason: detail.reason
+      };
+      if (!groups.has(key)) {
+        groups.set(key, { contributions: [] });
+      }
+      groups.get(key).contributions.push(contrib);
+    }
+  }
+  const result = [];
+  for (const [key, val] of groups) {
+    const [command, argShapeStr] = key.split("\0");
+    const contribs = val.contributions;
+    let count = contribs.length;
+    let firstSeen = contribs[0].ts;
+    let lastSeen = contribs[0].ts;
+    for (const c of contribs) {
+      if (Date.parse(c.ts) < Date.parse(firstSeen)) firstSeen = c.ts;
+      if (Date.parse(c.ts) > Date.parse(lastSeen)) lastSeen = c.ts;
+    }
+    const decisionSample = contribs.some((c) => c.decision === "deny") ? "deny" : "ask";
+    let matchedRuleSample = void 0;
+    let sampleReason = contribs[0].reason;
+    let bestRank = restrictivenessRank(void 0);
+    for (const c of contribs) {
+      const rank = restrictivenessRank(c.matchedRule);
+      if (rank > bestRank) {
+        bestRank = rank;
+        matchedRuleSample = c.matchedRule;
+        sampleReason = c.reason;
+      } else if (rank === bestRank && rank > 0) {
+        if (c.matchedRule !== void 0 && (matchedRuleSample === void 0 || c.matchedRule < matchedRuleSample)) {
+          matchedRuleSample = c.matchedRule;
+          sampleReason = c.reason;
+        }
+      }
+    }
+    result.push({
+      command,
+      argShape: argShapeStr,
+      count,
+      firstSeen,
+      lastSeen,
+      decisionSample,
+      matchedRuleSample,
+      sampleReason
+    });
+  }
+  result.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    const lastSeenDiff = Date.parse(b.lastSeen) - Date.parse(a.lastSeen);
+    if (lastSeenDiff !== 0) return lastSeenDiff;
+    if (a.command !== b.command) return a.command < b.command ? -1 : 1;
+    return a.argShape < b.argShape ? -1 : 1;
+  });
+  return result;
+}
+function parseDurationMs(spec) {
+  const m = spec.match(/^(\d+)([smhdw])$/);
+  if (!m) return null;
+  const mult = { s: 1e3, m: 6e4, h: 36e5, d: 864e5, w: 6048e5 };
+  return Number(m[1]) * mult[m[2]];
+}
+
+// src/suggest.ts
+function generateFullAllowSnippet(command) {
+  const lines = [
+    "rules:",
+    `  - command: "${command}"`,
+    "    default: allow"
+  ];
+  return lines.join("\n");
+}
+function generateSubcommandSnippet(command, subcommand) {
+  const lines = [
+    "rules:",
+    `  - command: "${command}"`,
+    "    default: ask",
+    "    argPatterns:",
+    "      - match:",
+    `          anyArgMatches: ['^${escapeRegex(subcommand)}$']`,
+    "        decision: allow",
+    `        description: Allow ${command} ${subcommand}`
+  ];
+  return lines.join("\n");
+}
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function isSuggestable(g) {
+  if (g.decisionSample !== "ask") return false;
+  return g.matchedRuleSample === void 0 || g.matchedRuleSample === "default" || g.matchedRuleSample === `${g.command}:default`;
+}
+function buildAllowlistSnippet(groups) {
+  const commentLines = [];
+  const allowFragments = [];
+  const suggestableByCommand = /* @__PURE__ */ new Map();
+  for (const g of groups) {
+    if (!isSuggestable(g)) {
+      const argPart = g.argShape ? ` ${g.argShape}` : "";
+      commentLines.push(`# review manually: ${g.command}${argPart} (${g.sampleReason})`);
+    } else {
+      const list = suggestableByCommand.get(g.command);
+      if (list) {
+        list.push(g);
+      } else {
+        suggestableByCommand.set(g.command, [g]);
+      }
+    }
+  }
+  for (const [command, cGroups] of suggestableByCommand) {
+    const ruleBearing = cGroups.some((g) => g.matchedRuleSample === `${command}:default`);
+    const hasBareSuggestable = cGroups.some((g) => g.argShape === "");
+    const nonEmptySubs = cGroups.filter((g) => g.argShape !== "").map((g) => g.argShape);
+    const subs = [];
+    for (const s of nonEmptySubs) {
+      if (!subs.includes(s)) subs.push(s);
+    }
+    if (ruleBearing) {
+      if (subs.length >= 1) {
+        for (const sub of subs) {
+          allowFragments.push(generateSubcommandSnippet(command, sub));
+        }
+      } else {
+        commentLines.push(`# review manually: ${command} asked bare but is rule-gated`);
+      }
+    } else {
+      if (hasBareSuggestable) {
+        allowFragments.push(generateFullAllowSnippet(command));
+      } else if (subs.length === 1) {
+        allowFragments.push(generateSubcommandSnippet(command, subs[0]));
+      } else {
+        allowFragments.push(generateFullAllowSnippet(command));
+      }
+    }
+  }
+  if (commentLines.length === 0 && allowFragments.length === 0) return "";
+  const lines = [...commentLines];
+  if (allowFragments.length > 0) {
+    lines.push("rules:");
+    for (const frag of allowFragments) {
+      const body = frag.split("\n").slice(1);
+      for (const line of body) {
+        lines.push(line);
+      }
+    }
+  }
+  return lines.join("\n");
+}
+function formatSuggestionReport(groups, opts) {
+  const topN = opts?.top ?? 10;
+  const topGroups = groups.slice(0, topN);
+  if (groups.length === 0) {
+    if (opts?.json) {
+      return JSON.stringify({ period: { from: null, to: null }, totalAskDeny: 0, distinctGroups: 0, top: [], snippet: "" });
+    }
+    return "No recurring ask/deny entries found.";
+  }
+  let totalAskDeny = 0;
+  let from = null;
+  let to = null;
+  for (const g of groups) {
+    totalAskDeny += g.count;
+    if (from === null || Date.parse(g.firstSeen) < Date.parse(from)) from = g.firstSeen;
+    if (to === null || Date.parse(g.lastSeen) > Date.parse(to)) to = g.lastSeen;
+  }
+  const distinctGroups = groups.length;
+  const snippet = buildAllowlistSnippet(topGroups);
+  if (opts?.json) {
+    return JSON.stringify({ period: { from, to }, totalAskDeny, distinctGroups, top: topGroups, snippet });
+  }
+  const lines = [];
+  lines.push(`Warden suggest \u2014 ${from} .. ${to}`);
+  lines.push(`${totalAskDeny} recurring ask/deny occurrences across ${distinctGroups} commands`);
+  lines.push("");
+  lines.push("Top repeated asks:");
+  for (const g of topGroups) {
+    const argPart = g.argShape ? ` ${g.argShape}` : "";
+    lines.push(`  ${g.count}x  ${g.command}${argPart}   (${g.sampleReason})`);
+  }
+  lines.push("");
+  lines.push("Suggested warden.yaml additions:");
+  lines.push(snippet);
+  return lines.join("\n");
+}
+
 // src/cli.ts
 setQuiet(false);
 function printHelp() {
   process.stdout.write(
     [
       "Usage: warden eval [options] <command>",
+      "       warden suggest [options]",
       "",
-      "Evaluate a shell command against Warden safety rules.",
+      "Evaluate a shell command against Warden safety rules, or",
+      "suggest warden.yaml rules from the audit log.",
+      "",
+      "Commands:",
+      "  eval       Evaluate a shell command",
+      "  suggest    Suggest rules from audit log",
       "",
       "Options:",
       "  --cwd <dir>   Set working directory for config loading",
@@ -14163,27 +14519,18 @@ function printHelp() {
       '  warden eval "ls -la"',
       '  warden eval --json "git push --force"',
       '  warden eval --cwd /path/to/project "rm -rf dist"',
+      "  warden suggest --json --top 5",
+      "  warden suggest --since 7d",
       ""
     ].join("\n")
   );
 }
 var EXIT_CODES = { allow: 0, ask: 1, deny: 2 };
-function main() {
-  const argv = process.argv.slice(2);
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
-    printHelp();
-    process.exit(0);
-  }
-  if (argv[0] !== "eval") {
-    process.stderr.write(`Unknown subcommand: ${argv[0]}
-`);
-    printHelp();
-    process.exit(1);
-  }
+function runEval(argv) {
   let cwd = process.cwd();
   let json = false;
   let command;
-  for (let i = 1; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--cwd" && argv[i + 1]) {
       cwd = argv[i + 1];
@@ -14210,5 +14557,55 @@ function main() {
 `);
   }
   process.exit(EXIT_CODES[result.decision]);
+}
+function runSuggest(argv) {
+  let cwd = process.cwd();
+  let json = false;
+  let top;
+  let since;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--cwd" && argv[i + 1]) {
+      cwd = argv[i + 1];
+      i++;
+    } else if (arg === "--json") {
+      json = true;
+    } else if (arg === "--top" && argv[i + 1]) {
+      top = parseInt(argv[i + 1], 10);
+      i++;
+    } else if (arg === "--since" && argv[i + 1]) {
+      since = argv[i + 1];
+      i++;
+    } else if (arg === "-h" || arg === "--help") {
+      printHelp();
+      process.exit(0);
+    }
+  }
+  const config = loadConfig(cwd);
+  const sinceMs = since ? parseDurationMs(since) ?? void 0 : void 0;
+  const entries = readAuditLog(config.auditPath, { sinceMs });
+  const groups = aggregateAsks(entries);
+  const out = formatSuggestionReport(groups, { top, json });
+  process.stdout.write(out + (out.endsWith("\n") ? "" : "\n"));
+  process.exit(0);
+}
+function main() {
+  const argv = process.argv.slice(2);
+  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+    printHelp();
+    process.exit(0);
+  }
+  const subcommand = argv[0];
+  const rest = argv.slice(1);
+  if (subcommand === "eval") {
+    runEval(rest);
+  } else if (subcommand === "suggest") {
+    runSuggest(rest);
+  } else {
+    process.stderr.write(`Unknown subcommand: ${subcommand}
+`);
+    printHelp();
+    process.exit(1);
+  }
 }
 main();
