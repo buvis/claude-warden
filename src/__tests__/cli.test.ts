@@ -231,3 +231,127 @@ describe('CLI: warden suggest', () => {
     expect(first.stdout).toBe(second.stdout);
   });
 });
+
+// --- helpers for warden validate tests ---
+
+function runValidate(args: string[], home: string): { stdout: string; stderr: string; exitCode: number } {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI_BIN, 'validate', ...args], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+    });
+    return { stdout, stderr: '', exitCode: 0 };
+  } catch (err: any) {
+    return { stdout: err.stdout ?? '', stderr: err.stderr ?? '', exitCode: err.status ?? 1 };
+  }
+}
+
+describe('CLI: warden validate', () => {
+  it('exits 0 for a clean project config', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-vhome-'));
+    const ws = mkdtempSync(join(tmpdir(), 'warden-vws-'));
+    try {
+      mkdirSync(join(ws, '.claude'), { recursive: true });
+      writeFileSync(
+        join(ws, '.claude', 'warden.yaml'),
+        'rules:\n  - command: git\n    default: allow\n',
+      );
+      const { exitCode } = runValidate(['--cwd', ws], home);
+      expect(exitCode).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('exits 0 and returns an empty JSON array for a clean config under --json', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-vhome-'));
+    const ws = mkdtempSync(join(tmpdir(), 'warden-vws-'));
+    try {
+      mkdirSync(join(ws, '.claude'), { recursive: true });
+      writeFileSync(
+        join(ws, '.claude', 'warden.yaml'),
+        'rules:\n  - command: git\n    default: allow\n',
+      );
+      const { exitCode, stdout } = runValidate(['--cwd', ws, '--json'], home);
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('exits 1 and names the typo and its suggestion for a top-level unknown key', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-vhome-'));
+    const ws = mkdtempSync(join(tmpdir(), 'warden-vws-'));
+    try {
+      mkdirSync(join(ws, '.claude'), { recursive: true });
+      writeFileSync(join(ws, '.claude', 'warden.yaml'), 'alwaysAlow:\n  - foo\n');
+      const { exitCode, stdout } = runValidate(['--cwd', ws], home);
+      expect(exitCode).toBe(1);
+      expect(stdout).toContain('alwaysAlow');
+      expect(stdout).toContain('alwaysAllow');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('exits 1 and emits stable ConfigWarning shape under --json for a top-level typo', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-vhome-'));
+    const ws = mkdtempSync(join(tmpdir(), 'warden-vws-'));
+    try {
+      mkdirSync(join(ws, '.claude'), { recursive: true });
+      writeFileSync(join(ws, '.claude', 'warden.yaml'), 'alwaysAlow:\n  - foo\n');
+      const { exitCode, stdout } = runValidate(['--cwd', ws, '--json'], home);
+      expect(exitCode).toBe(1);
+      const warnings = JSON.parse(stdout);
+      expect(Array.isArray(warnings)).toBe(true);
+      const entry = warnings.find((w: any) => w.path === 'alwaysAlow');
+      expect(entry).toBeDefined();
+      expect(entry.suggestion).toBe('alwaysAllow');
+      expect(entry.message).toContain('unknown key');
+      expect(typeof entry.file).toBe('string');
+      expect(entry.file.length).toBeGreaterThan(0);
+      expect(entry.file).toMatch(/warden\.yaml$/);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('exits 1 and names the rule-field typo and suggests the correct key', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-vhome-'));
+    const ws = mkdtempSync(join(tmpdir(), 'warden-vws-'));
+    try {
+      mkdirSync(join(ws, '.claude'), { recursive: true });
+      writeFileSync(
+        join(ws, '.claude', 'warden.yaml'),
+        'rules:\n  - command: git\n    defualt: deny\n',
+      );
+      const { exitCode, stdout } = runValidate(['--cwd', ws], home);
+      expect(exitCode).toBe(1);
+      expect(stdout).toContain('defualt');
+      expect(stdout).toContain('default');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('exits 0 when there is no project config and home is empty', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-vhome-'));
+    const ws = mkdtempSync(join(tmpdir(), 'warden-vws-'));
+    try {
+      // no warden.yaml written anywhere — both home and ws are empty
+      const { exitCode } = runValidate(['--cwd', ws], home);
+      expect(exitCode).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+});
