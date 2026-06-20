@@ -450,4 +450,107 @@ describe('aggregateAsks', () => {
     const groups = aggregateAsks(entries);
     expect(groups[0].count).toBe(3);
   });
+
+  // --- Synthetic fallback: ask/deny entries with no usable non-allow detail ---
+
+  it('synthesizes a group from entry.cmd when an ask entry has no details', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({ decision: 'ask', cmd: 'mkdocs build', reason: 'no rule', details: [] }),
+    ];
+    const groups = aggregateAsks(entries);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].command).toBe('mkdocs');
+    expect(groups[0].argShape).toBe('build');
+    expect(groups[0].count).toBe(1);
+    expect(groups[0].decisionSample).toBe('ask');
+    expect(groups[0].matchedRuleSample).toBeUndefined();
+    expect(groups[0].sampleReason).toBe('no rule');
+  });
+
+  it('synthetic fallback applies the flag rule to the second token', () => {
+    const entries: AuditEntry[] = [makeEntry({ decision: 'ask', cmd: 'ls -la', details: [] })];
+    const groups = aggregateAsks(entries);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].command).toBe('ls');
+    expect(groups[0].argShape).toBe('');
+  });
+
+  it('synthetic fallback carries the deny decision for a deny entry', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({ decision: 'deny', cmd: 'shutdown now', reason: 'blocked', details: [] }),
+    ];
+    const groups = aggregateAsks(entries);
+    expect(groups[0].decisionSample).toBe('deny');
+    expect(groups[0].command).toBe('shutdown');
+  });
+
+  it('skips the synthetic fallback for an env-prefixed command', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({ decision: 'ask', cmd: 'FOO=bar mytool run', details: [] }),
+    ];
+    expect(aggregateAsks(entries)).toEqual([]);
+  });
+
+  it('skips the synthetic fallback for a piped command', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({ decision: 'ask', cmd: 'cat secrets | grep token', details: [] }),
+    ];
+    expect(aggregateAsks(entries)).toEqual([]);
+  });
+
+  it('skips the synthetic fallback for chained commands (&& and ;)', () => {
+    expect(
+      aggregateAsks([makeEntry({ decision: 'ask', cmd: 'build && deploy', details: [] })]),
+    ).toEqual([]);
+    expect(
+      aggregateAsks([makeEntry({ decision: 'ask', cmd: 'a ; b', details: [] })]),
+    ).toEqual([]);
+  });
+
+  it('does NOT synthesize when a non-allow detail is present (detail wins)', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({
+        decision: 'ask',
+        cmd: 'wrapper inner',
+        details: [{ command: 'realcmd', args: ['sub'], decision: 'ask', reason: 'r' }],
+      }),
+    ];
+    const groups = aggregateAsks(entries);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].command).toBe('realcmd');
+    expect(groups[0].argShape).toBe('sub');
+  });
+
+  it('tolerates a non-array details value without throwing', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({
+        decision: 'ask',
+        cmd: 'tool sub',
+        details: 'garbage' as unknown as AuditEntry['details'],
+      }),
+    ];
+    let groups: ReturnType<typeof aggregateAsks> = [];
+    expect(() => {
+      groups = aggregateAsks(entries);
+    }).not.toThrow();
+    expect(groups).toHaveLength(1);
+    expect(groups[0].command).toBe('tool');
+    expect(groups[0].argShape).toBe('sub');
+  });
+
+  it('tolerates malformed detail elements without throwing', () => {
+    const entries: AuditEntry[] = [
+      makeEntry({
+        decision: 'ask',
+        cmd: 'tool sub',
+        details: [null, 42, { no: 'shape' }] as unknown as AuditEntry['details'],
+      }),
+    ];
+    let groups: ReturnType<typeof aggregateAsks> = [];
+    expect(() => {
+      groups = aggregateAsks(entries);
+    }).not.toThrow();
+    expect(groups).toHaveLength(1);
+    expect(groups[0].command).toBe('tool');
+  });
 });
