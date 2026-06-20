@@ -135,6 +135,31 @@ function isSuggestable(g: AskGroup): boolean {
   );
 }
 
+// Snippet fragments (and any review-manually comment) for one command's
+// suggestable groups, per the design's rule-bearing decision table.
+function commandFragments(
+  command: string,
+  cGroups: AskGroup[],
+): { fragments: string[]; comment: string | null } {
+  const ruleBearing = cGroups.some(g => g.matchedRuleSample === `${command}:default`);
+  const hasBare = cGroups.some(g => g.argShape === '');
+  const subs: string[] = [];
+  for (const g of cGroups) {
+    if (g.argShape !== '' && !subs.includes(g.argShape)) subs.push(g.argShape);
+  }
+
+  if (ruleBearing) {
+    if (subs.length >= 1) {
+      // scope each observed subcommand; never blanket (preserves argPattern gates)
+      return { fragments: subs.map(sub => generateSubcommandSnippet(command, sub)), comment: null };
+    }
+    return { fragments: [], comment: `# review manually: ${command} asked bare but is rule-gated` };
+  }
+  if (hasBare) return { fragments: [generateFullAllowSnippet(command)], comment: null };
+  if (subs.length === 1) return { fragments: [generateSubcommandSnippet(command, subs[0])], comment: null };
+  return { fragments: [generateFullAllowSnippet(command)], comment: null }; // >=2 subs, no bare
+}
+
 function buildAllowlistSnippet(groups: AskGroup[]): string {
   const commentLines: string[] = [];
   const allowFragments: string[] = [];
@@ -147,44 +172,16 @@ function buildAllowlistSnippet(groups: AskGroup[]): string {
       commentLines.push(`# review manually: ${g.command}${argPart} (${g.sampleReason})`);
     } else {
       const list = suggestableByCommand.get(g.command);
-      if (list) {
-        list.push(g);
-      } else {
-        suggestableByCommand.set(g.command, [g]);
-      }
+      if (list) list.push(g);
+      else suggestableByCommand.set(g.command, [g]);
     }
   }
 
   // Build allow fragments per command in first-appearance order
   for (const [command, cGroups] of suggestableByCommand) {
-    const ruleBearing = cGroups.some(g => g.matchedRuleSample === `${command}:default`);
-    const hasBareSuggestable = cGroups.some(g => g.argShape === '');
-    const nonEmptySubs = cGroups.filter(g => g.argShape !== '').map(g => g.argShape);
-    // deduplicate while preserving order
-    const subs: string[] = [];
-    for (const s of nonEmptySubs) {
-      if (!subs.includes(s)) subs.push(s);
-    }
-
-    if (ruleBearing) {
-      if (subs.length >= 1) {
-        for (const sub of subs) {
-          allowFragments.push(generateSubcommandSnippet(command, sub));
-        }
-      } else {
-        // bare ask but rule-gated: review manually comment
-        commentLines.push(`# review manually: ${command} asked bare but is rule-gated`);
-      }
-    } else {
-      if (hasBareSuggestable) {
-        allowFragments.push(generateFullAllowSnippet(command));
-      } else if (subs.length === 1) {
-        allowFragments.push(generateSubcommandSnippet(command, subs[0]));
-      } else {
-        // ≥2 subs, not rule-bearing, no bare
-        allowFragments.push(generateFullAllowSnippet(command));
-      }
-    }
+    const { fragments, comment } = commandFragments(command, cGroups);
+    allowFragments.push(...fragments);
+    if (comment) commentLines.push(comment);
   }
 
   if (commentLines.length === 0 && allowFragments.length === 0) return '';
@@ -193,10 +190,7 @@ function buildAllowlistSnippet(groups: AskGroup[]): string {
   if (allowFragments.length > 0) {
     lines.push('rules:');
     for (const frag of allowFragments) {
-      const body = frag.split('\n').slice(1);
-      for (const line of body) {
-        lines.push(line);
-      }
+      for (const line of frag.split('\n').slice(1)) lines.push(line);
     }
   }
 
