@@ -5,77 +5,58 @@ user_invocable: true
 
 # Review Warden Decisions
 
-Analyze `~/.claude/warden-audit.jsonl` to find misclassified command decisions: dangerous commands allowed, safe commands denied/asked.
+Find misclassified warden decisions: safe commands needlessly asked/denied, and (when logged) dangerous commands that were allowed. The recurring ask/deny analysis is done deterministically by `warden suggest`; the model is reserved for the one fuzzy call code can't make - whether an *allowed* command was actually dangerous.
 
 ## Steps
 
 ### 1. Check prerequisites
 
-Read `~/.claude/warden.yaml` (if it exists) to check `auditAllowDecisions` setting.
+Read `~/.claude/warden.yaml` (if it exists) to check `auditAllowDecisions`.
 
 - If `auditAllowDecisions` is false or missing, warn: "Allow decisions are not logged. Only deny/ask analysis is available. To enable full audit, add `auditAllowDecisions: true` to `~/.claude/warden.yaml`."
-- Check that `~/.claude/warden-audit.jsonl` exists. If missing, stop with error.
+- No need to check that the log file exists - `warden suggest` handles a missing or empty log and prints "No recurring ask/deny entries found."
 
-### 2. Gather stats
+### 2. Aggregate recurring ask/deny entries (deterministic - no manual counting)
 
-Run these commands to get overview:
-- `wc -l ~/.claude/warden-audit.jsonl` - total entries
-- `grep -c '"decision":"allow"'` / `"ask"` / `"deny"` - breakdown
-- `head -1` and `tail -1` to get date range from `ts` field
+Run the warden CLI's `suggest` subcommand. It reads the configured audit log (`~/.claude/warden-audit.jsonl` by default, plus the rotated `.1`), ranks recurring ask/deny commands by frequency then recency, and emits a ready-to-paste `warden.yaml` snippet - all in code, with no model call:
 
-Report summary: "X entries (Y allow, Z ask, W deny) from DATE to DATE"
-
-### 3. Analyze deny/ask entries (safe commands wrongly flagged)
-
-Extract all deny and ask entries:
-```
-grep '"decision":"ask"\|"decision":"deny"' ~/.claude/warden-audit.jsonl
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.cjs" suggest --json
 ```
 
-Read the output. Deduplicate by command + reason (ignore repeated identical entries).
+If `warden` is on your PATH, `warden suggest --json` is equivalent. Useful flags: `--top N` (limit the list), `--since 7d` (only recent entries), `--cwd DIR` (load a project's `.claude/warden.yaml` for its `auditPath`).
 
-For each unique entry, classify:
-- **False positive** - command is clearly safe: read-only operations, standard dev tools (mkdocs, maturin, poetry, etc.), benign flags
-- **Correct** - command genuinely warrants review: destructive ops, registry publish, force push, system modifications
-- **Borderline** - depends on context
+The JSON has `period {from, to}`, `totalAskDeny`, `distinctGroups`, `top[]` (each `{command, argShape, count, sampleReason, ...}`), and `snippet` (the suggested `warden.yaml` additions). These are authoritative - do not recount or regroup them.
 
-For false positives, provide the fix:
-- If the command should always be allowed: suggest adding to `alwaysAllow` in `~/.claude/warden.yaml`
-- If only certain subcommands are safe: suggest a rule with argPatterns
-- Or suggest: `/warden:allow <command>`
+The snippet is safety-first: only un-gated recurring asks become allow rules. Commands gated by a rule, denied, or resolved by a specialized evaluator are emitted as `# review manually` comments, never allow snippets - so a frequently-asked-but-dangerous command is flagged, not auto-allowed.
 
-### 4. Analyze allow entries (dangerous commands wrongly passed)
+### 3. Judge allowed commands for danger (the model's job)
 
-Skip this section if no allow entries exist (print the warning from step 1 again).
+Skip this section when allow decisions are not logged (the warning in step 1) - `warden suggest` deliberately covers only ask/deny recurrence, never allow-danger detection.
 
-Pre-filter allows for suspicious patterns using grep:
-```
+When allows ARE logged, scan them for dangerous commands that slipped through. Pre-filter with grep:
+
+```bash
 grep '"decision":"allow"' ~/.claude/warden-audit.jsonl | grep -iE 'rm -rf|chmod 777|--force|--hard|\bdd\b|mkfs|eval |curl.*\|.*sh|wget.*\|.*sh|> /(etc|usr|var|sys)|sudo|shutdown|reboot'
 ```
 
-Read the filtered results. For each match, classify:
-- **Dangerous allow** - should have been blocked or prompted (e.g., `rm -rf /` allowed, curl piped to shell allowed)
-- **False alarm** - pattern matched but command is safe in context (e.g., `--force` in a safe context)
+For each match, judge (this is the fuzzy call that needs the model, not code):
 
-For dangerous allows, suggest adding to `alwaysDeny` or adding an argPattern with `decision: deny`.
+- **Dangerous allow** - should have been blocked or prompted (e.g. `rm -rf /` allowed, curl piped to shell). Suggest adding to `alwaysDeny`, or an argPattern with `decision: deny`.
+- **False alarm** - the pattern matched but the command is safe in context.
 
-### 5. Present report
-
-Format as:
+### 4. Present report
 
 ```
 ## Warden Audit Report
 
-**Period:** DATE - DATE | **Entries:** X (Y allow, Z ask, W deny)
+**Period:** {from} - {to} | **Recurring ask/deny:** {totalAskDeny} across {distinctGroups} commands
+
+### Safe commands unnecessarily flagged (from `warden suggest`)
+[The top[] groups with their counts, then the suggested `warden.yaml` snippet - or "None found"]
 
 ### Dangerous commands allowed
-[List with command, timestamp, and suggested fix - or "None found"]
-
-### Safe commands unnecessarily flagged
-[List grouped by command, with occurrence count and suggested fix - or "None found"]
-
-### Suggested config changes
-[Ready-to-copy yaml snippets for ~/.claude/warden.yaml]
+[Allow-danger findings from step 3 with suggested deny config - or "None found", or "allow logging disabled"]
 ```
 
-If no issues found in either category, say "No misclassifications detected."
+If neither category has anything, say "No misclassifications detected."
