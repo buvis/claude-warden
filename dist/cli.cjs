@@ -14595,7 +14595,13 @@ function runSuggest(argv) {
     } else if (arg === "--json") {
       json = true;
     } else if (arg === "--top" && argv[i + 1]) {
-      top = parseInt(argv[i + 1], 10);
+      const raw = argv[i + 1];
+      const parsed = parseInt(raw, 10);
+      if (!/^\d+$/.test(raw) || parsed <= 0) {
+        process.stderr.write("Error: invalid --top value\n");
+        process.exit(1);
+      }
+      top = parsed;
       i++;
     } else if (arg === "--since" && argv[i + 1]) {
       since = argv[i + 1];
@@ -14605,8 +14611,16 @@ function runSuggest(argv) {
       process.exit(0);
     }
   }
+  let sinceMs;
+  if (since !== void 0) {
+    const parsed = parseDurationMs(since);
+    if (parsed === null) {
+      process.stderr.write("Error: invalid --since value\n");
+      process.exit(1);
+    }
+    sinceMs = parsed;
+  }
   const config = loadConfig(cwd);
-  const sinceMs = since ? parseDurationMs(since) ?? void 0 : void 0;
   const entries = readAuditLog(config.auditPath, { sinceMs });
   const groups = aggregateAsks(entries);
   const out = formatSuggestionReport(groups, { top, json });
