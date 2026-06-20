@@ -51,7 +51,7 @@ export function readAuditLog(auditPath: string, opts?: ReadAuditOptions): AuditE
       const entry: AuditEntry = {
         ts: rec.ts,
         sid: (rec.sid as string) ?? '',
-        cmd: (rec.cmd as string) ?? '',
+        cmd: typeof rec.cmd === 'string' ? rec.cmd : '',
         decision: rec.decision as Decision,
         reason: (rec.reason as string) ?? '',
         details: Array.isArray(rec.details) ? rec.details : [],
@@ -105,6 +105,7 @@ function isUsableDetail(d: unknown): d is CommandEvalDetail {
   return (
     typeof r.command === 'string' &&
     Array.isArray(r.args) &&
+    r.args.every((a) => typeof a === 'string') &&
     VALID_DECISIONS.has(r.decision as Decision)
   );
 }
@@ -131,6 +132,7 @@ function hasUnescapedChain(cmd: string): boolean {
 function syntheticContribution(
   entry: AuditEntry,
 ): { key: string; contrib: Contribution } | null {
+  if (typeof entry.cmd !== 'string') return null;
   const tokens = entry.cmd.trim().split(/\s+/).filter((t) => t !== '');
   if (tokens.length === 0) return null;
   if (tokens[0].includes('=')) return null;

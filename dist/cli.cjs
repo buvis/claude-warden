@@ -14264,7 +14264,7 @@ function readAuditLog(auditPath, opts) {
       const entry = {
         ts: rec.ts,
         sid: rec.sid ?? "",
-        cmd: rec.cmd ?? "",
+        cmd: typeof rec.cmd === "string" ? rec.cmd : "",
         decision: rec.decision,
         reason: rec.reason ?? "",
         details: Array.isArray(rec.details) ? rec.details : [],
@@ -14299,7 +14299,7 @@ function restrictivenessRank(matchedRule) {
 function isUsableDetail(d) {
   if (d === null || typeof d !== "object") return false;
   const r = d;
-  return typeof r.command === "string" && Array.isArray(r.args) && VALID_DECISIONS2.has(r.decision);
+  return typeof r.command === "string" && Array.isArray(r.args) && r.args.every((a) => typeof a === "string") && VALID_DECISIONS2.has(r.decision);
 }
 function hasUnescapedChain(cmd) {
   for (let i = 0; i < cmd.length; i++) {
@@ -14314,6 +14314,7 @@ function hasUnescapedChain(cmd) {
   return false;
 }
 function syntheticContribution(entry) {
+  if (typeof entry.cmd !== "string") return null;
   const tokens = entry.cmd.trim().split(/\s+/).filter((t) => t !== "");
   if (tokens.length === 0) return null;
   if (tokens[0].includes("=")) return null;
