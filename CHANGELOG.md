@@ -5,6 +5,7 @@
 ### Added
 
 - **cli**: new `warden validate` subcommand — checks the user and project `warden.yaml` for unknown keys (with edit-distance "did you mean" suggestions), invalid values, deprecations, and parse errors; exits 1 when any problem is found, 0 when clean. Supports `--cwd` and `--json`. Config problems are now also collected during normal config loading instead of being silently dropped, so a typo'd `alwaysDeny`/`alwaysAllow` no longer fails silent
+- **hook**: the SessionStart guidance now ends with a bounded config-health note when `warden.yaml` has problems — a one-line count plus the first warning and a `warden validate` pointer, so a typo'd config surfaces in the next session instead of staying invisible in quiet hook mode. Suppressed when `sessionGuidance: false`
 - **cli**: new `warden suggest` subcommand — reads the audit log and prints the most frequent recurring ask/deny commands with suggested `warden.yaml` additions. Safety-first: only un-gated asks become allow snippets; rule-gated, denied, or specially-evaluated commands are flagged `# review manually` instead. Supports `--json`, `--top N`, `--since <dur>`, and `--cwd`
 - **script-scanner**: widened deletion/danger detection — Python `pathlib` `.unlink()`/`.rmdir()`, `importlib`, `os.replace()`, `shutil.move()`, and non-recursive JS `fs.rm`/`fs.rmSync`/`fs.rmdir`/`fs.rmdirSync` now classify as cautious/dangerous, so these scripts prompt instead of being silently allowed
 

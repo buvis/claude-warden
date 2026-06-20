@@ -14660,9 +14660,20 @@ async function readStdin(maxSize) {
 }
 
 // src/index.ts
+function buildConfigHealthNote(warnings) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const w of warnings) counts.set(w.file, (counts.get(w.file) ?? 0) + 1);
+  const perFile = [...counts].map(([file, n]) => `${n} in ${file}`).join(", ");
+  const first = warnings[0];
+  return `[warden] config: ${warnings.length} warning(s) (${perFile}). First: ${first.message} [${first.path}]. Run \`warden validate\` for details.`;
+}
 function handleSessionStart(config) {
   if (config.sessionGuidance === false) process.exit(0);
-  const text = config.sessionGuidance ?? buildDefaultSessionGuidance(config.tempScriptDir ?? DEFAULT_TEMP_SCRIPT_DIR);
+  const warnings = config.warnings ?? [];
+  let text = config.sessionGuidance ?? buildDefaultSessionGuidance(config.tempScriptDir ?? DEFAULT_TEMP_SCRIPT_DIR);
+  if (warnings.length > 0) {
+    text += "\n\n" + buildConfigHealthNote(warnings);
+  }
   const output = {
     hookSpecificOutput: {
       hookEventName: "SessionStart",
