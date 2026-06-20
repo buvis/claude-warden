@@ -3,7 +3,7 @@ import { evaluate } from '../evaluator';
 import { parseCommand } from '../parser';
 import { loadConfig, setQuiet } from '../rules';
 import { DEFAULT_CONFIG } from '../defaults';
-import type { WardenConfig, ConfigLayer } from '../types';
+import type { WardenConfig, ConfigLayer, ConfigWarning } from '../types';
 
 function emptyLayer(overrides: Partial<ConfigLayer> = {}): ConfigLayer {
   return { alwaysAllow: [], alwaysDeny: [], rules: [], ...overrides };
@@ -258,6 +258,108 @@ trustedRemotes:
 
     const warnings = stderrSpy.mock.calls.map(c => String(c[0]));
     expect(warnings.some(w => w.includes('deprecated'))).toBe(false);
+
+    stderrSpy.mockRestore();
+    setQuiet(true);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('config.warnings collection', () => {
+  it('collects a warning for an invalid rule decision in verbose mode and also prints to stderr', () => {
+    setQuiet(false);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    const fs = require('fs');
+    const tmpDir = '/tmp/warden-test-warnings-verbose';
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.mkdirSync(`${tmpDir}/.claude`, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/.claude/warden.yaml`, `
+rules:
+  - command: git
+    default: banana
+`);
+
+    const config = loadConfig(tmpDir);
+
+    // warning must be collected regardless of quiet mode
+    expect(Array.isArray(config.warnings)).toBe(true);
+    expect(config.warnings!.length).toBeGreaterThan(0);
+
+    const w = config.warnings![0] as ConfigWarning;
+    // file must be an absolute path pointing to the config file we wrote
+    expect(w.file).toContain(tmpDir);
+    // path must reference the offending rule location
+    expect(w.path).toBeTruthy();
+    expect(w.path).toMatch(/rule/i);
+    // message must describe the invalid value, not be empty
+    expect(w.message).toBeTruthy();
+    expect(w.message).toContain('banana');
+
+    // verbose mode: warning must also have been printed to stderr
+    const stderrLines = stderrSpy.mock.calls.map(c => String(c[0]));
+    expect(stderrLines.some(l => l.includes('banana'))).toBe(true);
+
+    stderrSpy.mockRestore();
+    setQuiet(true);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('collects a warning for an invalid rule decision in quiet mode without printing to stderr', () => {
+    setQuiet(true);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    const fs = require('fs');
+    const tmpDir = '/tmp/warden-test-warnings-quiet';
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.mkdirSync(`${tmpDir}/.claude`, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/.claude/warden.yaml`, `
+rules:
+  - command: git
+    default: banana
+`);
+
+    const config = loadConfig(tmpDir);
+
+    // warning must be collected even in quiet mode
+    expect(Array.isArray(config.warnings)).toBe(true);
+    expect(config.warnings!.length).toBeGreaterThan(0);
+
+    const w = config.warnings![0] as ConfigWarning;
+    expect(w.file).toContain(tmpDir);
+    expect(w.path).toBeTruthy();
+    expect(w.path).toMatch(/rule/i);
+    expect(w.message).toBeTruthy();
+    expect(w.message).toContain('banana');
+
+    // quiet mode: stderr must NOT have been written to at all
+    expect(stderrSpy).not.toHaveBeenCalled();
+
+    stderrSpy.mockRestore();
+    setQuiet(true);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('yields an empty warnings array when the config is valid', () => {
+    setQuiet(true);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    const fs = require('fs');
+    const tmpDir = '/tmp/warden-test-warnings-valid';
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.mkdirSync(`${tmpDir}/.claude`, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/.claude/warden.yaml`, `
+rules:
+  - command: git
+    default: allow
+`);
+
+    const config = loadConfig(tmpDir);
+
+    // warnings must always be present and be an array
+    expect(Array.isArray(config.warnings)).toBe(true);
+    // a valid config produces zero warnings
+    expect(config.warnings).toHaveLength(0);
 
     stderrSpy.mockRestore();
     setQuiet(true);
