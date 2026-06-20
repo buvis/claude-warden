@@ -24,17 +24,14 @@ export function editDistance(a: string, b: string): number {
   return prev[lb];
 }
 
-// ── Nearest known key ─────────────────────────────────────────────────────
-
 export function nearestKey(
   key: string,
   known: Iterable<string>,
   maxDistance: number = 2,
 ): string | undefined {
-  const sorted = [...known].sort();
   let best = '';
   let bestDist = Infinity;
-  for (const candidate of sorted) {
+  for (const candidate of known) {
     const d = editDistance(key, candidate);
     if (d <= maxDistance && d < bestDist) {
       best = candidate;
@@ -43,8 +40,6 @@ export function nearestKey(
   }
   return bestDist < Infinity ? best : undefined;
 }
-
-// ── Known-key tables (derived from interface specs) ────────────────────────
 
 const COMMAND_RULE_SPEC: Record<keyof CommandRule, true> = {
   command: true, default: true, argPatterns: true, override: true,
@@ -110,8 +105,6 @@ const ENDPOINT_POLICY_SPEC: Record<keyof EndpointPolicy, true> = {
 export const KNOWN_ENDPOINT_POLICY_KEYS: ReadonlySet<string> =
   new Set(Object.keys(ENDPOINT_POLICY_SPEC));
 
-// ── Legacy top-level keys ─────────────────────────────────────────────────
-
 export const LEGACY_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   'trustedSSHHosts',
   'trustedDockerContainers',
@@ -119,8 +112,6 @@ export const LEGACY_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   'trustedSprites',
   'trustedFlyApps',
 ]);
-
-// ── Field-origin classifier ───────────────────────────────────────────────
 
 export const WARDEN_CONFIG_FIELD_ORIGIN: Record<keyof WardenConfig, 'raw' | 'layer' | 'runtime'> = {
   layers: 'layer',
@@ -138,8 +129,6 @@ export const WARDEN_CONFIG_FIELD_ORIGIN: Record<keyof WardenConfig, 'raw' | 'lay
   sessionGuidance: 'raw',
   tempScriptDir: 'raw',
 };
-
-// ── Derived top-level key set ─────────────────────────────────────────────
 
 const RAW_KEYS = new Set(
   Object.entries(WARDEN_CONFIG_FIELD_ORIGIN)
