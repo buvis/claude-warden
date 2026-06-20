@@ -7,6 +7,14 @@ import type {
   TrustedRemote, RemoteContext, TargetPolicy, PathPolicy, DatabasePolicy, EndpointPolicy,
 } from './types';
 import { DEFAULT_CONFIG } from './defaults';
+import {
+  KNOWN_COMMAND_RULE_KEYS, KNOWN_ARG_PATTERN_KEYS,
+  KNOWN_MATCH_CONDITION_KEYS, KNOWN_LAYER_KEYS,
+  KNOWN_TRUSTED_REMOTE_KEYS, KNOWN_TRUSTED_TARGET_KEYS,
+  KNOWN_PATH_POLICY_KEYS, KNOWN_DATABASE_POLICY_KEYS,
+  KNOWN_ENDPOINT_POLICY_KEYS, KNOWN_TOP_LEVEL_KEYS,
+  nearestKey,
+} from './config-schema';
 
 const VALID_DECISIONS = new Set(['allow', 'deny', 'ask']);
 function isValidDecision(value: string): value is 'allow' | 'deny' | 'ask' {
@@ -30,11 +38,25 @@ export function warn(message: string): void {
 let warningSink: ConfigWarning[] | null = null;
 let currentFile = '';
 
-function report(path: string, message: string): void {
+function report(path: string, message: string, suggestion?: string): void {
   if (warningSink) {
-    warningSink.push({ file: currentFile, path, message });
+    warningSink.push({ file: currentFile, path, message, ...(suggestion !== undefined && { suggestion }) });
   }
   warn(`[warden] Warning: ${message}\n`);
+}
+
+// Report each key of `obj` not in `known`. pathPrefix '' -> path is the bare key;
+// non-empty -> `${pathPrefix}.${key}`.
+function scanKeys(
+  obj: Record<string, unknown>,
+  known: ReadonlySet<string>,
+  pathPrefix: string,
+): void {
+  for (const key of Object.keys(obj)) {
+    if (known.has(key)) continue;
+    const path = pathPrefix ? `${pathPrefix}.${key}` : key;
+    report(path, `unknown key "${key}"`, nearestKey(key, known));
+  }
 }
 
 const USER_CONFIG_PATHS = [
@@ -94,10 +116,12 @@ export function loadConfig(cwd?: string): WardenConfig {
     // Merge non-layer fields from user config, then workspace config (workspace wins)
     if (userRaw) {
       currentFile = userConfigPath;
+      scanKeys(userRaw, KNOWN_TOP_LEVEL_KEYS, '');
       mergeNonLayerFields(config, userRaw);
     }
     if (workspaceRaw) {
       currentFile = workspaceConfigPath;
+      scanKeys(workspaceRaw, KNOWN_TOP_LEVEL_KEYS, '');
       mergeNonLayerFields(config, workspaceRaw);
     }
 
@@ -126,25 +150,40 @@ function tryLoadFile(filePath: string): Record<string, unknown> | null {
   return null;
 }
 
-function extractLayer(raw: Record<string, unknown>): ConfigLayer {
+function extractLayer(
+  raw: Record<string, unknown>,
+  pathPrefix?: string,
+): ConfigLayer {
   const rules = Array.isArray(raw.rules) ? raw.rules : [];
   for (let i = 0; i < rules.length; i++) {
     const rule = rules[i];
     if (rule && typeof rule === 'object') {
+      const rulePath = pathPrefix ? `${pathPrefix}.rules[${i}]` : `rules[${i}]`;
+      scanKeys(rule as Record<string, unknown>, KNOWN_COMMAND_RULE_KEYS, rulePath);
       if (rule.default && !isValidDecision(rule.default)) {
-        report(`rules[${i}].default`, `invalid rule default "${rule.default}" for "${rule.command}", using "ask"`);
+        report(`${rulePath}.default`, `invalid rule default "${rule.default}" for "${rule.command}", using "ask"`);
         rule.default = 'ask';
       }
       if (Array.isArray(rule.argPatterns)) {
         for (let j = 0; j < rule.argPatterns.length; j++) {
           const pattern = rule.argPatterns[j];
-          if (pattern?.decision && !isValidDecision(pattern.decision)) {
-            report(`rules[${i}].argPatterns[${j}].decision`, `invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"`);
-            pattern.decision = 'ask';
+          if (pattern && typeof pattern === 'object') {
+            const patPath = `${rulePath}.argPatterns[${j}]`;
+            scanKeys(pattern as Record<string, unknown>, KNOWN_ARG_PATTERN_KEYS, patPath);
+            if (pattern.decision && !isValidDecision(pattern.decision)) {
+              report(`${patPath}.decision`, `invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"`);
+              pattern.decision = 'ask';
+            }
+            if (pattern.match && typeof pattern.match === 'object') {
+              scanKeys(pattern.match as Record<string, unknown>, KNOWN_MATCH_CONDITION_KEYS, `${patPath}.match`);
+            }
           }
         }
       }
     }
+  }
+  if (pathPrefix) {
+    scanKeys(raw, KNOWN_LAYER_KEYS, pathPrefix);
   }
   return {
     alwaysAllow: Array.isArray(raw.alwaysAllow) ? raw.alwaysAllow : [],
@@ -153,15 +192,20 @@ function extractLayer(raw: Record<string, unknown>): ConfigLayer {
   };
 }
 
-export function parseTrustedList(raw: unknown[]): TrustedTarget[] {
-  return raw.map(entry => {
+export function parseTrustedList(
+  raw: unknown[],
+  pathPrefix: string = '',
+): TrustedTarget[] {
+  return raw.map((entry, i) => {
     if (typeof entry === 'string') return { name: entry };
     if (entry && typeof entry === 'object' && 'name' in entry) {
       const obj = entry as Record<string, unknown>;
+      const entryPath = pathPrefix ? `${pathPrefix}[${i}]` : `[${i}]`;
+      scanKeys(obj, KNOWN_TRUSTED_TARGET_KEYS, entryPath);
       const target: TrustedTarget = { name: String(obj.name) };
       if (obj.allowAll === true) target.allowAll = true;
       if (obj.overrides && typeof obj.overrides === 'object') {
-        target.overrides = extractLayer(obj.overrides as Record<string, unknown>);
+        target.overrides = extractLayer(obj.overrides as Record<string, unknown>, `${entryPath}.overrides`);
       }
       return target;
     }
@@ -171,15 +215,20 @@ export function parseTrustedList(raw: unknown[]): TrustedTarget[] {
 
 const VALID_REMOTE_CONTEXTS = new Set<RemoteContext>(['ssh', 'docker', 'kubectl', 'sprite', 'fly']);
 
-function parseTrustedRemotes(raw: unknown[]): TrustedRemote[] {
+function parseTrustedRemotes(
+  raw: unknown[],
+  pathPrefix: string = 'trustedRemotes',
+): TrustedRemote[] {
   const results: TrustedRemote[] = [];
   for (let i = 0; i < raw.length; i++) {
     const entry = raw[i];
     if (!entry || typeof entry !== 'object') continue;
     const obj = entry as Record<string, unknown>;
+    const entryPath = `${pathPrefix}[${i}]`;
+    scanKeys(obj, KNOWN_TRUSTED_REMOTE_KEYS, entryPath);
     const context = String(obj.context || '');
     if (!VALID_REMOTE_CONTEXTS.has(context as RemoteContext)) {
-      report(`trustedRemotes[${i}].context`, `unknown remote context "${context}", skipping`);
+      report(`${entryPath}.context`, `unknown remote context "${context}", skipping`);
       continue;
     }
     const name = String(obj.name || '');
@@ -187,14 +236,17 @@ function parseTrustedRemotes(raw: unknown[]): TrustedRemote[] {
     const remote: TrustedRemote = { name, context: context as RemoteContext };
     if (obj.allowAll === true) remote.allowAll = true;
     if (obj.overrides && typeof obj.overrides === 'object') {
-      remote.overrides = extractLayer(obj.overrides as Record<string, unknown>);
+      remote.overrides = extractLayer(obj.overrides as Record<string, unknown>, `${entryPath}.overrides`);
     }
     results.push(remote);
   }
   return results;
 }
 
-export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
+export function parseTargetPolicies(
+  raw: unknown[],
+  pathPrefix: string = 'targetPolicies',
+): TargetPolicy[] {
   const results: TargetPolicy[] = [];
   for (let i = 0; i < raw.length; i++) {
     const entry = raw[i];
@@ -203,17 +255,28 @@ export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
       continue;
     }
     const obj = entry as Record<string, unknown>;
-    if (typeof obj.decision !== 'string' || !isValidDecision(obj.decision)) {
-      report(`targetPolicies[${i}]`, `targetPolicies entry missing or invalid "decision", skipping`);
+    const entryPath = `${pathPrefix}[${i}]`;
+    const policyType = String(obj.type);
+    if (!['path', 'database', 'endpoint'].includes(policyType)) {
+      report(entryPath, `unknown targetPolicy type "${policyType}", skipping`);
       continue;
     }
+    if (typeof obj.decision !== 'string' || !isValidDecision(obj.decision)) {
+      report(entryPath, `targetPolicies entry missing or invalid "decision", skipping`);
+      continue;
+    }
+    const typeKey = policyType as 'path' | 'database' | 'endpoint';
+    const typeTable = typeKey === 'path' ? KNOWN_PATH_POLICY_KEYS
+      : typeKey === 'database' ? KNOWN_DATABASE_POLICY_KEYS
+      : KNOWN_ENDPOINT_POLICY_KEYS;
+    scanKeys(obj, typeTable, entryPath);
     const base = {
       decision: obj.decision,
       ...(typeof obj.reason === 'string' && { reason: obj.reason }),
       ...(Array.isArray(obj.commands) && { commands: obj.commands as string[] }),
       ...(obj.allowAll === true && { allowAll: true }),
     };
-    switch (obj.type) {
+    switch (typeKey) {
       case 'path': {
         if (typeof obj.path !== 'string') {
           report(`targetPolicies[${i}]`, `path targetPolicy missing "path" field, skipping`);
@@ -272,12 +335,12 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
   for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
     if (Array.isArray(raw[key])) {
       report(key, `${key} is deprecated, use trustedRemotes with context: "${context}" instead`);
-      const targets = parseTrustedList(raw[key] as unknown[]);
+      const targets = parseTrustedList(raw[key] as unknown[], key);
       config.trustedRemotes = [...config.trustedRemotes, ...targets.map(t => ({ ...t, context }))];
     }
   }
   if (Array.isArray(raw.targetPolicies)) {
-    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies)];
+    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies, 'targetPolicies')];
   }
   if (typeof raw.defaultDecision === 'string') {
     if (isValidDecision(raw.defaultDecision)) {
@@ -316,7 +379,7 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
   }
   if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === 'object') {
     const overrides = raw.trustedContextOverrides as Record<string, unknown>;
-    const layer = extractLayer(overrides);
+    const layer = extractLayer(overrides, 'trustedContextOverrides');
     // Merge with existing overrides (later config wins by prepending)
     if (config.trustedContextOverrides) {
       config.trustedContextOverrides = {

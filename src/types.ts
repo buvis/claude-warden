@@ -105,6 +105,8 @@ export interface ConfigWarning {
   file: string;    // absolute path of the config file the warning came from
   path: string;    // dotted location, e.g. "rules[2].default", "trustedRemotes[0].context"
   message: string; // human-readable, WITHOUT the "[warden] Warning: " prefix and trailing newline
+  /** Nearest known key when edit-distance <= 2; omitted otherwise. */
+  suggestion?: string;
 }
 
 export interface WardenConfig {
