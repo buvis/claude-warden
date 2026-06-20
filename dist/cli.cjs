@@ -14296,64 +14296,98 @@ function restrictivenessRank(matchedRule) {
   if (matchedRule.endsWith(":argPattern")) return 4;
   return 3;
 }
-function aggregateAsks(entries) {
+function isUsableDetail(d) {
+  if (d === null || typeof d !== "object") return false;
+  const r = d;
+  return typeof r.command === "string" && Array.isArray(r.args) && VALID_DECISIONS2.has(r.decision);
+}
+function hasUnescapedChain(cmd) {
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "|" || ch === ";") return true;
+    if (ch === "&" && cmd[i + 1] === "&") return true;
+  }
+  return false;
+}
+function syntheticContribution(entry) {
+  const tokens = entry.cmd.trim().split(/\s+/).filter((t) => t !== "");
+  if (tokens.length === 0) return null;
+  if (tokens[0].includes("=")) return null;
+  if (hasUnescapedChain(entry.cmd)) return null;
+  return {
+    key: `${tokens[0]}\0${argShape(tokens.slice(1))}`,
+    contrib: { ts: entry.ts, decision: entry.decision, matchedRule: void 0, reason: entry.reason }
+  };
+}
+function collectContributions(entries) {
   const groups = /* @__PURE__ */ new Map();
+  const push = (key, c) => {
+    const list = groups.get(key);
+    if (list) list.push(c);
+    else groups.set(key, [c]);
+  };
   for (const entry of entries) {
     if (entry.decision === "allow") continue;
-    for (const detail of entry.details) {
-      if (detail.decision === "allow") continue;
-      const key = `${detail.command}\0${argShape(detail.args)}`;
-      const contrib = {
-        ts: entry.ts,
-        decision: detail.decision,
-        matchedRule: detail.matchedRule,
-        reason: detail.reason
-      };
-      if (!groups.has(key)) {
-        groups.set(key, { contributions: [] });
+    let contributed = false;
+    if (Array.isArray(entry.details)) {
+      for (const detail of entry.details) {
+        if (!isUsableDetail(detail) || detail.decision === "allow") continue;
+        push(`${detail.command}\0${argShape(detail.args)}`, {
+          ts: entry.ts,
+          decision: detail.decision,
+          matchedRule: typeof detail.matchedRule === "string" ? detail.matchedRule : void 0,
+          reason: typeof detail.reason === "string" ? detail.reason : ""
+        });
+        contributed = true;
       }
-      groups.get(key).contributions.push(contrib);
+    }
+    if (!contributed) {
+      const synth = syntheticContribution(entry);
+      if (synth) push(synth.key, synth.contrib);
     }
   }
+  return groups;
+}
+function reduceGroup(key, contribs) {
+  const [command, argShapeStr] = key.split("\0");
+  let firstSeen = contribs[0].ts;
+  let lastSeen = contribs[0].ts;
+  for (const c of contribs) {
+    if (Date.parse(c.ts) < Date.parse(firstSeen)) firstSeen = c.ts;
+    if (Date.parse(c.ts) > Date.parse(lastSeen)) lastSeen = c.ts;
+  }
+  const decisionSample = contribs.some((c) => c.decision === "deny") ? "deny" : "ask";
+  let matchedRuleSample = void 0;
+  let sampleReason = contribs[0].reason;
+  let bestRank = restrictivenessRank(void 0);
+  for (const c of contribs) {
+    const rank = restrictivenessRank(c.matchedRule);
+    const tie = rank === bestRank && rank > 0 && c.matchedRule !== void 0 && (matchedRuleSample === void 0 || c.matchedRule < matchedRuleSample);
+    if (rank > bestRank || tie) {
+      bestRank = rank;
+      matchedRuleSample = c.matchedRule;
+      sampleReason = c.reason;
+    }
+  }
+  return {
+    command,
+    argShape: argShapeStr,
+    count: contribs.length,
+    firstSeen,
+    lastSeen,
+    decisionSample,
+    matchedRuleSample,
+    sampleReason
+  };
+}
+function aggregateAsks(entries) {
+  const groups = collectContributions(entries);
   const result = [];
-  for (const [key, val] of groups) {
-    const [command, argShapeStr] = key.split("\0");
-    const contribs = val.contributions;
-    let count = contribs.length;
-    let firstSeen = contribs[0].ts;
-    let lastSeen = contribs[0].ts;
-    for (const c of contribs) {
-      if (Date.parse(c.ts) < Date.parse(firstSeen)) firstSeen = c.ts;
-      if (Date.parse(c.ts) > Date.parse(lastSeen)) lastSeen = c.ts;
-    }
-    const decisionSample = contribs.some((c) => c.decision === "deny") ? "deny" : "ask";
-    let matchedRuleSample = void 0;
-    let sampleReason = contribs[0].reason;
-    let bestRank = restrictivenessRank(void 0);
-    for (const c of contribs) {
-      const rank = restrictivenessRank(c.matchedRule);
-      if (rank > bestRank) {
-        bestRank = rank;
-        matchedRuleSample = c.matchedRule;
-        sampleReason = c.reason;
-      } else if (rank === bestRank && rank > 0) {
-        if (c.matchedRule !== void 0 && (matchedRuleSample === void 0 || c.matchedRule < matchedRuleSample)) {
-          matchedRuleSample = c.matchedRule;
-          sampleReason = c.reason;
-        }
-      }
-    }
-    result.push({
-      command,
-      argShape: argShapeStr,
-      count,
-      firstSeen,
-      lastSeen,
-      decisionSample,
-      matchedRuleSample,
-      sampleReason
-    });
-  }
+  for (const [key, contribs] of groups) result.push(reduceGroup(key, contribs));
   result.sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count;
     const lastSeenDiff = Date.parse(b.lastSeen) - Date.parse(a.lastSeen);
