@@ -101,6 +101,13 @@ export interface EndpointPolicy extends TargetPolicyBase {
 
 export type TargetPolicy = PathPolicy | DatabasePolicy | EndpointPolicy;
 
+export interface ConfigWarning {
+  file: string;        // absolute path of the config file the warning came from
+  path: string;        // dotted location, e.g. "rules[2].default", "trustedRemotes[0].context"
+  message: string;     // human-readable, WITHOUT the "[warden] Warning: " prefix and trailing newline
+  suggestion?: string; // nearest known key when within edit-distance threshold; omitted otherwise (not used by THIS task)
+}
+
 export interface WardenConfig {
   layers: ConfigLayer[];
   trustedRemotes: TrustedRemote[];
@@ -125,6 +132,7 @@ export interface WardenConfig {
    * scripts to. Defaults to `/tmp`. Only used when `sessionGuidance` is unset.
    */
   tempScriptDir?: string;
+  warnings?: ConfigWarning[];
 }
 
 export interface EvalResult {

@@ -3,7 +3,7 @@ import { parse as parseYaml } from 'yaml';
 import { homedir } from 'os';
 import { join } from 'path';
 import type {
-  WardenConfig, ConfigLayer, TrustedTarget,
+  WardenConfig, ConfigLayer, ConfigWarning, TrustedTarget,
   TrustedRemote, RemoteContext, TargetPolicy, PathPolicy, DatabasePolicy, EndpointPolicy,
 } from './types';
 import { DEFAULT_CONFIG } from './defaults';
@@ -27,6 +27,20 @@ export function warn(message: string): void {
   process.stderr.write(message);
 }
 
+let warningSink: ConfigWarning[] | null = null;
+let currentFile = '';
+
+function report(path: string, message: string, suggestion?: string): void {
+  if (warningSink) {
+    const entry: ConfigWarning = { file: currentFile, path, message };
+    if (suggestion) {
+      entry.suggestion = suggestion;
+    }
+    warningSink.push(entry);
+  }
+  warn(`[warden] Warning: ${message}\n`);
+}
+
 const USER_CONFIG_PATHS = [
   join(homedir(), '.claude', 'warden.yaml'),
   join(homedir(), '.claude', 'warden.json'),
@@ -38,45 +52,64 @@ const PROJECT_CONFIG_NAMES = [
 ];
 
 export function loadConfig(cwd?: string): WardenConfig {
-  const config = structuredClone(DEFAULT_CONFIG);
-  const defaultLayer = config.layers[0];
+  const warnings: ConfigWarning[] = [];
+  warningSink = warnings;
+  try {
+    const config = structuredClone(DEFAULT_CONFIG);
+    const defaultLayer = config.layers[0];
 
-  let userLayer: ConfigLayer | null = null;
-  let userRaw: Record<string, unknown> | null = null;
-  for (const configPath of USER_CONFIG_PATHS) {
-    const result = tryLoadFile(configPath);
-    if (result) {
-      userLayer = extractLayer(result);
-      userRaw = result;
-      break;
-    }
-  }
-
-  let workspaceLayer: ConfigLayer | null = null;
-  let workspaceRaw: Record<string, unknown> | null = null;
-  if (cwd) {
-    for (const name of PROJECT_CONFIG_NAMES) {
-      const result = tryLoadFile(join(cwd, name));
+    let userLayer: ConfigLayer | null = null;
+    let userRaw: Record<string, unknown> | null = null;
+    let userConfigPath = '';
+    for (const configPath of USER_CONFIG_PATHS) {
+      currentFile = configPath;
+      const result = tryLoadFile(configPath);
       if (result) {
-        workspaceLayer = extractLayer(result);
-        workspaceRaw = result;
+        userConfigPath = configPath;
+        userLayer = extractLayer(result);
+        userRaw = result;
         break;
       }
     }
+
+    let workspaceLayer: ConfigLayer | null = null;
+    let workspaceRaw: Record<string, unknown> | null = null;
+    let workspaceConfigPath = '';
+    if (cwd) {
+      for (const name of PROJECT_CONFIG_NAMES) {
+        currentFile = join(cwd, name);
+        const result = tryLoadFile(join(cwd, name));
+        if (result) {
+          workspaceConfigPath = join(cwd, name);
+          workspaceLayer = extractLayer(result);
+          workspaceRaw = result;
+          break;
+        }
+      }
+    }
+
+    // Build layers: workspace > user > default
+    config.layers = [
+      ...(workspaceLayer ? [workspaceLayer] : []),
+      ...(userLayer ? [userLayer] : []),
+      defaultLayer,
+    ];
+
+    // Merge non-layer fields from user config, then workspace config (workspace wins)
+    if (userRaw) {
+      currentFile = userConfigPath;
+      mergeNonLayerFields(config, userRaw);
+    }
+    if (workspaceRaw) {
+      currentFile = workspaceConfigPath;
+      mergeNonLayerFields(config, workspaceRaw);
+    }
+
+    config.warnings = warnings;
+    return config;
+  } finally {
+    warningSink = null;
   }
-
-  // Build layers: workspace > user > default
-  config.layers = [
-    ...(workspaceLayer ? [workspaceLayer] : []),
-    ...(userLayer ? [userLayer] : []),
-    defaultLayer,
-  ];
-
-  // Merge non-layer fields from user config, then workspace config (workspace wins)
-  if (userRaw) mergeNonLayerFields(config, userRaw);
-  if (workspaceRaw) mergeNonLayerFields(config, workspaceRaw);
-
-  return config;
 }
 
 function tryLoadFile(filePath: string): Record<string, unknown> | null {
@@ -92,23 +125,25 @@ function tryLoadFile(filePath: string): Record<string, unknown> | null {
       return parsed as Record<string, unknown>;
     }
   } catch (err) {
-    warn(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}\n`);
+    report(filePath, `failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
   }
   return null;
 }
 
 function extractLayer(raw: Record<string, unknown>): ConfigLayer {
   const rules = Array.isArray(raw.rules) ? raw.rules : [];
-  for (const rule of rules) {
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
     if (rule && typeof rule === 'object') {
       if (rule.default && !isValidDecision(rule.default)) {
-        warn(`[warden] Warning: invalid rule default "${rule.default}" for "${rule.command}", using "ask"\n`);
+        report(`rules[${i}].default`, `invalid rule default "${rule.default}" for "${rule.command}", using "ask"`);
         rule.default = 'ask';
       }
       if (Array.isArray(rule.argPatterns)) {
-        for (const pattern of rule.argPatterns) {
+        for (let j = 0; j < rule.argPatterns.length; j++) {
+          const pattern = rule.argPatterns[j];
           if (pattern?.decision && !isValidDecision(pattern.decision)) {
-            warn(`[warden] Warning: invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"\n`);
+            report(`rules[${i}].argPatterns[${j}].decision`, `invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"`);
             pattern.decision = 'ask';
           }
         }
@@ -142,12 +177,13 @@ const VALID_REMOTE_CONTEXTS = new Set<RemoteContext>(['ssh', 'docker', 'kubectl'
 
 function parseTrustedRemotes(raw: unknown[]): TrustedRemote[] {
   const results: TrustedRemote[] = [];
-  for (const entry of raw) {
+  for (let i = 0; i < raw.length; i++) {
+    const entry = raw[i];
     if (!entry || typeof entry !== 'object') continue;
     const obj = entry as Record<string, unknown>;
     const context = String(obj.context || '');
     if (!VALID_REMOTE_CONTEXTS.has(context as RemoteContext)) {
-      warn(`[warden] Warning: unknown remote context "${context}", skipping\n`);
+      report(`trustedRemotes[${i}].context`, `unknown remote context "${context}", skipping`);
       continue;
     }
     const name = String(obj.name || '');
@@ -164,14 +200,15 @@ function parseTrustedRemotes(raw: unknown[]): TrustedRemote[] {
 
 export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
   const results: TargetPolicy[] = [];
-  for (const entry of raw) {
+  for (let i = 0; i < raw.length; i++) {
+    const entry = raw[i];
     if (!entry || typeof entry !== 'object' || !('type' in entry)) {
-      warn(`[warden] Warning: targetPolicies entry missing "type" field, skipping\n`);
+      report(`targetPolicies[${i}]`, `targetPolicies entry missing "type" field, skipping`);
       continue;
     }
     const obj = entry as Record<string, unknown>;
     if (typeof obj.decision !== 'string' || !isValidDecision(obj.decision)) {
-      warn(`[warden] Warning: targetPolicies entry missing or invalid "decision", skipping\n`);
+      report(`targetPolicies[${i}]`, `targetPolicies entry missing or invalid "decision", skipping`);
       continue;
     }
     const base = {
@@ -183,7 +220,7 @@ export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
     switch (obj.type) {
       case 'path': {
         if (typeof obj.path !== 'string') {
-          warn(`[warden] Warning: path targetPolicy missing "path" field, skipping\n`);
+          report(`targetPolicies[${i}]`, `path targetPolicy missing "path" field, skipping`);
           continue;
         }
         const policy: PathPolicy = { ...base, type: 'path', path: obj.path, recursive: typeof obj.recursive === 'boolean' ? obj.recursive : true };
@@ -192,7 +229,7 @@ export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
       }
       case 'database': {
         if (typeof obj.host !== 'string') {
-          warn(`[warden] Warning: database targetPolicy missing "host" field, skipping\n`);
+          report(`targetPolicies[${i}]`, `database targetPolicy missing "host" field, skipping`);
           continue;
         }
         const policy: DatabasePolicy = {
@@ -207,7 +244,7 @@ export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
       }
       case 'endpoint': {
         if (typeof obj.pattern !== 'string') {
-          warn(`[warden] Warning: endpoint targetPolicy missing "pattern" field, skipping\n`);
+          report(`targetPolicies[${i}]`, `endpoint targetPolicy missing "pattern" field, skipping`);
           continue;
         }
         const policy: EndpointPolicy = { ...base, type: 'endpoint', pattern: obj.pattern };
@@ -215,7 +252,7 @@ export function parseTargetPolicies(raw: unknown[]): TargetPolicy[] {
         break;
       }
       default:
-        warn(`[warden] Warning: unknown targetPolicy type "${String(obj.type)}", skipping\n`);
+        report(`targetPolicies[${i}]`, `unknown targetPolicy type "${String(obj.type)}", skipping`);
     }
   }
   return results;
@@ -238,7 +275,7 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
   // Legacy keys → convert to trustedRemotes with context
   for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
     if (Array.isArray(raw[key])) {
-      warn(`[warden] Warning: ${key} is deprecated, use trustedRemotes with context: "${context}" instead\n`);
+      report(key, `${key} is deprecated, use trustedRemotes with context: "${context}" instead`);
       const targets = parseTrustedList(raw[key] as unknown[]);
       config.trustedRemotes = [...config.trustedRemotes, ...targets.map(t => ({ ...t, context }))];
     }
@@ -250,7 +287,7 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
     if (isValidDecision(raw.defaultDecision)) {
       config.defaultDecision = raw.defaultDecision;
     } else {
-      warn(`[warden] Warning: invalid defaultDecision "${raw.defaultDecision}", ignoring\n`);
+      report('defaultDecision', `invalid defaultDecision "${raw.defaultDecision}", ignoring`);
     }
   }
   if (typeof raw.askOnSubshell === 'boolean') {
@@ -265,12 +302,12 @@ function mergeNonLayerFields(config: WardenConfig, raw: Record<string, unknown>)
   if (typeof raw.sessionGuidance === 'string' || raw.sessionGuidance === false) {
     config.sessionGuidance = raw.sessionGuidance;
   } else if (raw.sessionGuidance !== undefined) {
-    warn(`[warden] Warning: invalid sessionGuidance (expected string or false), ignoring\n`);
+    report('sessionGuidance', `invalid sessionGuidance (expected string or false), ignoring`);
   }
   if (typeof raw.tempScriptDir === 'string' && raw.tempScriptDir.length > 0) {
     config.tempScriptDir = raw.tempScriptDir;
   } else if (raw.tempScriptDir !== undefined) {
-    warn(`[warden] Warning: invalid tempScriptDir (expected non-empty string), ignoring\n`);
+    report('tempScriptDir', `invalid tempScriptDir (expected non-empty string), ignoring`);
   }
   if (typeof raw.audit === 'boolean') {
     config.audit = raw.audit;
