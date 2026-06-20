@@ -13,13 +13,15 @@ function printHelp(): void {
     [
       'Usage: warden eval [options] <command>',
       '       warden suggest [options]',
+      '       warden validate [options]',
       '',
-      'Evaluate a shell command against Warden safety rules, or',
-      'suggest warden.yaml rules from the audit log.',
+      'Evaluate a shell command against Warden safety rules, suggest',
+      'warden.yaml rules from the audit log, or validate config files.',
       '',
       'Commands:',
       '  eval       Evaluate a shell command',
       '  suggest    Suggest rules from audit log',
+      '  validate   Validate warden.yaml config files',
       '',
       'Options:',
       '  --cwd <dir>   Set working directory for config loading',
@@ -27,7 +29,8 @@ function printHelp(): void {
       '  -h, --help    Show this help',
       '',
       'Exit codes:',
-      '  0 = allow, 1 = ask, 2 = deny',
+      '  eval/suggest: 0 = allow, 1 = ask, 2 = deny',
+      '  validate:     0 = no warnings, 1 = warnings found',
       '',
       'Examples:',
       '  warden eval "ls -la"',
@@ -35,6 +38,8 @@ function printHelp(): void {
       '  warden eval --cwd /path/to/project "rm -rf dist"',
       '  warden suggest --json --top 5',
       '  warden suggest --since 7d',
+      '  warden validate',
+      '  warden validate --json',
       '',
     ].join('\n'),
   );
@@ -77,6 +82,58 @@ function runEval(argv: string[]): void {
   }
 
   process.exit(EXIT_CODES[result.decision]);
+}
+
+function runValidate(argv: string[]): void {
+  setQuiet(true);
+
+  let cwd = process.cwd();
+  let json = false;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--cwd' && argv[i + 1]) {
+      cwd = argv[i + 1];
+      i++;
+    } else if (arg === '--json') {
+      json = true;
+    } else if (arg === '-h' || arg === '--help') {
+      printHelp();
+      process.exit(0);
+    }
+  }
+
+  const config = loadConfig(cwd);
+  const warnings = config.warnings ?? [];
+
+  if (json) {
+    process.stdout.write(JSON.stringify(warnings) + '\n');
+  } else {
+    const byFile = new Map<string, typeof warnings>();
+    for (const w of warnings) {
+      const arr = byFile.get(w.file);
+      if (arr) {
+        arr.push(w);
+      } else {
+        byFile.set(w.file, [w]);
+      }
+    }
+    for (const [file, fileWarnings] of byFile) {
+      process.stdout.write(file + '\n');
+      for (const w of fileWarnings) {
+        const line = `  ${w.path}: ${w.message}`;
+        const suggestionLine = w.suggestion ? ` (did you mean "${w.suggestion}")` : '';
+        process.stdout.write(line + suggestionLine + '\n');
+      }
+    }
+    if (warnings.length === 0) {
+      process.stdout.write('ok — no config problems\n');
+    } else {
+      process.stdout.write(`${warnings.length} warning(s) found\n`);
+    }
+  }
+
+  process.exit(warnings.length > 0 ? 1 : 0);
 }
 
 function runSuggest(argv: string[]): void {
@@ -143,6 +200,8 @@ function main(): void {
     runEval(rest);
   } else if (subcommand === 'suggest') {
     runSuggest(rest);
+  } else if (subcommand === 'validate') {
+    runValidate(rest);
   } else {
     process.stderr.write(`Unknown subcommand: ${subcommand}\n`);
     printHelp();

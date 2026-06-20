@@ -12253,6 +12253,145 @@ var DEFAULT_CONFIG = {
   }]
 };
 
+// src/config-schema.ts
+function editDistance(a, b) {
+  const la = a.length, lb = b.length;
+  if (la === 0) return lb;
+  if (lb === 0) return la;
+  let prev = Array.from({ length: lb + 1 }, (_, j) => j);
+  let curr = new Array(lb + 1);
+  for (let i = 1; i <= la; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= lb; j++) {
+      curr[j] = a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[lb];
+}
+function nearestKey(key, known, maxDistance = 2) {
+  let best = "";
+  let bestDist = Infinity;
+  for (const candidate of [...known].sort()) {
+    const d = editDistance(key, candidate);
+    if (d <= maxDistance && d < bestDist) {
+      best = candidate;
+      bestDist = d;
+    }
+  }
+  return bestDist < Infinity ? best : void 0;
+}
+var COMMAND_RULE_SPEC = {
+  command: true,
+  default: true,
+  argPatterns: true,
+  override: true
+};
+var KNOWN_COMMAND_RULE_KEYS = new Set(Object.keys(COMMAND_RULE_SPEC));
+var ARG_PATTERN_SPEC = {
+  description: true,
+  decision: true,
+  reason: true,
+  match: true
+};
+var KNOWN_ARG_PATTERN_KEYS = new Set(Object.keys(ARG_PATTERN_SPEC));
+var MATCH_CONDITION_SPEC = {
+  argsMatch: true,
+  anyArgMatches: true,
+  noArgs: true,
+  argCount: true,
+  not: true
+};
+var KNOWN_MATCH_CONDITION_KEYS = new Set(Object.keys(MATCH_CONDITION_SPEC));
+var LAYER_SPEC = {
+  alwaysAllow: true,
+  alwaysDeny: true,
+  rules: true
+};
+var KNOWN_LAYER_KEYS = new Set(Object.keys(LAYER_SPEC));
+var TRUSTED_REMOTE_SPEC = {
+  name: true,
+  context: true,
+  allowAll: true,
+  overrides: true
+};
+var KNOWN_TRUSTED_REMOTE_KEYS = new Set(Object.keys(TRUSTED_REMOTE_SPEC));
+var TRUSTED_TARGET_SPEC = {
+  name: true,
+  allowAll: true,
+  overrides: true
+};
+var KNOWN_TRUSTED_TARGET_KEYS = new Set(Object.keys(TRUSTED_TARGET_SPEC));
+var TARGET_POLICY_BASE_SPEC = {
+  type: true,
+  decision: true,
+  reason: true,
+  commands: true,
+  allowAll: true
+};
+var KNOWN_TARGET_POLICY_BASE_KEYS = new Set(Object.keys(TARGET_POLICY_BASE_SPEC));
+var PATH_POLICY_SPEC = {
+  type: true,
+  path: true,
+  recursive: true,
+  decision: true,
+  reason: true,
+  commands: true,
+  allowAll: true
+};
+var KNOWN_PATH_POLICY_KEYS = new Set(Object.keys(PATH_POLICY_SPEC));
+var DATABASE_POLICY_SPEC = {
+  type: true,
+  host: true,
+  port: true,
+  database: true,
+  decision: true,
+  reason: true,
+  commands: true,
+  allowAll: true
+};
+var KNOWN_DATABASE_POLICY_KEYS = new Set(Object.keys(DATABASE_POLICY_SPEC));
+var ENDPOINT_POLICY_SPEC = {
+  type: true,
+  pattern: true,
+  decision: true,
+  reason: true,
+  commands: true,
+  allowAll: true
+};
+var KNOWN_ENDPOINT_POLICY_KEYS = new Set(Object.keys(ENDPOINT_POLICY_SPEC));
+var LEGACY_TOP_LEVEL_KEYS = /* @__PURE__ */ new Set([
+  "trustedSSHHosts",
+  "trustedDockerContainers",
+  "trustedKubectlContexts",
+  "trustedSprites",
+  "trustedFlyApps"
+]);
+var WARDEN_CONFIG_FIELD_ORIGIN = {
+  layers: "layer",
+  warnings: "runtime",
+  trustedRemotes: "raw",
+  targetPolicies: "raw",
+  trustedContextOverrides: "raw",
+  defaultDecision: "raw",
+  askOnSubshell: "raw",
+  notifyOnAsk: "raw",
+  notifyOnDeny: "raw",
+  audit: "raw",
+  auditPath: "raw",
+  auditAllowDecisions: "raw",
+  sessionGuidance: "raw",
+  tempScriptDir: "raw"
+};
+var RAW_KEYS = new Set(
+  Object.entries(WARDEN_CONFIG_FIELD_ORIGIN).filter(([, origin]) => origin === "raw").map(([key]) => key)
+);
+var KNOWN_TOP_LEVEL_KEYS = /* @__PURE__ */ new Set([
+  ...KNOWN_LAYER_KEYS,
+  ...RAW_KEYS,
+  ...LEGACY_TOP_LEVEL_KEYS
+]);
+
 // src/rules.ts
 var VALID_DECISIONS = /* @__PURE__ */ new Set(["allow", "deny", "ask"]);
 function isValidDecision(value) {
@@ -12266,6 +12405,22 @@ function warn(message) {
   if (quiet) return;
   process.stderr.write(message);
 }
+var warningSink = null;
+var currentFile = "";
+function report(path, message, suggestion) {
+  if (warningSink) {
+    warningSink.push({ file: currentFile, path, message, ...suggestion !== void 0 && { suggestion } });
+  }
+  warn(`[warden] Warning: ${message}
+`);
+}
+function scanKeys(obj, known, pathPrefix) {
+  for (const key of Object.keys(obj)) {
+    if (known.has(key)) continue;
+    const path = pathPrefix ? `${pathPrefix}.${key}` : key;
+    report(path, `unknown key "${key}"`, nearestKey(key, known));
+  }
+}
 var USER_CONFIG_PATHS = [
   (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden.yaml"),
   (0, import_path3.join)((0, import_os3.homedir)(), ".claude", "warden.json")
@@ -12275,38 +12430,59 @@ var PROJECT_CONFIG_NAMES = [
   ".claude/warden.json"
 ];
 function loadConfig(cwd) {
-  const config = structuredClone(DEFAULT_CONFIG);
-  const defaultLayer = config.layers[0];
-  let userLayer = null;
-  let userRaw = null;
-  for (const configPath of USER_CONFIG_PATHS) {
-    const result = tryLoadFile(configPath);
-    if (result) {
-      userLayer = extractLayer(result);
-      userRaw = result;
-      break;
-    }
-  }
-  let workspaceLayer = null;
-  let workspaceRaw = null;
-  if (cwd) {
-    for (const name of PROJECT_CONFIG_NAMES) {
-      const result = tryLoadFile((0, import_path3.join)(cwd, name));
+  const warnings = [];
+  warningSink = warnings;
+  try {
+    const config = structuredClone(DEFAULT_CONFIG);
+    const defaultLayer = config.layers[0];
+    let userLayer = null;
+    let userRaw = null;
+    let userConfigPath = "";
+    for (const configPath of USER_CONFIG_PATHS) {
+      currentFile = configPath;
+      const result = tryLoadFile(configPath);
       if (result) {
-        workspaceLayer = extractLayer(result);
-        workspaceRaw = result;
+        userConfigPath = configPath;
+        userLayer = extractLayer(result);
+        userRaw = result;
         break;
       }
     }
+    let workspaceLayer = null;
+    let workspaceRaw = null;
+    let workspaceConfigPath = "";
+    if (cwd) {
+      for (const name of PROJECT_CONFIG_NAMES) {
+        currentFile = (0, import_path3.join)(cwd, name);
+        const result = tryLoadFile((0, import_path3.join)(cwd, name));
+        if (result) {
+          workspaceConfigPath = (0, import_path3.join)(cwd, name);
+          workspaceLayer = extractLayer(result);
+          workspaceRaw = result;
+          break;
+        }
+      }
+    }
+    config.layers = [
+      ...workspaceLayer ? [workspaceLayer] : [],
+      ...userLayer ? [userLayer] : [],
+      defaultLayer
+    ];
+    if (userRaw) {
+      currentFile = userConfigPath;
+      scanKeys(userRaw, KNOWN_TOP_LEVEL_KEYS, "");
+      mergeNonLayerFields(config, userRaw);
+    }
+    if (workspaceRaw) {
+      currentFile = workspaceConfigPath;
+      scanKeys(workspaceRaw, KNOWN_TOP_LEVEL_KEYS, "");
+      mergeNonLayerFields(config, workspaceRaw);
+    }
+    config.warnings = warnings;
+    return config;
+  } finally {
+    warningSink = null;
   }
-  config.layers = [
-    ...workspaceLayer ? [workspaceLayer] : [],
-    ...userLayer ? [userLayer] : [],
-    defaultLayer
-  ];
-  if (userRaw) mergeNonLayerFields(config, userRaw);
-  if (workspaceRaw) mergeNonLayerFields(config, workspaceRaw);
-  return config;
 }
 function tryLoadFile(filePath) {
   if (!(0, import_fs.existsSync)(filePath)) return null;
@@ -12317,30 +12493,41 @@ function tryLoadFile(filePath) {
       return parsed;
     }
   } catch (err) {
-    warn(`[warden] Warning: failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}
-`);
+    report(filePath, `failed to parse config ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
   }
   return null;
 }
-function extractLayer(raw) {
+function extractLayer(raw, pathPrefix) {
   const rules = Array.isArray(raw.rules) ? raw.rules : [];
-  for (const rule of rules) {
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
     if (rule && typeof rule === "object") {
+      const rulePath = pathPrefix ? `${pathPrefix}.rules[${i}]` : `rules[${i}]`;
+      scanKeys(rule, KNOWN_COMMAND_RULE_KEYS, rulePath);
       if (rule.default && !isValidDecision(rule.default)) {
-        warn(`[warden] Warning: invalid rule default "${rule.default}" for "${rule.command}", using "ask"
-`);
+        report(`${rulePath}.default`, `invalid rule default "${rule.default}" for "${rule.command}", using "ask"`);
         rule.default = "ask";
       }
       if (Array.isArray(rule.argPatterns)) {
-        for (const pattern of rule.argPatterns) {
-          if (pattern?.decision && !isValidDecision(pattern.decision)) {
-            warn(`[warden] Warning: invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"
-`);
-            pattern.decision = "ask";
+        for (let j = 0; j < rule.argPatterns.length; j++) {
+          const pattern = rule.argPatterns[j];
+          if (pattern && typeof pattern === "object") {
+            const patPath = `${rulePath}.argPatterns[${j}]`;
+            scanKeys(pattern, KNOWN_ARG_PATTERN_KEYS, patPath);
+            if (pattern.decision && !isValidDecision(pattern.decision)) {
+              report(`${patPath}.decision`, `invalid pattern decision "${pattern.decision}" for "${rule.command}", using "ask"`);
+              pattern.decision = "ask";
+            }
+            if (pattern.match && typeof pattern.match === "object") {
+              scanKeys(pattern.match, KNOWN_MATCH_CONDITION_KEYS, `${patPath}.match`);
+            }
           }
         }
       }
     }
+  }
+  if (pathPrefix) {
+    scanKeys(raw, KNOWN_LAYER_KEYS, pathPrefix);
   }
   return {
     alwaysAllow: Array.isArray(raw.alwaysAllow) ? raw.alwaysAllow : [],
@@ -12348,15 +12535,17 @@ function extractLayer(raw) {
     rules
   };
 }
-function parseTrustedList(raw) {
-  return raw.map((entry) => {
+function parseTrustedList(raw, pathPrefix = "") {
+  return raw.map((entry, i) => {
     if (typeof entry === "string") return { name: entry };
     if (entry && typeof entry === "object" && "name" in entry) {
       const obj = entry;
+      const entryPath = pathPrefix ? `${pathPrefix}[${i}]` : `[${i}]`;
+      scanKeys(obj, KNOWN_TRUSTED_TARGET_KEYS, entryPath);
       const target = { name: String(obj.name) };
       if (obj.allowAll === true) target.allowAll = true;
       if (obj.overrides && typeof obj.overrides === "object") {
-        target.overrides = extractLayer(obj.overrides);
+        target.overrides = extractLayer(obj.overrides, `${entryPath}.overrides`);
       }
       return target;
     }
@@ -12364,15 +12553,17 @@ function parseTrustedList(raw) {
   }).filter((t) => t !== null);
 }
 var VALID_REMOTE_CONTEXTS = /* @__PURE__ */ new Set(["ssh", "docker", "kubectl", "sprite", "fly"]);
-function parseTrustedRemotes(raw) {
+function parseTrustedRemotes(raw, pathPrefix = "trustedRemotes") {
   const results = [];
-  for (const entry of raw) {
+  for (let i = 0; i < raw.length; i++) {
+    const entry = raw[i];
     if (!entry || typeof entry !== "object") continue;
     const obj = entry;
+    const entryPath = `${pathPrefix}[${i}]`;
+    scanKeys(obj, KNOWN_TRUSTED_REMOTE_KEYS, entryPath);
     const context = String(obj.context || "");
     if (!VALID_REMOTE_CONTEXTS.has(context)) {
-      warn(`[warden] Warning: unknown remote context "${context}", skipping
-`);
+      report(`${entryPath}.context`, `unknown remote context "${context}", skipping`);
       continue;
     }
     const name = String(obj.name || "");
@@ -12380,37 +12571,44 @@ function parseTrustedRemotes(raw) {
     const remote = { name, context };
     if (obj.allowAll === true) remote.allowAll = true;
     if (obj.overrides && typeof obj.overrides === "object") {
-      remote.overrides = extractLayer(obj.overrides);
+      remote.overrides = extractLayer(obj.overrides, `${entryPath}.overrides`);
     }
     results.push(remote);
   }
   return results;
 }
-function parseTargetPolicies(raw) {
+function parseTargetPolicies(raw, pathPrefix = "targetPolicies") {
   const results = [];
-  for (const entry of raw) {
+  for (let i = 0; i < raw.length; i++) {
+    const entry = raw[i];
     if (!entry || typeof entry !== "object" || !("type" in entry)) {
-      warn(`[warden] Warning: targetPolicies entry missing "type" field, skipping
-`);
+      report(`targetPolicies[${i}]`, `targetPolicies entry missing "type" field, skipping`);
       continue;
     }
     const obj = entry;
-    if (typeof obj.decision !== "string" || !isValidDecision(obj.decision)) {
-      warn(`[warden] Warning: targetPolicies entry missing or invalid "decision", skipping
-`);
+    const entryPath = `${pathPrefix}[${i}]`;
+    const policyType = String(obj.type);
+    if (!["path", "database", "endpoint"].includes(policyType)) {
+      report(entryPath, `unknown targetPolicy type "${policyType}", skipping`);
       continue;
     }
+    if (typeof obj.decision !== "string" || !isValidDecision(obj.decision)) {
+      report(entryPath, `targetPolicies entry missing or invalid "decision", skipping`);
+      continue;
+    }
+    const typeKey = policyType;
+    const typeTable = typeKey === "path" ? KNOWN_PATH_POLICY_KEYS : typeKey === "database" ? KNOWN_DATABASE_POLICY_KEYS : KNOWN_ENDPOINT_POLICY_KEYS;
+    scanKeys(obj, typeTable, entryPath);
     const base = {
       decision: obj.decision,
       ...typeof obj.reason === "string" && { reason: obj.reason },
       ...Array.isArray(obj.commands) && { commands: obj.commands },
       ...obj.allowAll === true && { allowAll: true }
     };
-    switch (obj.type) {
+    switch (typeKey) {
       case "path": {
         if (typeof obj.path !== "string") {
-          warn(`[warden] Warning: path targetPolicy missing "path" field, skipping
-`);
+          report(`targetPolicies[${i}]`, `path targetPolicy missing "path" field, skipping`);
           continue;
         }
         const policy = { ...base, type: "path", path: obj.path, recursive: typeof obj.recursive === "boolean" ? obj.recursive : true };
@@ -12419,8 +12617,7 @@ function parseTargetPolicies(raw) {
       }
       case "database": {
         if (typeof obj.host !== "string") {
-          warn(`[warden] Warning: database targetPolicy missing "host" field, skipping
-`);
+          report(`targetPolicies[${i}]`, `database targetPolicy missing "host" field, skipping`);
           continue;
         }
         const policy = {
@@ -12435,8 +12632,7 @@ function parseTargetPolicies(raw) {
       }
       case "endpoint": {
         if (typeof obj.pattern !== "string") {
-          warn(`[warden] Warning: endpoint targetPolicy missing "pattern" field, skipping
-`);
+          report(`targetPolicies[${i}]`, `endpoint targetPolicy missing "pattern" field, skipping`);
           continue;
         }
         const policy = { ...base, type: "endpoint", pattern: obj.pattern };
@@ -12444,8 +12640,7 @@ function parseTargetPolicies(raw) {
         break;
       }
       default:
-        warn(`[warden] Warning: unknown targetPolicy type "${String(obj.type)}", skipping
-`);
+        report(`targetPolicies[${i}]`, `unknown targetPolicy type "${String(obj.type)}", skipping`);
     }
   }
   return results;
@@ -12463,21 +12658,19 @@ function mergeNonLayerFields(config, raw) {
   }
   for (const [key, context] of Object.entries(LEGACY_REMOTE_MAP)) {
     if (Array.isArray(raw[key])) {
-      warn(`[warden] Warning: ${key} is deprecated, use trustedRemotes with context: "${context}" instead
-`);
-      const targets = parseTrustedList(raw[key]);
+      report(key, `${key} is deprecated, use trustedRemotes with context: "${context}" instead`);
+      const targets = parseTrustedList(raw[key], key);
       config.trustedRemotes = [...config.trustedRemotes, ...targets.map((t) => ({ ...t, context }))];
     }
   }
   if (Array.isArray(raw.targetPolicies)) {
-    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies)];
+    config.targetPolicies = [...config.targetPolicies, ...parseTargetPolicies(raw.targetPolicies, "targetPolicies")];
   }
   if (typeof raw.defaultDecision === "string") {
     if (isValidDecision(raw.defaultDecision)) {
       config.defaultDecision = raw.defaultDecision;
     } else {
-      warn(`[warden] Warning: invalid defaultDecision "${raw.defaultDecision}", ignoring
-`);
+      report("defaultDecision", `invalid defaultDecision "${raw.defaultDecision}", ignoring`);
     }
   }
   if (typeof raw.askOnSubshell === "boolean") {
@@ -12492,14 +12685,12 @@ function mergeNonLayerFields(config, raw) {
   if (typeof raw.sessionGuidance === "string" || raw.sessionGuidance === false) {
     config.sessionGuidance = raw.sessionGuidance;
   } else if (raw.sessionGuidance !== void 0) {
-    warn(`[warden] Warning: invalid sessionGuidance (expected string or false), ignoring
-`);
+    report("sessionGuidance", `invalid sessionGuidance (expected string or false), ignoring`);
   }
   if (typeof raw.tempScriptDir === "string" && raw.tempScriptDir.length > 0) {
     config.tempScriptDir = raw.tempScriptDir;
   } else if (raw.tempScriptDir !== void 0) {
-    warn(`[warden] Warning: invalid tempScriptDir (expected non-empty string), ignoring
-`);
+    report("tempScriptDir", `invalid tempScriptDir (expected non-empty string), ignoring`);
   }
   if (typeof raw.audit === "boolean") {
     config.audit = raw.audit;
@@ -12512,7 +12703,7 @@ function mergeNonLayerFields(config, raw) {
   }
   if (raw.trustedContextOverrides && typeof raw.trustedContextOverrides === "object") {
     const overrides = raw.trustedContextOverrides;
-    const layer = extractLayer(overrides);
+    const layer = extractLayer(overrides, "trustedContextOverrides");
     if (config.trustedContextOverrides) {
       config.trustedContextOverrides = {
         alwaysAllow: [...layer.alwaysAllow, ...config.trustedContextOverrides.alwaysAllow],
