@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { checkNativePermissions, runDiagnostics, checkHookRegistration, checkBinary, checkConfigHealth } from '../diagnose';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { checkNativePermissions, runDiagnostics, checkHookRegistration, checkBinary, checkConfigHealth, checkAuditWritable, checkPipelineProbe, checkVersionSync } from '../diagnose';
+import { writeFileSync, mkdirSync, mkdtempSync, rmSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { DiagnoseEnv } from '../diagnose';
@@ -513,5 +513,243 @@ describe('checkConfigHealth', () => {
     expect(result.status).toBe('warn');
     expect(result.detail).toBeTruthy();
     expect(result.detail.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkAuditWritable
+// ---------------------------------------------------------------------------
+
+let savedHome: string | undefined;
+
+describe('checkAuditWritable', () => {
+  beforeEach(() => {
+    savedHome = process.env.HOME;
+  });
+
+  afterEach(() => {
+    if (savedHome !== undefined) {
+      process.env.HOME = savedHome;
+    } else {
+      delete process.env.HOME;
+    }
+  });
+
+  it('returns id audit-writable', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.id).toBe('audit-writable');
+  });
+
+  it('passes when the configured audit directory exists and is writable', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const auditDir = join(root, 'audit');
+    mkdirSync(auditDir, { recursive: true });
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(auditDir, 'warden-audit.jsonl')}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.status).not.toBe('warn');
+    expect(result.status).not.toBe('fail');
+  });
+
+  it('fails when the configured audit directory exists but is not writable', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const auditDir = join(root, 'audit-ro');
+    mkdirSync(auditDir, { recursive: true });
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(auditDir, 'warden-audit.jsonl')}\n`);
+    chmodSync(auditDir, 0o555);
+    let result;
+    try {
+      result = checkAuditWritable(makeEnv(root));
+    } finally {
+      chmodSync(auditDir, 0o755);
+    }
+    expect(result!.status).toBe('fail');
+    expect(result!.status).not.toBe('pass');
+    expect(result!.fix).toBeTruthy();
+  });
+
+  it('warns when the configured audit directory does not exist', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const missingDir = join(root, 'nonexistent', 'subdir');
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(missingDir, 'warden-audit.jsonl')}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.status).not.toBe('pass');
+    expect(result.status).not.toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('a naive impl returning pass for a missing dir fails this test', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const missingDir = join(root, 'definitely-absent');
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(missingDir, 'warden-audit.jsonl')}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).not.toBe('pass');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkPipelineProbe
+// ---------------------------------------------------------------------------
+
+describe('checkPipelineProbe', () => {
+  it('returns id pipeline-probe', () => {
+    const root = tmpRoot();
+    const result = checkPipelineProbe(makeEnv(root));
+    expect(result.id).toBe('pipeline-probe');
+  });
+
+  it('passes when the in-process pipeline allows a benign echo command against default config', () => {
+    const root = tmpRoot();
+    const result = checkPipelineProbe(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.status).not.toBe('fail');
+  });
+
+  it('detail is a non-empty string', () => {
+    const root = tmpRoot();
+    const result = checkPipelineProbe(makeEnv(root));
+    expect(typeof result.detail).toBe('string');
+    expect(result.detail.length).toBeGreaterThan(0);
+  });
+
+  it('is not affected by missing fixture files — exercises in-process wiring only', () => {
+    // A fresh tmpdir with no config files at all should still pass
+    const root = tmpRoot();
+    const result = checkPipelineProbe(makeEnv(root));
+    expect(result.status).toBe('pass');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkVersionSync
+// ---------------------------------------------------------------------------
+
+describe('checkVersionSync', () => {
+  it('returns id version-sync', () => {
+    const root = tmpRoot();
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.id).toBe('version-sync');
+  });
+
+  it('skips when no package.json is present (not a warden tree)', () => {
+    const root = tmpRoot();
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('skip');
+    expect(result.status).not.toBe('pass');
+    expect(result.status).not.toBe('fail');
+  });
+
+  it('passes when only package.json stamp is present and has a valid version', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.2.3' });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.status).not.toBe('skip');
+    expect(result.detail).toContain('1.2.3');
+  });
+
+  it('passes when package.json and plugin.json agree', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '2.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '2.0.0' });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('pass');
+  });
+
+  it('passes when all three stamps agree', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '3.1.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '3.1.0' });
+    writeJson(root, join('.claude-plugin', 'marketplace.json'), { plugins: [{ name: 'warden', version: '3.1.0' }] });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('pass');
+  });
+
+  it('warns when package.json and plugin.json disagree', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '2.0.0' });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('warn detail names each stamp and value when versions differ', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '2.0.0' });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.detail).toContain('1.0.0');
+    expect(result.detail).toContain('2.0.0');
+  });
+
+  it('warns when marketplace.json disagrees with package.json', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.0.0' });
+    writeJson(root, join('.claude-plugin', 'marketplace.json'), { plugins: [{ name: 'warden', version: '9.9.9' }] });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.fix).toBeTruthy();
+    expect(result.detail).toContain('9.9.9');
+  });
+
+  it('absent stamp files are silently omitted and do not fail the check', () => {
+    // Only package.json present — no plugin.json, no marketplace.json
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '4.0.0' });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.status).not.toBe('skip');
+    expect(result.status).not.toBe('fail');
+  });
+
+  it('pass detail lists each present stamp and its value', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '5.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '5.0.0' });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('5.0.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runDiagnostics — new checks included and ordered
+// ---------------------------------------------------------------------------
+
+describe('runDiagnostics new checks ordering', () => {
+  it('includes audit-writable, pipeline-probe, version-sync after config-health in that order', () => {
+    const root = tmpRoot();
+    const results = runDiagnostics(makeEnv(root));
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain('config-health');
+    expect(ids).toContain('audit-writable');
+    expect(ids).toContain('pipeline-probe');
+    expect(ids).toContain('version-sync');
+    expect(ids.indexOf('config-health')).toBeLessThan(ids.indexOf('audit-writable'));
+    expect(ids.indexOf('audit-writable')).toBeLessThan(ids.indexOf('pipeline-probe'));
+    expect(ids.indexOf('pipeline-probe')).toBeLessThan(ids.indexOf('version-sync'));
+  });
+
+  it('full chain order: native-permissions, hook-registration, binary, config-health, audit-writable, pipeline-probe, version-sync', () => {
+    const root = tmpRoot();
+    const results = runDiagnostics(makeEnv(root));
+    const ids = results.map((r) => r.id);
+    const ordered = ['native-permissions', 'hook-registration', 'binary', 'config-health', 'audit-writable', 'pipeline-probe', 'version-sync'];
+    for (const id of ordered) {
+      expect(ids).toContain(id);
+    }
+    for (let i = 0; i < ordered.length - 1; i++) {
+      expect(ids.indexOf(ordered[i])).toBeLessThan(ids.indexOf(ordered[i + 1]));
+    }
   });
 });
