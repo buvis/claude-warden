@@ -12299,6 +12299,11 @@ var MATCH_CONDITION_SPEC = {
   not: true
 };
 var KNOWN_MATCH_CONDITION_KEYS = new Set(Object.keys(MATCH_CONDITION_SPEC));
+var ARG_COUNT_SPEC = {
+  min: true,
+  max: true
+};
+var KNOWN_ARG_COUNT_KEYS = new Set(Object.keys(ARG_COUNT_SPEC));
 var LAYER_SPEC = {
   alwaysAllow: true,
   alwaysDeny: true,
@@ -12495,7 +12500,11 @@ function extractLayer(raw, pathPrefix) {
               pattern.decision = "ask";
             }
             if (pattern.match && typeof pattern.match === "object") {
-              scanKeys(pattern.match, KNOWN_MATCH_CONDITION_KEYS, `${patPath}.match`);
+              const matchObj = pattern.match;
+              scanKeys(matchObj, KNOWN_MATCH_CONDITION_KEYS, `${patPath}.match`);
+              if (matchObj.argCount && typeof matchObj.argCount === "object") {
+                scanKeys(matchObj.argCount, KNOWN_ARG_COUNT_KEYS, `${patPath}.match.argCount`);
+              }
             }
           }
         }
