@@ -1,24 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve, join } from 'path';
 
 const HOOK_BIN = resolve(__dirname, '../../dist/index.cjs');
 
-function runHook(input: object, home: string): { stdout: string; exitCode: number } {
-  try {
-    const stdout = execFileSync(process.execPath, [HOOK_BIN], {
-      input: JSON.stringify(input),
-      encoding: 'utf-8',
-      timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, HOME: home, USERPROFILE: home },
-    });
-    return { stdout, exitCode: 0 };
-  } catch (err: any) {
-    return { stdout: err.stdout ?? '', exitCode: err.status ?? 1 };
-  }
+function runHook(input: object, home: string): { stdout: string; stderr: string; exitCode: number } {
+  const result = spawnSync(process.execPath, [HOOK_BIN], {
+    input: JSON.stringify(input),
+    encoding: 'utf-8',
+    timeout: 5000,
+    env: { ...process.env, HOME: home, USERPROFILE: home },
+  });
+  return { stdout: result.stdout ?? '', stderr: result.stderr ?? '', exitCode: result.status ?? 1 };
 }
 
 describe('SessionStart config-health note', () => {
@@ -100,7 +95,7 @@ describe('SessionStart config-health note', () => {
       mkdirSync(join(ws, '.claude'), { recursive: true });
       writeFileSync(join(ws, '.claude', 'warden.yaml'), 'alwaysAlow:\n  - foo\n');
 
-      const { stdout } = runHook(
+      const { stdout, stderr } = runHook(
         {
           hook_event_name: 'PreToolUse',
           session_id: 's1',
@@ -115,6 +110,7 @@ describe('SessionStart config-health note', () => {
       const output = JSON.parse(stdout);
       expect(output.hookSpecificOutput.permissionDecision).toBe('allow');
       expect(stdout).not.toContain('[warden] config:');
+      expect(stderr).toBe('');
     } finally {
       rmSync(home, { recursive: true, force: true });
       rmSync(ws, { recursive: true, force: true });
