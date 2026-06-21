@@ -720,6 +720,29 @@ describe('checkVersionSync', () => {
     expect(result.status).toBe('pass');
     expect(result.detail).toContain('5.0.0');
   });
+
+  it('returns unknown (never a false pass) when a present stamp file is unparseable', () => {
+    // A valid package.json + plugin.json that agree, plus a CORRUPT marketplace.json,
+    // must NOT report pass — the corrupt stamp could not be inspected (fail-loud).
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '1.0.0' });
+    writeFile(root, join('.claude-plugin', 'marketplace.json'), '{ not valid json');
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+    expect(result.detail).toContain('marketplace.json');
+  });
+
+  it('returns unknown (not skip) when package.json itself is present but unparseable', () => {
+    const root = tmpRoot();
+    writeFile(root, 'package.json', '{ corrupt');
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('skip');
+    expect(result.fix).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------

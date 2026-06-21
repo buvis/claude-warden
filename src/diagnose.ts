@@ -384,6 +384,7 @@ export function checkVersionSync(env: DiagnoseEnv): CheckResult {
   const root = pr.root;
 
   const stamps: { label: string; value: string }[] = [];
+  const unparseable: string[] = [];
 
   // Helper to read a JSON stamp file
   function readStamp(relPath: string, extract: (obj: unknown) => string | undefined): void {
@@ -397,7 +398,10 @@ export function checkVersionSync(env: DiagnoseEnv): CheckResult {
         stamps.push({ label: relPath, value });
       }
     } catch {
-      // Unparseable JSON — silently omit
+      // Present but unparseable — a load-bearing stamp we could not inspect.
+      // Record it so the check fails loud (unknown) rather than silently
+      // dropping it, which could otherwise produce a false 'pass'.
+      unparseable.push(relPath);
     }
   }
 
@@ -444,6 +448,17 @@ export function checkVersionSync(env: DiagnoseEnv): CheckResult {
     }
     return undefined;
   });
+
+  // A present-but-unparseable stamp could not be inspected: fail loud (unknown)
+  // before any pass/skip verdict, so a corrupt stamp never reads as green.
+  if (unparseable.length > 0) {
+    return {
+      id: 'version-sync',
+      status: 'unknown',
+      detail: `Could not parse version stamp(s): ${unparseable.join(', ')} (at ${root}).`,
+      fix: 'Fix the JSON syntax in the listed version stamp file(s).',
+    };
+  }
 
   // If no package.json stamp found, skip
   const pkgStamp = stamps.find(s => s.label === 'package.json');
