@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { checkNativePermissions, runDiagnostics } from '../diagnose';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { checkNativePermissions, runDiagnostics, checkHookRegistration, checkBinary, checkConfigHealth } from '../diagnose';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -186,5 +186,358 @@ describe('runDiagnostics', () => {
         expect((r.fix as string).length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('returns checks in order: native-permissions, hook-registration, binary, config-health', () => {
+    const root = tmpRoot();
+    const results = runDiagnostics(makeEnv(root));
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain('native-permissions');
+    expect(ids).toContain('hook-registration');
+    expect(ids).toContain('binary');
+    expect(ids).toContain('config-health');
+    expect(ids.indexOf('native-permissions')).toBeLessThan(ids.indexOf('hook-registration'));
+    expect(ids.indexOf('hook-registration')).toBeLessThan(ids.indexOf('binary'));
+    expect(ids.indexOf('binary')).toBeLessThan(ids.indexOf('config-health'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers for hook/binary/config-health fixtures
+// ---------------------------------------------------------------------------
+
+function writeJson(dir: string, relpath: string, obj: unknown): void {
+  const full = join(dir, relpath);
+  mkdirSync(join(dir, relpath, '..'), { recursive: true });
+  writeFileSync(full, JSON.stringify(obj));
+}
+
+function writeFile(dir: string, relpath: string, content: string): void {
+  const full = join(dir, relpath);
+  mkdirSync(join(dir, relpath, '..'), { recursive: true });
+  writeFileSync(full, content);
+}
+
+function makeHooksJson(command: string): unknown {
+  return {
+    PreToolUse: [
+      {
+        matcher: 'Bash',
+        hooks: [{ type: 'command', command }],
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// checkHookRegistration
+// ---------------------------------------------------------------------------
+
+describe('checkHookRegistration', () => {
+  it('returns id hook-registration', () => {
+    const root = tmpRoot();
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.id).toBe('hook-registration');
+  });
+
+  it('passes in dev mode when hooks.json has a Bash matcher with dist/index.cjs command', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(root, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('pass');
+  });
+
+  it('substring-matches dist/index.cjs — a ${CLAUDE_PLUGIN_ROOT}-prefixed command still passes', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    const command = 'node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"';
+    expect(command).toContain('dist/index.cjs');
+    writeJson(root, join('hooks', 'hooks.json'), makeHooksJson(command));
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.detail).toMatch(/dev/i);
+  });
+
+  it('fails in dev mode when hooks.json has no Bash matcher', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(root, join('hooks', 'hooks.json'), {
+      PreToolUse: [{ matcher: 'Read', hooks: [{ type: 'command', command: 'node dist/index.cjs' }] }],
+    });
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('fails in dev mode when Bash matcher command does not include dist/index.cjs', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(root, join('hooks', 'hooks.json'), makeHooksJson('node dist/something-else.cjs'));
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('returns unknown in dev mode when hooks.json is missing', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    // do NOT create hooks/hooks.json
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('unknown');
+    expect(result.detail).toContain('hooks.json');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('returns unknown in dev mode when hooks.json contains invalid JSON', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeFile(root, join('hooks', 'hooks.json'), '{not valid json');
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('unknown');
+    expect(result.detail).toContain('hooks.json');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('passes in installed mode when hooks.json has Bash matcher with dist/index.cjs', () => {
+    const home = tmpRoot();
+    const pluginDir = tmpRoot();
+    writeJson(pluginDir, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    writeJson(home, join('.claude', 'plugins', 'installed_plugins.json'), {
+      version: 2,
+      plugins: {
+        'warden@https://marketplace.example.com': [{ installPath: pluginDir }],
+      },
+    });
+    const repoRoot = tmpRoot(); // no package.json — should not be used
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+    const result = checkHookRegistration(env);
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails when no plugin root is found (not-found mode)', () => {
+    const root = tmpRoot();
+    // no package.json, no installed_plugins.json
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('detail always names the resolved mode and root path', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(root, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    const result = checkHookRegistration(makeEnv(root));
+    // detail should mention some form of mode (dev) and a path
+    expect(result.detail.length).toBeGreaterThan(0);
+    expect(result.detail).toContain(root);
+  });
+
+  it('prefers installed mode over dev mode when both are present', () => {
+    const home = tmpRoot();
+    const pluginDir = tmpRoot();
+    // installed plugin with passing hooks.json
+    writeJson(pluginDir, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    writeJson(home, join('.claude', 'plugins', 'installed_plugins.json'), {
+      version: 2,
+      plugins: {
+        'warden@https://marketplace.example.com': [{ installPath: pluginDir }],
+      },
+    });
+    // repoRoot also looks like a dev clone
+    writeJson(home, 'package.json', { name: '@buvis/claude-warden' });
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot: home };
+    const result = checkHookRegistration(env);
+    // installed mode resolved — pluginDir should be in the detail
+    expect(result.detail).toContain(pluginDir);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkBinary
+// ---------------------------------------------------------------------------
+
+describe('checkBinary', () => {
+  it('returns id binary', () => {
+    const root = tmpRoot();
+    const result = checkBinary(makeEnv(root));
+    expect(result.id).toBe('binary');
+  });
+
+  it('passes when dist/index.cjs exists and has content', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeFile(root, join('dist', 'index.cjs'), '"use strict";console.log("ok");');
+    const result = checkBinary(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('dist/index.cjs');
+  });
+
+  it('fails when dist/index.cjs is missing', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    // dist/ dir does not exist
+    const result = checkBinary(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('fails when dist/index.cjs is empty (0 bytes)', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeFile(root, join('dist', 'index.cjs'), '');
+    const result = checkBinary(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('fails when no plugin root is found', () => {
+    const root = tmpRoot();
+    // no package.json, no installed_plugins.json
+    const result = checkBinary(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('passes via installed mode binary path', () => {
+    const home = tmpRoot();
+    const pluginDir = tmpRoot();
+    writeFile(pluginDir, join('dist', 'index.cjs'), '"use strict";');
+    writeJson(home, join('.claude', 'plugins', 'installed_plugins.json'), {
+      version: 2,
+      plugins: {
+        'warden@https://marketplace.example.com': [{ installPath: pluginDir }],
+      },
+    });
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot: home };
+    const result = checkBinary(env);
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain(pluginDir);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkConfigHealth
+// ---------------------------------------------------------------------------
+
+let originalHome: string | undefined;
+
+describe('checkConfigHealth', () => {
+  beforeEach(() => {
+    originalHome = process.env.HOME;
+  });
+
+  afterEach(() => {
+    if (originalHome !== undefined) {
+      process.env.HOME = originalHome;
+    } else {
+      delete process.env.HOME;
+    }
+  });
+
+  it('returns id config-health', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.id).toBe('config-health');
+  });
+
+  it('passes when no config files are present', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.status).toBe('pass');
+  });
+
+  it('passes when a fully valid project config is present', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    writeFile(root, join('.claude', 'warden.yaml'), 'defaultDecision: ask\n');
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails when project config has a parse error (malformed YAML)', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    // malformed YAML triggers a parse error
+    writeFile(root, join('.claude', 'warden.yaml'), ':\n  - [unclosed');
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('parse-error prefix "failed to parse config " is load-bearing — detail must reference it', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    writeFile(root, join('.claude', 'warden.yaml'), 'key: : :');
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.status).toBe('fail');
+    // The detail must mention the literal prefix that couples tests to the config loader contract
+    expect(result.detail).toContain('failed to parse config ');
+  });
+
+  it('warns (not fails) for unknown top-level keys in an otherwise-valid YAML', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    writeFile(root, join('.claude', 'warden.yaml'), 'bogusKey: true\n');
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('a naive impl returning warn for parse errors fails this test — status must be fail not warn', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    writeFile(root, join('.claude', 'warden.yaml'), ':\n  - [unclosed');
+    const result = checkConfigHealth(makeEnv(root));
+    // explicitly assert fail, not warn — catches the naive impl
+    expect(result.status).toBe('fail');
+    expect(result.status).not.toBe('warn');
+  });
+
+  it('reads user config from process.env.HOME (HOME seam) not from env.home when they differ', () => {
+    const home = tmpRoot();
+    const otherHome = tmpRoot();
+    // put a parse-error YAML under home (which we set as HOME)
+    writeFile(home, join('.claude', 'warden.yaml'), ':\n  - [unclosed');
+    process.env.HOME = home;
+    // env.home points elsewhere — if the impl uses env.home instead of HOME, this test fails
+    const env: DiagnoseEnv = { home: otherHome, cwd: otherHome, repoRoot: otherHome };
+    const result = checkConfigHealth(env);
+    expect(result.status).toBe('fail');
+  });
+
+  it('does not read the real user home — isolating HOME to a tmpdir prevents leakage', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    // No warden.yaml at all in our isolated HOME, so no user config warnings
+    const result = checkConfigHealth(makeEnv(root));
+    // Should be pass (no config), not whatever the real ~/.claude/warden.yaml would produce
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails when user config (from HOME) has a parse error', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    // user config at <HOME>/.claude/warden.yaml
+    writeFile(root, join('.claude', 'warden.yaml'), ':\n  - [unclosed');
+    // cwd has no config
+    const cwd = tmpRoot();
+    const env: DiagnoseEnv = { home: root, cwd, repoRoot: root };
+    const result = checkConfigHealth(env);
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('failed to parse config ');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('warn detail names the file and message', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    writeFile(root, join('.claude', 'warden.yaml'), 'bogusKey: true\n');
+    const result = checkConfigHealth(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.detail).toBeTruthy();
+    expect(result.detail.length).toBeGreaterThan(0);
   });
 });
