@@ -355,3 +355,125 @@ describe('CLI: warden validate', () => {
     }
   });
 });
+
+// --- helpers for warden diagnose tests ---
+
+function runDiagnose(
+  subcommand: 'diagnose' | 'doctor',
+  args: string[],
+  home: string,
+): { stdout: string; stderr: string; exitCode: number } {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI_BIN, subcommand, ...args], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+    });
+    return { stdout, stderr: '', exitCode: 0 };
+  } catch (err: any) {
+    return { stdout: err.stdout ?? '', stderr: err.stderr ?? '', exitCode: err.status ?? 1 };
+  }
+}
+
+describe('CLI: warden diagnose', () => {
+  const ALLOWED_STATUSES = new Set(['pass', 'fail', 'warn', 'info', 'skip', 'unknown']);
+
+  it('exits 0 on a healthy env with no shadowed permissions', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      const { exitCode } = runDiagnose('diagnose', ['--cwd', cwd], home);
+      expect(exitCode).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('exits 1 and names the offending Bash deny entry when native permissions shadow warden', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      writeFileSync(
+        join(home, '.claude', 'settings.json'),
+        JSON.stringify({ permissions: { deny: ['Bash(git push:*)'] } }),
+      );
+      const { exitCode, stdout } = runDiagnose('diagnose', ['--cwd', cwd], home);
+      expect(exitCode).toBe(1);
+      expect(stdout).toContain('Bash(git push:*)');
+      // remediation hint must mention removal or the deny list or single authority
+      expect(stdout).toMatch(/remov|deny|single authority/i);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('--json emits the stable check shape with required ids and valid statuses', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      const { exitCode, stdout } = runDiagnose('diagnose', ['--cwd', cwd, '--json'], home);
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(stdout);
+      expect(Array.isArray(result.checks)).toBe(true);
+      for (const check of result.checks) {
+        expect(typeof check.id).toBe('string');
+        expect(typeof check.status).toBe('string');
+        expect(typeof check.detail).toBe('string');
+        expect(ALLOWED_STATUSES.has(check.status)).toBe(true);
+      }
+      const ids = result.checks.map((c: any) => c.id);
+      expect(ids).toContain('native-permissions');
+      expect(ids).toContain('version-sync');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('--json reports native-permissions as fail with a fix when settings.json has a Bash deny entry', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      writeFileSync(
+        join(home, '.claude', 'settings.json'),
+        JSON.stringify({ permissions: { deny: ['Bash(git push:*)'] } }),
+      );
+      const { exitCode, stdout } = runDiagnose('diagnose', ['--cwd', cwd, '--json'], home);
+      expect(exitCode).toBe(1);
+      const result = JSON.parse(stdout);
+      const check = result.checks.find((c: any) => c.id === 'native-permissions');
+      expect(check).toBeDefined();
+      expect(check.status).toBe('fail');
+      expect(typeof check.fix).toBe('string');
+      expect(check.fix.length).toBeGreaterThan(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('doctor alias produces the same check ids as diagnose on a clean env', () => {
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      const diagnoseResult = runDiagnose('diagnose', ['--cwd', cwd, '--json'], home);
+      const doctorResult = runDiagnose('doctor', ['--cwd', cwd, '--json'], home);
+      expect(diagnoseResult.exitCode).toBe(0);
+      expect(doctorResult.exitCode).toBe(0);
+      const diagnoseIds = JSON.parse(diagnoseResult.stdout).checks.map((c: any) => c.id).sort();
+      const doctorIds = JSON.parse(doctorResult.stdout).checks.map((c: any) => c.id).sort();
+      expect(doctorIds).toEqual(diagnoseIds);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
