@@ -672,6 +672,39 @@ trustedSSHHosts:
     }
   });
 
+  it('reports both the missing-decision warning and the unknown-key warning for a targetPolicy entry', () => {
+    const fs = require('fs');
+    const tmpDir = writeWorkspaceConfig('targetpolicy-dual-error', `
+targetPolicies:
+  - type: path
+    path: /tmp
+    pathh: true
+`);
+    try {
+      const config = loadConfig(tmpDir);
+
+      // (a) must warn about the missing/invalid decision on the entry
+      const decisionWarnings = (config.warnings ?? []).filter(
+        (w: ConfigWarning) =>
+          w.path.includes('targetPolicies[0]') &&
+          (w.message.toLowerCase().includes('decision') || w.path.includes('decision')),
+      );
+      expect(decisionWarnings.length).toBeGreaterThan(0);
+
+      // (b) must warn about the unknown key "pathh" (typo of "path")
+      const unknownKeyWarnings = (config.warnings ?? []).filter(
+        (w: ConfigWarning) => w.message === 'unknown key "pathh"',
+      );
+      expect(unknownKeyWarnings).toHaveLength(1);
+      const w = unknownKeyWarnings[0] as ConfigWarning & { suggestion?: string };
+      expect(w.path).toBe('targetPolicies[0].pathh');
+
+      // both problems surface from ONE loadConfig call (implied by the assertions above)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('argPattern without a match key produces zero match-level warnings and no crash', () => {
     const fs = require('fs');
     const tmpDir = writeWorkspaceConfig('no-match-key', `
