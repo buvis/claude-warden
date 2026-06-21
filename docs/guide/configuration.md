@@ -346,3 +346,37 @@ rules:
         decision: allow
         description: Allow bare REPL
 ```
+
+## Validating your config
+
+Warden silently ignores config keys it does not recognize. A typo like `alwaysAlow` or `defualt` is dropped without a sound, so the rule you wrote never takes effect - for a safety tool, a dropped `alwaysDeny` is a hole and a dropped `alwaysAllow` is unexplained prompt noise. `warden validate` catches these before they bite:
+
+```bash
+npx @buvis/claude-warden validate
+```
+
+If the plugin's `warden` binary is on your `PATH`, `warden validate` works too.
+
+It loads both config files (`~/.claude/warden.yaml` and `.claude/warden.yaml`) and reports every problem it finds, grouped by file:
+
+- **Unknown keys (typos)** at every level it parses - top-level, rule fields, match conditions, `trustedRemotes`, and `targetPolicies` entries - each with the nearest known key as a suggestion.
+- Parse errors, invalid `decision` / `default` values, and deprecated keys.
+
+```text
+/Users/you/.claude/warden.yaml
+  alwaysAlow: unknown key "alwaysAlow" (did you mean "alwaysAllow")
+  rules[0].defualt: unknown key "defualt" (did you mean "default")
+2 warning(s) found
+```
+
+The suggestion is advisory only (within a small edit distance); warden never auto-corrects. Deprecated-but-supported keys like the legacy `trusted*` lists keep their own deprecation warning and are not flagged as typos.
+
+A clean config prints `ok — no config problems`. Exit codes make it scriptable in CI: **0** when there are no warnings, **1** when any are found.
+
+| Option | Description |
+|--------|-------------|
+| `--cwd <dir>` | Directory to discover the project config from (defaults to the current directory) |
+| `--json` | Emit the warnings as a JSON array instead of the grouped report |
+
+!!! note "Surfaced at session start too"
+    When your config has problems, warden adds a one-line health note to the guidance it injects at the start of each Claude Code session, pointing you at `warden validate`. The hook itself stays quiet - it never writes these warnings to stderr, which would surface as a hook error in Claude Code.
