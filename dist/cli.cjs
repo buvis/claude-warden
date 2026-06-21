@@ -12425,54 +12425,37 @@ var PROJECT_CONFIG_NAMES = [
   ".claude/warden.yaml",
   ".claude/warden.json"
 ];
+function findConfigFile(paths) {
+  for (const configPath of paths) {
+    currentFile = configPath;
+    const raw = tryLoadFile(configPath);
+    if (raw) return { path: configPath, raw, layer: extractLayer(raw) };
+  }
+  return null;
+}
 function loadConfig(cwd) {
   const warnings = [];
   warningSink = warnings;
   try {
     const config = structuredClone(DEFAULT_CONFIG);
     const defaultLayer = config.layers[0];
-    let userLayer = null;
-    let userRaw = null;
-    let userConfigPath = "";
-    for (const configPath of USER_CONFIG_PATHS) {
-      currentFile = configPath;
-      const result = tryLoadFile(configPath);
-      if (result) {
-        userConfigPath = configPath;
-        userLayer = extractLayer(result);
-        userRaw = result;
-        break;
-      }
-    }
-    let workspaceLayer = null;
-    let workspaceRaw = null;
-    let workspaceConfigPath = "";
-    if (cwd) {
-      for (const name of PROJECT_CONFIG_NAMES) {
-        currentFile = (0, import_path3.join)(cwd, name);
-        const result = tryLoadFile((0, import_path3.join)(cwd, name));
-        if (result) {
-          workspaceConfigPath = (0, import_path3.join)(cwd, name);
-          workspaceLayer = extractLayer(result);
-          workspaceRaw = result;
-          break;
-        }
-      }
-    }
+    const userResult = findConfigFile(USER_CONFIG_PATHS);
+    const projectPaths = cwd ? PROJECT_CONFIG_NAMES.map((n) => (0, import_path3.join)(cwd, n)) : [];
+    const workspaceResult = findConfigFile(projectPaths);
     config.layers = [
-      ...workspaceLayer ? [workspaceLayer] : [],
-      ...userLayer ? [userLayer] : [],
+      ...workspaceResult ? [workspaceResult.layer] : [],
+      ...userResult ? [userResult.layer] : [],
       defaultLayer
     ];
-    if (userRaw) {
-      currentFile = userConfigPath;
-      scanKeys(userRaw, KNOWN_TOP_LEVEL_KEYS, "");
-      mergeNonLayerFields(config, userRaw);
+    if (userResult) {
+      currentFile = userResult.path;
+      scanKeys(userResult.raw, KNOWN_TOP_LEVEL_KEYS, "");
+      mergeNonLayerFields(config, userResult.raw);
     }
-    if (workspaceRaw) {
-      currentFile = workspaceConfigPath;
-      scanKeys(workspaceRaw, KNOWN_TOP_LEVEL_KEYS, "");
-      mergeNonLayerFields(config, workspaceRaw);
+    if (workspaceResult) {
+      currentFile = workspaceResult.path;
+      scanKeys(workspaceResult.raw, KNOWN_TOP_LEVEL_KEYS, "");
+      mergeNonLayerFields(config, workspaceResult.raw);
     }
     config.warnings = warnings;
     return config;
@@ -12573,6 +12556,33 @@ function parseTrustedRemotes(raw, pathPrefix = "trustedRemotes") {
   }
   return results;
 }
+function buildTargetPolicy(obj, typeKey, entryPath) {
+  const base = {
+    decision: obj.decision,
+    ...typeof obj.reason === "string" && { reason: obj.reason },
+    ...Array.isArray(obj.commands) && { commands: obj.commands },
+    ...obj.allowAll === true && { allowAll: true }
+  };
+  if (typeKey === "path") {
+    if (typeof obj.path !== "string") {
+      report(entryPath, `path targetPolicy missing "path" field, skipping`);
+      return null;
+    }
+    return { ...base, type: "path", path: obj.path, recursive: typeof obj.recursive === "boolean" ? obj.recursive : true };
+  }
+  if (typeKey === "database") {
+    if (typeof obj.host !== "string") {
+      report(entryPath, `database targetPolicy missing "host" field, skipping`);
+      return null;
+    }
+    return { ...base, type: "database", host: obj.host, ...typeof obj.port === "number" && { port: obj.port }, ...typeof obj.database === "string" && { database: obj.database } };
+  }
+  if (typeof obj.pattern !== "string") {
+    report(entryPath, `endpoint targetPolicy missing "pattern" field, skipping`);
+    return null;
+  }
+  return { ...base, type: "endpoint", pattern: obj.pattern };
+}
 function parseTargetPolicies(raw, pathPrefix = "targetPolicies") {
   const results = [];
   for (let i = 0; i < raw.length; i++) {
@@ -12588,56 +12598,15 @@ function parseTargetPolicies(raw, pathPrefix = "targetPolicies") {
       report(entryPath, `unknown targetPolicy type "${policyType}", skipping`);
       continue;
     }
+    const typeKey = policyType;
+    const typeTable = typeKey === "path" ? KNOWN_PATH_POLICY_KEYS : typeKey === "database" ? KNOWN_DATABASE_POLICY_KEYS : KNOWN_ENDPOINT_POLICY_KEYS;
+    scanKeys(obj, typeTable, entryPath);
     if (typeof obj.decision !== "string" || !isValidDecision(obj.decision)) {
       report(entryPath, `targetPolicies entry missing or invalid "decision", skipping`);
       continue;
     }
-    const typeKey = policyType;
-    const typeTable = typeKey === "path" ? KNOWN_PATH_POLICY_KEYS : typeKey === "database" ? KNOWN_DATABASE_POLICY_KEYS : KNOWN_ENDPOINT_POLICY_KEYS;
-    scanKeys(obj, typeTable, entryPath);
-    const base = {
-      decision: obj.decision,
-      ...typeof obj.reason === "string" && { reason: obj.reason },
-      ...Array.isArray(obj.commands) && { commands: obj.commands },
-      ...obj.allowAll === true && { allowAll: true }
-    };
-    switch (typeKey) {
-      case "path": {
-        if (typeof obj.path !== "string") {
-          report(`targetPolicies[${i}]`, `path targetPolicy missing "path" field, skipping`);
-          continue;
-        }
-        const policy = { ...base, type: "path", path: obj.path, recursive: typeof obj.recursive === "boolean" ? obj.recursive : true };
-        results.push(policy);
-        break;
-      }
-      case "database": {
-        if (typeof obj.host !== "string") {
-          report(`targetPolicies[${i}]`, `database targetPolicy missing "host" field, skipping`);
-          continue;
-        }
-        const policy = {
-          ...base,
-          type: "database",
-          host: obj.host,
-          ...typeof obj.port === "number" && { port: obj.port },
-          ...typeof obj.database === "string" && { database: obj.database }
-        };
-        results.push(policy);
-        break;
-      }
-      case "endpoint": {
-        if (typeof obj.pattern !== "string") {
-          report(`targetPolicies[${i}]`, `endpoint targetPolicy missing "pattern" field, skipping`);
-          continue;
-        }
-        const policy = { ...base, type: "endpoint", pattern: obj.pattern };
-        results.push(policy);
-        break;
-      }
-      default:
-        report(`targetPolicies[${i}]`, `unknown targetPolicy type "${String(obj.type)}", skipping`);
-    }
+    const policy = buildTargetPolicy(obj, typeKey, entryPath);
+    if (policy) results.push(policy);
   }
   return results;
 }
@@ -14779,8 +14748,7 @@ function runEval(argv) {
   }
   process.exit(EXIT_CODES[result.decision]);
 }
-function runValidate(argv) {
-  setQuiet(true);
+function parseValidateArgs(argv) {
   let cwd = process.cwd();
   let json = false;
   for (let i = 0; i < argv.length; i++) {
@@ -14795,34 +14763,42 @@ function runValidate(argv) {
       process.exit(0);
     }
   }
+  return { cwd, json };
+}
+function printWarningReport(warnings) {
+  const byFile = /* @__PURE__ */ new Map();
+  for (const w of warnings) {
+    const arr = byFile.get(w.file);
+    if (arr) {
+      arr.push(w);
+    } else {
+      byFile.set(w.file, [w]);
+    }
+  }
+  for (const [file, fileWarnings] of byFile) {
+    process.stdout.write(file + "\n");
+    for (const w of fileWarnings) {
+      const line = `  ${w.path}: ${w.message}`;
+      const suggestionLine = w.suggestion ? ` (did you mean "${w.suggestion}")` : "";
+      process.stdout.write(line + suggestionLine + "\n");
+    }
+  }
+  if (warnings.length === 0) {
+    process.stdout.write("ok \u2014 no config problems\n");
+  } else {
+    process.stdout.write(`${warnings.length} warning(s) found
+`);
+  }
+}
+function runValidate(argv) {
+  setQuiet(true);
+  const { cwd, json } = parseValidateArgs(argv);
   const config = loadConfig(cwd);
   const warnings = config.warnings ?? [];
   if (json) {
     process.stdout.write(JSON.stringify(warnings) + "\n");
   } else {
-    const byFile = /* @__PURE__ */ new Map();
-    for (const w of warnings) {
-      const arr = byFile.get(w.file);
-      if (arr) {
-        arr.push(w);
-      } else {
-        byFile.set(w.file, [w]);
-      }
-    }
-    for (const [file, fileWarnings] of byFile) {
-      process.stdout.write(file + "\n");
-      for (const w of fileWarnings) {
-        const line = `  ${w.path}: ${w.message}`;
-        const suggestionLine = w.suggestion ? ` (did you mean "${w.suggestion}")` : "";
-        process.stdout.write(line + suggestionLine + "\n");
-      }
-    }
-    if (warnings.length === 0) {
-      process.stdout.write("ok \u2014 no config problems\n");
-    } else {
-      process.stdout.write(`${warnings.length} warning(s) found
-`);
-    }
+    printWarningReport(warnings);
   }
   process.exit(warnings.length > 0 ? 1 : 0);
 }
