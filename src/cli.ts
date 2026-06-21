@@ -84,9 +84,7 @@ function runEval(argv: string[]): void {
   process.exit(EXIT_CODES[result.decision]);
 }
 
-function runValidate(argv: string[]): void {
-  setQuiet(true);
-
+function parseValidateArgs(argv: string[]): { cwd: string; json: boolean } {
   let cwd = process.cwd();
   let json = false;
 
@@ -103,34 +101,45 @@ function runValidate(argv: string[]): void {
     }
   }
 
+  return { cwd, json };
+}
+
+function printWarningReport(warnings: NonNullable<ReturnType<typeof loadConfig>['warnings']>): void {
+  const byFile = new Map<string, typeof warnings>();
+  for (const w of warnings) {
+    const arr = byFile.get(w.file);
+    if (arr) {
+      arr.push(w);
+    } else {
+      byFile.set(w.file, [w]);
+    }
+  }
+  for (const [file, fileWarnings] of byFile) {
+    process.stdout.write(file + '\n');
+    for (const w of fileWarnings) {
+      const line = `  ${w.path}: ${w.message}`;
+      const suggestionLine = w.suggestion ? ` (did you mean "${w.suggestion}")` : '';
+      process.stdout.write(line + suggestionLine + '\n');
+    }
+  }
+  if (warnings.length === 0) {
+    process.stdout.write('ok — no config problems\n');
+  } else {
+    process.stdout.write(`${warnings.length} warning(s) found\n`);
+  }
+}
+
+function runValidate(argv: string[]): void {
+  setQuiet(true);
+
+  const { cwd, json } = parseValidateArgs(argv);
   const config = loadConfig(cwd);
   const warnings = config.warnings ?? [];
 
   if (json) {
     process.stdout.write(JSON.stringify(warnings) + '\n');
   } else {
-    const byFile = new Map<string, typeof warnings>();
-    for (const w of warnings) {
-      const arr = byFile.get(w.file);
-      if (arr) {
-        arr.push(w);
-      } else {
-        byFile.set(w.file, [w]);
-      }
-    }
-    for (const [file, fileWarnings] of byFile) {
-      process.stdout.write(file + '\n');
-      for (const w of fileWarnings) {
-        const line = `  ${w.path}: ${w.message}`;
-        const suggestionLine = w.suggestion ? ` (did you mean "${w.suggestion}")` : '';
-        process.stdout.write(line + suggestionLine + '\n');
-      }
-    }
-    if (warnings.length === 0) {
-      process.stdout.write('ok — no config problems\n');
-    } else {
-      process.stdout.write(`${warnings.length} warning(s) found\n`);
-    }
+    printWarningReport(warnings);
   }
 
   process.exit(warnings.length > 0 ? 1 : 0);
