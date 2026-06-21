@@ -476,4 +476,68 @@ describe('CLI: warden diagnose', () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  it('warn does not trigger exit 1 (warn is advisory, not a failure)', () => {
+    // config-health returns warn when warden.yaml has an unknown key.
+    // Exit code must be 0 because warn is not fail/unknown.
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      mkdirSync(join(cwd, '.claude'), { recursive: true });
+      writeFileSync(join(cwd, '.claude', 'warden.yaml'), 'notAKey: true\n');
+      const { exitCode, stdout } = runDiagnose('diagnose', ['--cwd', cwd, '--json'], home);
+      const result = JSON.parse(stdout);
+      const configHealth = result.checks.find((c: any) => c.id === 'config-health');
+      expect(configHealth).toBeDefined();
+      expect(configHealth.status).toBe('warn');
+      // No fail or unknown checks → exit 0
+      const hasBlocker = result.checks.some((c: any) => c.status === 'fail' || c.status === 'unknown');
+      expect(hasBlocker).toBe(false);
+      expect(exitCode).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('--cwd is wired through to config-health: unknown key in cwd warden.yaml appears in detail', () => {
+    // Verifies that --cwd flows into runDiagnostics({cwd}) and into checkConfigHealth's loadConfig call.
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      mkdirSync(join(cwd, '.claude'), { recursive: true });
+      writeFileSync(join(cwd, '.claude', 'warden.yaml'), 'notAKey: true\n');
+      const { stdout } = runDiagnose('diagnose', ['--cwd', cwd, '--json'], home);
+      const result = JSON.parse(stdout);
+      const configHealth = result.checks.find((c: any) => c.id === 'config-health');
+      expect(configHealth).toBeDefined();
+      expect(configHealth.status).toBe('warn');
+      expect(configHealth.detail).toContain('notAKey');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('unknown check triggers exit 1', () => {
+    // An unparseable settings.json causes native-permissions to return unknown.
+    // Exit code must be 1.
+    const home = mkdtempSync(join(tmpdir(), 'warden-dhome-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'warden-dcwd-'));
+    try {
+      mkdirSync(join(home, '.claude'), { recursive: true });
+      writeFileSync(join(home, '.claude', 'settings.json'), 'not valid json {{{');
+      const { exitCode, stdout } = runDiagnose('diagnose', ['--cwd', cwd, '--json'], home);
+      const result = JSON.parse(stdout);
+      const nativePerms = result.checks.find((c: any) => c.id === 'native-permissions');
+      expect(nativePerms).toBeDefined();
+      expect(nativePerms.status).toBe('unknown');
+      expect(exitCode).toBe(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 });
