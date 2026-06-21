@@ -14692,8 +14692,8 @@ var import_path6 = require("path");
 var import_os6 = __toESM(require("os"), 1);
 function resolvePluginRoot(env) {
   const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
-  try {
-    if ((0, import_fs4.existsSync)(pluginsJsonPath)) {
+  if ((0, import_fs4.existsSync)(pluginsJsonPath)) {
+    try {
       const raw = (0, import_fs4.readFileSync)(pluginsJsonPath, "utf-8");
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
@@ -14714,8 +14714,10 @@ function resolvePluginRoot(env) {
           }
         }
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { mode: "not-found", root: env.repoRoot, inspectError: `could not inspect ${pluginsJsonPath}: ${msg}` };
     }
-  } catch {
   }
   const pkgPath = (0, import_path6.join)(env.repoRoot, "package.json");
   try {
@@ -14811,6 +14813,14 @@ function checkNativePermissions(env) {
 }
 function checkHookRegistration(env) {
   const pr = resolvePluginRoot(env);
+  if (pr.inspectError) {
+    return {
+      id: "hook-registration",
+      status: "unknown",
+      detail: pr.inspectError,
+      fix: "Fix or restore ~/.claude/plugins/installed_plugins.json so the installed Warden plugin can be located."
+    };
+  }
   if (pr.mode === "not-found") {
     return {
       id: "hook-registration",
@@ -14873,6 +14883,14 @@ function checkHookRegistration(env) {
 }
 function checkBinary(env) {
   const pr = resolvePluginRoot(env);
+  if (pr.inspectError) {
+    return {
+      id: "binary",
+      status: "unknown",
+      detail: pr.inspectError,
+      fix: "Fix or restore ~/.claude/plugins/installed_plugins.json so the installed Warden binary can be located."
+    };
+  }
   if (pr.mode === "not-found") {
     return {
       id: "binary",
@@ -14884,6 +14902,14 @@ function checkBinary(env) {
   const binaryPath = (0, import_path6.join)(pr.root, "dist", "index.cjs");
   try {
     const st = (0, import_fs4.statSync)(binaryPath);
+    if (!st.isFile()) {
+      return {
+        id: "binary",
+        status: "fail",
+        detail: `${binaryPath} exists but is not a regular file.`,
+        fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
+      };
+    }
     if (st.size > 0) {
       return {
         id: "binary",
@@ -14897,12 +14923,21 @@ function checkBinary(env) {
       detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`,
       fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
     };
-  } catch {
+  } catch (err) {
+    const code = err?.code;
+    if (code === "ENOENT") {
+      return {
+        id: "binary",
+        status: "fail",
+        detail: `dist/index.cjs not found at ${binaryPath}.`,
+        fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
+      };
+    }
     return {
       id: "binary",
-      status: "fail",
-      detail: `dist/index.cjs not found at ${binaryPath}.`,
-      fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
+      status: "unknown",
+      detail: `Could not inspect ${binaryPath}: ${err instanceof Error ? err.message : String(err)}`,
+      fix: pr.mode === "dev" ? 'Check permissions on dist/index.cjs, then run "pnpm run build".' : "Check permissions on the installed plugin binary or reinstall the plugin."
     };
   }
 }
@@ -14949,6 +14984,14 @@ function checkAuditWritable(env) {
       status: "warn",
       detail: `Audit directory ${auditDir} does not exist \u2014 Warden will silently drop audit entries.`,
       fix: `Create the directory (mkdir -p ${auditDir}) or fix auditPath in your config.`
+    };
+  }
+  if (!(0, import_fs4.statSync)(auditDir).isDirectory()) {
+    return {
+      id: "audit-writable",
+      status: "warn",
+      detail: `Audit path's parent ${auditDir} is not a directory \u2014 Warden will drop audit entries.`,
+      fix: `Remove ${auditDir} and create it as a directory, or fix auditPath in your config.`
     };
   }
   try {
