@@ -14690,6 +14690,94 @@ function formatSuggestionReport(groups, opts) {
 var import_fs4 = require("fs");
 var import_path6 = require("path");
 var import_os6 = __toESM(require("os"), 1);
+function extractVersionField(obj) {
+  if (obj && typeof obj === "object") {
+    return obj.version;
+  }
+  return void 0;
+}
+function extractMarketplaceWardenVersion(obj) {
+  if (obj && typeof obj === "object") {
+    const plugins = obj.plugins;
+    if (Array.isArray(plugins)) {
+      const warden = plugins.find(
+        (p) => p && typeof p === "object" && p.name === "warden"
+      );
+      if (warden) {
+        return warden.version;
+      }
+    }
+  }
+  return void 0;
+}
+function readStamp(root, relPath, extract, stamps, unparseable) {
+  const fullPath = (0, import_path6.join)(root, relPath);
+  if (!(0, import_fs4.existsSync)(fullPath)) return;
+  try {
+    const raw = (0, import_fs4.readFileSync)(fullPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    const value = extract(parsed);
+    if (value !== void 0) {
+      stamps.push({ label: relPath, value });
+    }
+  } catch {
+    unparseable.push(relPath);
+  }
+}
+function collectBashEntries(entries, path) {
+  const results = [];
+  for (const entry of entries) {
+    if (typeof entry === "string" && isBashEntry(entry)) {
+      results.push({ path, entry });
+    }
+  }
+  return results;
+}
+function scanSettingsFile(path, denyBash, askBash, allowBash) {
+  try {
+    const raw = (0, import_fs4.readFileSync)(path, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return "ok";
+    const obj = parsed;
+    const perms = obj.permissions;
+    if (typeof perms !== "object" || perms === null) return "ok";
+    denyBash.push(...collectBashEntries(Array.isArray(perms.deny) ? perms.deny : [], path));
+    askBash.push(...collectBashEntries(Array.isArray(perms.ask) ? perms.ask : [], path));
+    allowBash.push(...collectBashEntries(Array.isArray(perms.allow) ? perms.allow : [], path));
+    return "ok";
+  } catch {
+    return "unparseable";
+  }
+}
+function readHooksJson(root) {
+  const hooksJsonPath = (0, import_path6.join)(root, "hooks", "hooks.json");
+  try {
+    const raw = (0, import_fs4.readFileSync)(hooksJsonPath, "utf-8");
+    return [JSON.parse(raw), null];
+  } catch {
+    return [null, hooksJsonPath];
+  }
+}
+function hasBashHookForDist(hooksData) {
+  if (!hooksData || typeof hooksData !== "object") return false;
+  const obj = hooksData;
+  const hooksObj = obj.hooks;
+  const preToolUse = hooksObj?.PreToolUse;
+  if (!Array.isArray(preToolUse)) return false;
+  for (const entry of preToolUse) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry;
+    if (e.matcher !== "Bash") continue;
+    const hooks = e.hooks;
+    if (!Array.isArray(hooks)) continue;
+    for (const h of hooks) {
+      if (!h || typeof h !== "object") continue;
+      const cmd = h.command;
+      if (typeof cmd === "string" && cmd.includes("dist/index.cjs")) return true;
+    }
+  }
+  return false;
+}
 function resolvePluginRoot(env) {
   const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
   if ((0, import_fs4.existsSync)(pluginsJsonPath)) {
@@ -14742,44 +14830,17 @@ function isBashEntry(entry) {
 }
 function checkNativePermissions(env) {
   const paths = [...new Set(SETTINGS_FILES.map((fn) => fn(env)))];
-  let unknown = false;
-  let unknownPath = "";
   const denyBash = [];
   const askBash = [];
   const allowBash = [];
+  let unknownPath = "";
   for (const path of paths) {
     if (!(0, import_fs4.existsSync)(path)) continue;
-    try {
-      const raw = (0, import_fs4.readFileSync)(path, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (typeof parsed !== "object" || parsed === null) continue;
-      const obj = parsed;
-      const perms = obj.permissions;
-      if (typeof perms !== "object" || perms === null) continue;
-      const deny = Array.isArray(perms.deny) ? perms.deny : [];
-      const ask = Array.isArray(perms.ask) ? perms.ask : [];
-      const allow = Array.isArray(perms.allow) ? perms.allow : [];
-      for (const entry of deny) {
-        if (typeof entry === "string" && isBashEntry(entry)) {
-          denyBash.push({ path, entry });
-        }
-      }
-      for (const entry of ask) {
-        if (typeof entry === "string" && isBashEntry(entry)) {
-          askBash.push({ path, entry });
-        }
-      }
-      for (const entry of allow) {
-        if (typeof entry === "string" && isBashEntry(entry)) {
-          allowBash.push({ path, entry });
-        }
-      }
-    } catch {
-      unknown = true;
+    if (scanSettingsFile(path, denyBash, askBash, allowBash) === "unparseable") {
       unknownPath = path;
     }
   }
-  if (unknown) {
+  if (unknownPath) {
     return {
       id: "native-permissions",
       status: "unknown",
@@ -14799,17 +14860,9 @@ function checkNativePermissions(env) {
   }
   if (allowBash.length > 0) {
     const detail = allowBash.map((f) => `${f.path}: ${f.entry}`).join("; ");
-    return {
-      id: "native-permissions",
-      status: "info",
-      detail
-    };
+    return { id: "native-permissions", status: "info", detail };
   }
-  return {
-    id: "native-permissions",
-    status: "pass",
-    detail: "No Bash entries found in any settings file."
-  };
+  return { id: "native-permissions", status: "pass", detail: "No Bash entries found in any settings file." };
 }
 function checkHookRegistration(env) {
   const pr = resolvePluginRoot(env);
@@ -14829,51 +14882,20 @@ function checkHookRegistration(env) {
       fix: "Install or reinstall the Warden plugin so its PreToolUse Bash hook is registered."
     };
   }
-  const hooksJsonPath = (0, import_path6.join)(pr.root, "hooks", "hooks.json");
-  let hooksData;
-  try {
-    const raw = (0, import_fs4.readFileSync)(hooksJsonPath, "utf-8");
-    hooksData = JSON.parse(raw);
-  } catch {
+  const [hooksData, errPath] = readHooksJson(pr.root);
+  if (errPath !== null) {
     return {
       id: "hook-registration",
       status: "unknown",
-      detail: `Could not inspect ${hooksJsonPath} - file could not be parsed as JSON.`,
+      detail: `Could not inspect ${errPath} - file could not be parsed as JSON.`,
       fix: "Repair or reinstall the plugin so hooks/hooks.json is valid JSON."
     };
   }
-  if (hooksData && typeof hooksData === "object") {
-    const obj = hooksData;
-    const hooksObj = obj.hooks;
-    const preToolUse = hooksObj?.PreToolUse;
-    if (Array.isArray(preToolUse)) {
-      for (const entry of preToolUse) {
-        if (entry && typeof entry === "object") {
-          const e = entry;
-          if (e.matcher === "Bash") {
-            const hooks = e.hooks;
-            if (Array.isArray(hooks)) {
-              for (const h of hooks) {
-                if (h && typeof h === "object") {
-                  const cmd = h.command;
-                  if (typeof cmd === "string" && cmd.includes("dist/index.cjs")) {
-                    const modeLabel2 = pr.mode === "dev" ? "dev checkout" : "installed plugin";
-                    const pathLabel = pr.mode === "installed" && pr.installPath ? pr.installPath : pr.root;
-                    return {
-                      id: "hook-registration",
-                      status: "pass",
-                      detail: `${modeLabel2} at ${pathLabel} - Bash hook registered with dist/index.cjs.`
-                    };
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   const modeLabel = pr.mode === "dev" ? "dev checkout" : "installed plugin";
+  if (hasBashHookForDist(hooksData)) {
+    const pathLabel = pr.mode === "installed" && pr.installPath ? pr.installPath : pr.root;
+    return { id: "hook-registration", status: "pass", detail: `${modeLabel} at ${pathLabel} - Bash hook registered with dist/index.cjs.` };
+  }
   return {
     id: "hook-registration",
     status: "fail",
@@ -15049,56 +15071,10 @@ function checkVersionSync(env) {
   const root = pr.root;
   const stamps = [];
   const unparseable = [];
-  function readStamp(relPath, extract) {
-    const fullPath = (0, import_path6.join)(root, relPath);
-    if (!(0, import_fs4.existsSync)(fullPath)) return;
-    try {
-      const raw = (0, import_fs4.readFileSync)(fullPath, "utf-8");
-      const parsed = JSON.parse(raw);
-      const value = extract(parsed);
-      if (value !== void 0) {
-        stamps.push({ label: relPath, value });
-      }
-    } catch {
-      unparseable.push(relPath);
-    }
-  }
-  readStamp("package.json", (obj) => {
-    if (obj && typeof obj === "object") {
-      return obj.version;
-    }
-    return void 0;
-  });
-  readStamp(".claude-plugin/plugin.json", (obj) => {
-    if (obj && typeof obj === "object") {
-      return obj.version;
-    }
-    return void 0;
-  });
-  readStamp(".claude-plugin/marketplace.json", (obj) => {
-    if (obj && typeof obj === "object") {
-      const plugins = obj.plugins;
-      if (Array.isArray(plugins)) {
-        const warden = plugins.find((p) => p && typeof p === "object" && p.name === "warden");
-        if (warden) {
-          return warden.version;
-        }
-      }
-    }
-    return void 0;
-  });
-  readStamp("../claude-plugins/.claude-plugin/marketplace.json", (obj) => {
-    if (obj && typeof obj === "object") {
-      const plugins = obj.plugins;
-      if (Array.isArray(plugins)) {
-        const warden = plugins.find((p) => p && typeof p === "object" && p.name === "warden");
-        if (warden) {
-          return warden.version;
-        }
-      }
-    }
-    return void 0;
-  });
+  readStamp(root, "package.json", extractVersionField, stamps, unparseable);
+  readStamp(root, ".claude-plugin/plugin.json", extractVersionField, stamps, unparseable);
+  readStamp(root, ".claude-plugin/marketplace.json", extractMarketplaceWardenVersion, stamps, unparseable);
+  readStamp(root, "../claude-plugins/.claude-plugin/marketplace.json", extractMarketplaceWardenVersion, stamps, unparseable);
   if (unparseable.length > 0) {
     return {
       id: "version-sync",
@@ -15116,15 +15092,10 @@ function checkVersionSync(env) {
     };
   }
   const allSame = stamps.every((s) => s.value === pkgStamp.value);
-  if (allSame) {
-    const detail2 = stamps.map((s) => `${s.label}=${s.value}`).join("; ");
-    return {
-      id: "version-sync",
-      status: "pass",
-      detail: detail2
-    };
-  }
   const detail = stamps.map((s) => `${s.label}=${s.value}`).join("; ");
+  if (allSame) {
+    return { id: "version-sync", status: "pass", detail };
+  }
   return {
     id: "version-sync",
     status: "warn",
