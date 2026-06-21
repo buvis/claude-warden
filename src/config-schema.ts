@@ -62,6 +62,13 @@ const MATCH_CONDITION_SPEC: Record<keyof MatchCondition, true> = {
 export const KNOWN_MATCH_CONDITION_KEYS: ReadonlySet<string> =
   new Set(Object.keys(MATCH_CONDITION_SPEC));
 
+type ArgCountShape = NonNullable<MatchCondition['argCount']>;
+const ARG_COUNT_SPEC: Record<keyof ArgCountShape, true> = {
+  min: true, max: true,
+};
+export const KNOWN_ARG_COUNT_KEYS: ReadonlySet<string> =
+  new Set(Object.keys(ARG_COUNT_SPEC));
+
 const LAYER_SPEC: Record<keyof ConfigLayer, true> = {
   alwaysAllow: true, alwaysDeny: true, rules: true,
 };

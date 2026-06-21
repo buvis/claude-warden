@@ -18,6 +18,7 @@
 ### Fixed
 
 - **script-scanner**: Python `open(*args)` splat calls are no longer treated as a safe single-arg read — the file mode is hidden in the unpacked args and could be a write, so these now ask instead of being silently allowed
+- **rules**: unknown keys inside an `argPattern`'s `argCount` (e.g. a `min`/`max` typo) are now reported with a "did you mean" suggestion instead of being silently dropped, so a mistyped count constraint no longer fails silent
 
 ## [0.12.0] - 2026-06-09
 

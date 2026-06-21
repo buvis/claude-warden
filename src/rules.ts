@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_CONFIG } from './defaults';
 import {
   KNOWN_COMMAND_RULE_KEYS, KNOWN_ARG_PATTERN_KEYS,
-  KNOWN_MATCH_CONDITION_KEYS, KNOWN_LAYER_KEYS,
+  KNOWN_MATCH_CONDITION_KEYS, KNOWN_ARG_COUNT_KEYS, KNOWN_LAYER_KEYS,
   KNOWN_TRUSTED_REMOTE_KEYS, KNOWN_TRUSTED_TARGET_KEYS,
   KNOWN_PATH_POLICY_KEYS, KNOWN_DATABASE_POLICY_KEYS,
   KNOWN_ENDPOINT_POLICY_KEYS, KNOWN_TOP_LEVEL_KEYS,
@@ -158,7 +158,11 @@ function extractLayer(
               pattern.decision = 'ask';
             }
             if (pattern.match && typeof pattern.match === 'object') {
-              scanKeys(pattern.match as Record<string, unknown>, KNOWN_MATCH_CONDITION_KEYS, `${patPath}.match`);
+              const matchObj = pattern.match as Record<string, unknown>;
+              scanKeys(matchObj, KNOWN_MATCH_CONDITION_KEYS, `${patPath}.match`);
+              if (matchObj.argCount && typeof matchObj.argCount === 'object') {
+                scanKeys(matchObj.argCount as Record<string, unknown>, KNOWN_ARG_COUNT_KEYS, `${patPath}.match.argCount`);
+              }
             }
           }
         }
