@@ -185,30 +185,15 @@ function printDiagnoseReport(checks: CheckResult[]): void {
     unknown: '?',
   };
 
-  let pass = 0;
-  let fail = 0;
-  let warn = 0;
-  let info = 0;
-  let skip = 0;
-  let unknown = 0;
-
   for (const check of checks) {
     const symbol = symbolMap[check.status] ?? '?';
     process.stdout.write(`${symbol} ${check.id}: ${check.detail}\n`);
     if ((check.status === 'fail' || check.status === 'warn' || check.status === 'unknown') && check.fix) {
       process.stdout.write(`  → fix: ${check.fix}\n`);
     }
-    switch (check.status) {
-      case 'pass': pass++; break;
-      case 'fail': fail++; break;
-      case 'warn': warn++; break;
-      case 'info': info++; break;
-      case 'skip': skip++; break;
-      case 'unknown': unknown++; break;
-    }
   }
 
-  const problems = fail + warn + unknown;
+  const problems = checks.filter(c => c.status === 'fail' || c.status === 'warn' || c.status === 'unknown').length;
   process.stdout.write(`${checks.length} check(s), ${problems} problem(s)\n`);
 }
 
