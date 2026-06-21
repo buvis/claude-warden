@@ -496,40 +496,14 @@ describe('checkConfigHealth', () => {
     expect(result.status).not.toBe('warn');
   });
 
-  it('reads user config from process.env.HOME (HOME seam) not from env.home when they differ', () => {
-    const home = tmpRoot();
-    const otherHome = tmpRoot();
-    // put a parse-error YAML under home (which we set as HOME)
-    writeFile(home, join('.claude', 'warden.yaml'), ':\n  - [unclosed');
-    process.env.HOME = home;
-    // env.home points elsewhere — if the impl uses env.home instead of HOME, this test fails
-    const env: DiagnoseEnv = { home: otherHome, cwd: otherHome, repoRoot: otherHome };
-    const result = checkConfigHealth(env);
-    expect(result.status).toBe('fail');
-  });
-
-  it('does not read the real user home — isolating HOME to a tmpdir prevents leakage', () => {
-    const root = tmpRoot();
-    process.env.HOME = root;
-    // No warden.yaml at all in our isolated HOME, so no user config warnings
-    const result = checkConfigHealth(makeEnv(root));
-    // Should be pass (no config), not whatever the real ~/.claude/warden.yaml would produce
-    expect(result.status).toBe('pass');
-  });
-
-  it('fails when user config (from HOME) has a parse error', () => {
-    const root = tmpRoot();
-    process.env.HOME = root;
-    // user config at <HOME>/.claude/warden.yaml
-    writeFile(root, join('.claude', 'warden.yaml'), ':\n  - [unclosed');
-    // cwd has no config
-    const cwd = tmpRoot();
-    const env: DiagnoseEnv = { home: root, cwd, repoRoot: root };
-    const result = checkConfigHealth(env);
-    expect(result.status).toBe('fail');
-    expect(result.detail).toContain('failed to parse config ');
-    expect(result.fix).toBeTruthy();
-  });
+  // NOTE: the USER-config HOME seam (a parse error / warning in <HOME>/.claude/warden.yaml)
+  // is not unit-testable in-process. rules.ts computes USER_CONFIG_PATHS as a module-level const
+  // (`join(homedir(), '.claude', 'warden.yaml')`) evaluated once at import, so reassigning
+  // process.env.HOME at runtime does not change which user config loadConfig reads — and the
+  // design forbids modifying rules.ts. The project-config parse-error / unknown-key tests above
+  // cover config-health's warning-partitioning logic in-process; the user-config/HOME seam is
+  // validated across the subprocess boundary by the diagnose CLI integration tests (cli.test.ts),
+  // which set HOME before spawning the built CLI.
 
   it('warn detail names the file and message', () => {
     const root = tmpRoot();
