@@ -198,7 +198,10 @@ export function checkHookRegistration(env: DiagnoseEnv): CheckResult {
 
   if (hooksData && typeof hooksData === 'object') {
     const obj = hooksData as Record<string, unknown>;
-    const preToolUse = obj.PreToolUse as unknown[] | undefined;
+    // Plugin hooks.json nests event arrays under a top-level "hooks" key
+    // ({ hooks: { PreToolUse: [...] } }), matching the Claude Code hook format.
+    const hooksObj = obj.hooks as Record<string, unknown> | undefined;
+    const preToolUse = hooksObj?.PreToolUse as unknown[] | undefined;
     if (Array.isArray(preToolUse)) {
       for (const entry of preToolUse) {
         if (entry && typeof entry === 'object') {

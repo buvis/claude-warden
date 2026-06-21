@@ -219,13 +219,17 @@ function writeFile(dir: string, relpath: string, content: string): void {
 }
 
 function makeHooksJson(command: string): unknown {
+  // Mirrors the real plugin hooks/hooks.json shape: event arrays nest under a
+  // top-level "hooks" key.
   return {
-    PreToolUse: [
-      {
-        matcher: 'Bash',
-        hooks: [{ type: 'command', command }],
-      },
-    ],
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command }],
+        },
+      ],
+    },
   };
 }
 
@@ -263,7 +267,9 @@ describe('checkHookRegistration', () => {
     const root = tmpRoot();
     writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
     writeJson(root, join('hooks', 'hooks.json'), {
-      PreToolUse: [{ matcher: 'Read', hooks: [{ type: 'command', command: 'node dist/index.cjs' }] }],
+      hooks: {
+        PreToolUse: [{ matcher: 'Read', hooks: [{ type: 'command', command: 'node dist/index.cjs' }] }],
+      },
     });
     const result = checkHookRegistration(makeEnv(root));
     expect(result.status).toBe('fail');
