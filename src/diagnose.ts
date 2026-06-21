@@ -29,13 +29,14 @@ interface PluginRoot {
   mode: PluginRootMode;
   root: string;
   installPath?: string;
+  inspectError?: string;
 }
 
 function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
   // 1. Check installed_plugins.json
   const pluginsJsonPath = join(env.home, '.claude', 'plugins', 'installed_plugins.json');
-  try {
-    if (existsSync(pluginsJsonPath)) {
+  if (existsSync(pluginsJsonPath)) {
+    try {
       const raw = readFileSync(pluginsJsonPath, 'utf-8');
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       if (parsed && typeof parsed === 'object') {
@@ -56,9 +57,13 @@ function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
           }
         }
       }
+    } catch (e: unknown) {
+      // File exists but could not be read or parsed — surface as inspectError so
+      // callers can distinguish this from "file absent" and report unknown instead
+      // of silently falling through to the dev-checkout branch (false pass).
+      const msg = e instanceof Error ? e.message : String(e);
+      return { mode: 'not-found', root: env.repoRoot, inspectError: `could not inspect ${pluginsJsonPath}: ${msg}` };
     }
-  } catch {
-    // Tolerate missing/unparseable installed_plugins.json
   }
 
   // 2. Check dev checkout
@@ -173,6 +178,15 @@ export function checkNativePermissions(env: DiagnoseEnv): CheckResult {
 export function checkHookRegistration(env: DiagnoseEnv): CheckResult {
   const pr = resolvePluginRoot(env);
 
+  if (pr.inspectError) {
+    return {
+      id: 'hook-registration',
+      status: 'unknown',
+      detail: pr.inspectError,
+      fix: 'Fix or restore ~/.claude/plugins/installed_plugins.json so the installed Warden plugin can be located.',
+    };
+  }
+
   if (pr.mode === 'not-found') {
     return {
       id: 'hook-registration',
@@ -242,6 +256,15 @@ export function checkHookRegistration(env: DiagnoseEnv): CheckResult {
 export function checkBinary(env: DiagnoseEnv): CheckResult {
   const pr = resolvePluginRoot(env);
 
+  if (pr.inspectError) {
+    return {
+      id: 'binary',
+      status: 'unknown',
+      detail: pr.inspectError,
+      fix: 'Fix or restore ~/.claude/plugins/installed_plugins.json so the installed Warden binary can be located.',
+    };
+  }
+
   if (pr.mode === 'not-found') {
     return {
       id: 'binary',
@@ -254,6 +277,14 @@ export function checkBinary(env: DiagnoseEnv): CheckResult {
   const binaryPath = join(pr.root, 'dist', 'index.cjs');
   try {
     const st = statSync(binaryPath);
+    if (!st.isFile()) {
+      return {
+        id: 'binary',
+        status: 'fail',
+        detail: `${binaryPath} exists but is not a regular file.`,
+        fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
+      };
+    }
     if (st.size > 0) {
       return {
         id: 'binary',
@@ -267,12 +298,21 @@ export function checkBinary(env: DiagnoseEnv): CheckResult {
       detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`,
       fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
     };
-  } catch {
+  } catch (err: unknown) {
+    const code = (err as { code?: string } | undefined)?.code;
+    if (code === 'ENOENT') {
+      return {
+        id: 'binary',
+        status: 'fail',
+        detail: `dist/index.cjs not found at ${binaryPath}.`,
+        fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
+      };
+    }
     return {
       id: 'binary',
-      status: 'fail',
-      detail: `dist/index.cjs not found at ${binaryPath}.`,
-      fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
+      status: 'unknown',
+      detail: `Could not inspect ${binaryPath}: ${err instanceof Error ? err.message : String(err)}`,
+      fix: pr.mode === 'dev' ? 'Check permissions on dist/index.cjs, then run "pnpm run build".' : 'Check permissions on the installed plugin binary or reinstall the plugin.',
     };
   }
 }
@@ -327,6 +367,15 @@ export function checkAuditWritable(env: DiagnoseEnv): CheckResult {
       status: 'warn',
       detail: `Audit directory ${auditDir} does not exist — Warden will silently drop audit entries.`,
       fix: `Create the directory (mkdir -p ${auditDir}) or fix auditPath in your config.`,
+    };
+  }
+
+  if (!statSync(auditDir).isDirectory()) {
+    return {
+      id: 'audit-writable',
+      status: 'warn',
+      detail: `Audit path's parent ${auditDir} is not a directory — Warden will drop audit entries.`,
+      fix: `Remove ${auditDir} and create it as a directory, or fix auditPath in your config.`,
     };
   }
 
