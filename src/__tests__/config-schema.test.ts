@@ -8,6 +8,7 @@ vi.mock('os', async (importOriginal) => {
 import {
   editDistance, nearestKey,
   KNOWN_COMMAND_RULE_KEYS, KNOWN_ARG_PATTERN_KEYS, KNOWN_MATCH_CONDITION_KEYS,
+  KNOWN_ARG_COUNT_KEYS,
   KNOWN_LAYER_KEYS, KNOWN_TRUSTED_REMOTE_KEYS, KNOWN_TRUSTED_TARGET_KEYS,
   KNOWN_TARGET_POLICY_BASE_KEYS, KNOWN_PATH_POLICY_KEYS, KNOWN_DATABASE_POLICY_KEYS,
   KNOWN_ENDPOINT_POLICY_KEYS, LEGACY_TOP_LEVEL_KEYS, KNOWN_TOP_LEVEL_KEYS,
@@ -94,6 +95,10 @@ describe('known-key tables mirror the types.ts interfaces (guard)', () => {
     expectSetEquals(KNOWN_MATCH_CONDITION_KEYS, [
       'argsMatch', 'anyArgMatches', 'noArgs', 'argCount', 'not',
     ]);
+  });
+
+  it('KNOWN_ARG_COUNT_KEYS', () => {
+    expectSetEquals(KNOWN_ARG_COUNT_KEYS, ['min', 'max']);
   });
 
   it('KNOWN_LAYER_KEYS', () => {

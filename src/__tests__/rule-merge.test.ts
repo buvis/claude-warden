@@ -458,6 +458,32 @@ rules:
     }
   });
 
+  it('argCount child-key typo emits an unknown-key warning with correct path and suggestion', () => {
+    const fs = require('fs');
+    const tmpDir = writeWorkspaceConfig('argcount-child-typo', `
+rules:
+  - command: git
+    default: ask
+    argPatterns:
+      - match:
+          argCount:
+            mins: 2
+        decision: deny
+`);
+    try {
+      const config = loadConfig(tmpDir);
+      const unknownWarnings = (config.warnings ?? []).filter(
+        (w: ConfigWarning) => w.message === 'unknown key "mins"',
+      );
+      expect(unknownWarnings).toHaveLength(1);
+      const w = unknownWarnings[0] as ConfigWarning & { suggestion?: string };
+      expect(w.path).toBe('rules[0].argPatterns[0].match.argCount.mins');
+      expect(w.suggestion).toBe('min');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('trustedRemotes entry typo emits an unknown-key warning with correct path and suggestion', () => {
     const fs = require('fs');
     const tmpDir = writeWorkspaceConfig('trustedremotes-typo', `
