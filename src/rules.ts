@@ -69,6 +69,17 @@ const PROJECT_CONFIG_NAMES = [
   '.claude/warden.json',
 ];
 
+function findConfigFile(
+  paths: string[],
+): { path: string; raw: Record<string, unknown>; layer: ConfigLayer } | null {
+  for (const configPath of paths) {
+    currentFile = configPath;
+    const raw = tryLoadFile(configPath);
+    if (raw) return { path: configPath, raw, layer: extractLayer(raw) };
+  }
+  return null;
+}
+
 export function loadConfig(cwd?: string): WardenConfig {
   const warnings: ConfigWarning[] = [];
   warningSink = warnings;
@@ -76,53 +87,25 @@ export function loadConfig(cwd?: string): WardenConfig {
     const config = structuredClone(DEFAULT_CONFIG);
     const defaultLayer = config.layers[0];
 
-    let userLayer: ConfigLayer | null = null;
-    let userRaw: Record<string, unknown> | null = null;
-    let userConfigPath = '';
-    for (const configPath of USER_CONFIG_PATHS) {
-      currentFile = configPath;
-      const result = tryLoadFile(configPath);
-      if (result) {
-        userConfigPath = configPath;
-        userLayer = extractLayer(result);
-        userRaw = result;
-        break;
-      }
-    }
+    const userResult = findConfigFile(USER_CONFIG_PATHS);
+    const projectPaths = cwd ? PROJECT_CONFIG_NAMES.map(n => join(cwd, n)) : [];
+    const workspaceResult = findConfigFile(projectPaths);
 
-    let workspaceLayer: ConfigLayer | null = null;
-    let workspaceRaw: Record<string, unknown> | null = null;
-    let workspaceConfigPath = '';
-    if (cwd) {
-      for (const name of PROJECT_CONFIG_NAMES) {
-        currentFile = join(cwd, name);
-        const result = tryLoadFile(join(cwd, name));
-        if (result) {
-          workspaceConfigPath = join(cwd, name);
-          workspaceLayer = extractLayer(result);
-          workspaceRaw = result;
-          break;
-        }
-      }
-    }
-
-    // Build layers: workspace > user > default
     config.layers = [
-      ...(workspaceLayer ? [workspaceLayer] : []),
-      ...(userLayer ? [userLayer] : []),
+      ...(workspaceResult ? [workspaceResult.layer] : []),
+      ...(userResult ? [userResult.layer] : []),
       defaultLayer,
     ];
 
-    // Merge non-layer fields from user config, then workspace config (workspace wins)
-    if (userRaw) {
-      currentFile = userConfigPath;
-      scanKeys(userRaw, KNOWN_TOP_LEVEL_KEYS, '');
-      mergeNonLayerFields(config, userRaw);
+    if (userResult) {
+      currentFile = userResult.path;
+      scanKeys(userResult.raw, KNOWN_TOP_LEVEL_KEYS, '');
+      mergeNonLayerFields(config, userResult.raw);
     }
-    if (workspaceRaw) {
-      currentFile = workspaceConfigPath;
-      scanKeys(workspaceRaw, KNOWN_TOP_LEVEL_KEYS, '');
-      mergeNonLayerFields(config, workspaceRaw);
+    if (workspaceResult) {
+      currentFile = workspaceResult.path;
+      scanKeys(workspaceResult.raw, KNOWN_TOP_LEVEL_KEYS, '');
+      mergeNonLayerFields(config, workspaceResult.raw);
     }
 
     config.warnings = warnings;
@@ -243,6 +226,39 @@ function parseTrustedRemotes(
   return results;
 }
 
+function buildTargetPolicy(
+  obj: Record<string, unknown>,
+  typeKey: 'path' | 'database' | 'endpoint',
+  entryPath: string,
+): TargetPolicy | null {
+  const base = {
+    decision: obj.decision as 'allow' | 'deny' | 'ask',
+    ...(typeof obj.reason === 'string' && { reason: obj.reason }),
+    ...(Array.isArray(obj.commands) && { commands: obj.commands as string[] }),
+    ...(obj.allowAll === true && { allowAll: true }),
+  };
+  if (typeKey === 'path') {
+    if (typeof obj.path !== 'string') {
+      report(entryPath, `path targetPolicy missing "path" field, skipping`);
+      return null;
+    }
+    return { ...base, type: 'path', path: obj.path, recursive: typeof obj.recursive === 'boolean' ? obj.recursive : true } as PathPolicy;
+  }
+  if (typeKey === 'database') {
+    if (typeof obj.host !== 'string') {
+      report(entryPath, `database targetPolicy missing "host" field, skipping`);
+      return null;
+    }
+    return { ...base, type: 'database', host: obj.host, ...(typeof obj.port === 'number' && { port: obj.port }), ...(typeof obj.database === 'string' && { database: obj.database }) } as DatabasePolicy;
+  }
+  // endpoint
+  if (typeof obj.pattern !== 'string') {
+    report(entryPath, `endpoint targetPolicy missing "pattern" field, skipping`);
+    return null;
+  }
+  return { ...base, type: 'endpoint', pattern: obj.pattern } as EndpointPolicy;
+}
+
 export function parseTargetPolicies(
   raw: unknown[],
   pathPrefix: string = 'targetPolicies',
@@ -261,58 +277,17 @@ export function parseTargetPolicies(
       report(entryPath, `unknown targetPolicy type "${policyType}", skipping`);
       continue;
     }
-    if (typeof obj.decision !== 'string' || !isValidDecision(obj.decision)) {
-      report(entryPath, `targetPolicies entry missing or invalid "decision", skipping`);
-      continue;
-    }
     const typeKey = policyType as 'path' | 'database' | 'endpoint';
     const typeTable = typeKey === 'path' ? KNOWN_PATH_POLICY_KEYS
       : typeKey === 'database' ? KNOWN_DATABASE_POLICY_KEYS
       : KNOWN_ENDPOINT_POLICY_KEYS;
     scanKeys(obj, typeTable, entryPath);
-    const base = {
-      decision: obj.decision,
-      ...(typeof obj.reason === 'string' && { reason: obj.reason }),
-      ...(Array.isArray(obj.commands) && { commands: obj.commands as string[] }),
-      ...(obj.allowAll === true && { allowAll: true }),
-    };
-    switch (typeKey) {
-      case 'path': {
-        if (typeof obj.path !== 'string') {
-          report(`targetPolicies[${i}]`, `path targetPolicy missing "path" field, skipping`);
-          continue;
-        }
-        const policy: PathPolicy = { ...base, type: 'path', path: obj.path, recursive: typeof obj.recursive === 'boolean' ? obj.recursive : true };
-        results.push(policy);
-        break;
-      }
-      case 'database': {
-        if (typeof obj.host !== 'string') {
-          report(`targetPolicies[${i}]`, `database targetPolicy missing "host" field, skipping`);
-          continue;
-        }
-        const policy: DatabasePolicy = {
-          ...base,
-          type: 'database',
-          host: obj.host,
-          ...(typeof obj.port === 'number' && { port: obj.port }),
-          ...(typeof obj.database === 'string' && { database: obj.database }),
-        };
-        results.push(policy);
-        break;
-      }
-      case 'endpoint': {
-        if (typeof obj.pattern !== 'string') {
-          report(`targetPolicies[${i}]`, `endpoint targetPolicy missing "pattern" field, skipping`);
-          continue;
-        }
-        const policy: EndpointPolicy = { ...base, type: 'endpoint', pattern: obj.pattern };
-        results.push(policy);
-        break;
-      }
-      default:
-        report(`targetPolicies[${i}]`, `unknown targetPolicy type "${String(obj.type)}", skipping`);
+    if (typeof obj.decision !== 'string' || !isValidDecision(obj.decision)) {
+      report(entryPath, `targetPolicies entry missing or invalid "decision", skipping`);
+      continue;
     }
+    const policy = buildTargetPolicy(obj, typeKey, entryPath);
+    if (policy) results.push(policy);
   }
   return results;
 }
