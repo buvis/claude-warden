@@ -32,6 +32,125 @@ interface PluginRoot {
   inspectError?: string;
 }
 
+// Extract a plain `.version` field from a parsed JSON object.
+function extractVersionField(obj: unknown): string | undefined {
+  if (obj && typeof obj === 'object') {
+    return (obj as Record<string, unknown>).version as string | undefined;
+  }
+  return undefined;
+}
+
+// Extract `.plugins.find(p => p.name === 'warden').version` from a parsed marketplace JSON.
+function extractMarketplaceWardenVersion(obj: unknown): string | undefined {
+  if (obj && typeof obj === 'object') {
+    const plugins = (obj as Record<string, unknown>).plugins as unknown[] | undefined;
+    if (Array.isArray(plugins)) {
+      const warden = plugins.find(
+        (p: unknown) => p && typeof p === 'object' && (p as Record<string, unknown>).name === 'warden'
+      );
+      if (warden) {
+        return (warden as Record<string, unknown>).version as string | undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+// Read a JSON stamp file relative to root; push the extracted value into stamps
+// or push relPath into unparseable when the file exists but cannot be parsed.
+function readStamp(
+  root: string,
+  relPath: string,
+  extract: (obj: unknown) => string | undefined,
+  stamps: { label: string; value: string }[],
+  unparseable: string[]
+): void {
+  const fullPath = join(root, relPath);
+  if (!existsSync(fullPath)) return;
+  try {
+    const raw = readFileSync(fullPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const value = extract(parsed);
+    if (value !== undefined) {
+      stamps.push({ label: relPath, value });
+    }
+  } catch {
+    // Present but unparseable — a load-bearing stamp we could not inspect.
+    // Record it so the check fails loud (unknown) rather than silently
+    // dropping it, which could otherwise produce a false 'pass'.
+    unparseable.push(relPath);
+  }
+}
+
+// Collect all Bash/Bash(...) entries from an array into { path, entry } pairs.
+function collectBashEntries(entries: unknown[], path: string): { path: string; entry: string }[] {
+  const results: { path: string; entry: string }[] = [];
+  for (const entry of entries) {
+    if (typeof entry === 'string' && isBashEntry(entry)) {
+      results.push({ path, entry });
+    }
+  }
+  return results;
+}
+
+// Scan a single settings file for Bash entries in deny/ask/allow buckets.
+// Returns undefined when the file cannot be parsed (caller treats as unknown).
+function scanSettingsFile(
+  path: string,
+  denyBash: { path: string; entry: string }[],
+  askBash: { path: string; entry: string }[],
+  allowBash: { path: string; entry: string }[]
+): 'ok' | 'unparseable' {
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return 'ok';
+    const obj = parsed as Record<string, unknown>;
+    const perms = obj.permissions as Record<string, unknown> | undefined;
+    if (typeof perms !== 'object' || perms === null) return 'ok';
+    denyBash.push(...collectBashEntries(Array.isArray(perms.deny) ? perms.deny : [], path));
+    askBash.push(...collectBashEntries(Array.isArray(perms.ask) ? perms.ask : [], path));
+    allowBash.push(...collectBashEntries(Array.isArray(perms.allow) ? perms.allow : [], path));
+    return 'ok';
+  } catch {
+    return 'unparseable';
+  }
+}
+
+// Read and parse hooks.json, returning [data, null] on success or [null, errorPath] on failure.
+function readHooksJson(root: string): [unknown, null] | [null, string] {
+  const hooksJsonPath = join(root, 'hooks', 'hooks.json');
+  try {
+    const raw = readFileSync(hooksJsonPath, 'utf-8');
+    return [JSON.parse(raw), null];
+  } catch {
+    return [null, hooksJsonPath];
+  }
+}
+
+// Return true if hooks.json data contains a PreToolUse Bash matcher whose
+// command includes 'dist/index.cjs'.
+function hasBashHookForDist(hooksData: unknown): boolean {
+  if (!hooksData || typeof hooksData !== 'object') return false;
+  const obj = hooksData as Record<string, unknown>;
+  const hooksObj = obj.hooks as Record<string, unknown> | undefined;
+  const preToolUse = hooksObj?.PreToolUse as unknown[] | undefined;
+  if (!Array.isArray(preToolUse)) return false;
+  for (const entry of preToolUse) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    if (e.matcher !== 'Bash') continue;
+    const hooks = e.hooks as unknown[] | undefined;
+    if (!Array.isArray(hooks)) continue;
+    for (const h of hooks) {
+      if (!h || typeof h !== 'object') continue;
+      const cmd = (h as Record<string, unknown>).command as string | undefined;
+      if (typeof cmd === 'string' && cmd.includes('dist/index.cjs')) return true;
+    }
+  }
+  return false;
+}
+
 function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
   // 1. Check installed_plugins.json
   const pluginsJsonPath = join(env.home, '.claude', 'plugins', 'installed_plugins.json');
@@ -96,50 +215,19 @@ function isBashEntry(entry: string): boolean {
 
 export function checkNativePermissions(env: DiagnoseEnv): CheckResult {
   const paths = [...new Set(SETTINGS_FILES.map(fn => fn(env)))];
-
-  let unknown = false;
-  let unknownPath = '';
   const denyBash: { path: string; entry: string }[] = [];
   const askBash: { path: string; entry: string }[] = [];
   const allowBash: { path: string; entry: string }[] = [];
+  let unknownPath = '';
 
   for (const path of paths) {
     if (!existsSync(path)) continue;
-
-    try {
-      const raw = readFileSync(path, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (typeof parsed !== 'object' || parsed === null) continue;
-      const obj = parsed as Record<string, unknown>;
-      const perms = obj.permissions as Record<string, unknown> | undefined;
-      if (typeof perms !== 'object' || perms === null) continue;
-
-      const deny = Array.isArray(perms.deny) ? perms.deny : [];
-      const ask = Array.isArray(perms.ask) ? perms.ask : [];
-      const allow = Array.isArray(perms.allow) ? perms.allow : [];
-
-      for (const entry of deny) {
-        if (typeof entry === 'string' && isBashEntry(entry)) {
-          denyBash.push({ path, entry });
-        }
-      }
-      for (const entry of ask) {
-        if (typeof entry === 'string' && isBashEntry(entry)) {
-          askBash.push({ path, entry });
-        }
-      }
-      for (const entry of allow) {
-        if (typeof entry === 'string' && isBashEntry(entry)) {
-          allowBash.push({ path, entry });
-        }
-      }
-    } catch {
-      unknown = true;
+    if (scanSettingsFile(path, denyBash, askBash, allowBash) === 'unparseable') {
       unknownPath = path;
     }
   }
 
-  if (unknown) {
+  if (unknownPath) {
     return {
       id: 'native-permissions',
       status: 'unknown',
@@ -161,18 +249,10 @@ export function checkNativePermissions(env: DiagnoseEnv): CheckResult {
 
   if (allowBash.length > 0) {
     const detail = allowBash.map(f => `${f.path}: ${f.entry}`).join('; ');
-    return {
-      id: 'native-permissions',
-      status: 'info',
-      detail,
-    };
+    return { id: 'native-permissions', status: 'info', detail };
   }
 
-  return {
-    id: 'native-permissions',
-    status: 'pass',
-    detail: 'No Bash entries found in any settings file.',
-  };
+  return { id: 'native-permissions', status: 'pass', detail: 'No Bash entries found in any settings file.' };
 }
 
 export function checkHookRegistration(env: DiagnoseEnv): CheckResult {
@@ -196,55 +276,22 @@ export function checkHookRegistration(env: DiagnoseEnv): CheckResult {
     };
   }
 
-  const hooksJsonPath = join(pr.root, 'hooks', 'hooks.json');
-  let hooksData: unknown;
-  try {
-    const raw = readFileSync(hooksJsonPath, 'utf-8');
-    hooksData = JSON.parse(raw);
-  } catch {
+  const [hooksData, errPath] = readHooksJson(pr.root);
+  if (errPath !== null) {
     return {
       id: 'hook-registration',
       status: 'unknown',
-      detail: `Could not inspect ${hooksJsonPath} - file could not be parsed as JSON.`,
+      detail: `Could not inspect ${errPath} - file could not be parsed as JSON.`,
       fix: 'Repair or reinstall the plugin so hooks/hooks.json is valid JSON.',
     };
   }
 
-  if (hooksData && typeof hooksData === 'object') {
-    const obj = hooksData as Record<string, unknown>;
-    // Plugin hooks.json nests event arrays under a top-level "hooks" key
-    // ({ hooks: { PreToolUse: [...] } }), matching the Claude Code hook format.
-    const hooksObj = obj.hooks as Record<string, unknown> | undefined;
-    const preToolUse = hooksObj?.PreToolUse as unknown[] | undefined;
-    if (Array.isArray(preToolUse)) {
-      for (const entry of preToolUse) {
-        if (entry && typeof entry === 'object') {
-          const e = entry as Record<string, unknown>;
-          if (e.matcher === 'Bash') {
-            const hooks = e.hooks as unknown[] | undefined;
-            if (Array.isArray(hooks)) {
-              for (const h of hooks) {
-                if (h && typeof h === 'object') {
-                  const cmd = (h as Record<string, unknown>).command as string | undefined;
-                  if (typeof cmd === 'string' && cmd.includes('dist/index.cjs')) {
-                    const modeLabel = pr.mode === 'dev' ? 'dev checkout' : 'installed plugin';
-                    const pathLabel = pr.mode === 'installed' && pr.installPath ? pr.installPath : pr.root;
-                    return {
-                      id: 'hook-registration',
-                      status: 'pass',
-                      detail: `${modeLabel} at ${pathLabel} - Bash hook registered with dist/index.cjs.`,
-                    };
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+  const modeLabel = pr.mode === 'dev' ? 'dev checkout' : 'installed plugin';
+  if (hasBashHookForDist(hooksData)) {
+    const pathLabel = pr.mode === 'installed' && pr.installPath ? pr.installPath : pr.root;
+    return { id: 'hook-registration', status: 'pass', detail: `${modeLabel} at ${pathLabel} - Bash hook registered with dist/index.cjs.` };
   }
 
-  const modeLabel = pr.mode === 'dev' ? 'dev checkout' : 'installed plugin';
   return {
     id: 'hook-registration',
     status: 'fail',
@@ -438,68 +485,10 @@ export function checkVersionSync(env: DiagnoseEnv): CheckResult {
   const stamps: { label: string; value: string }[] = [];
   const unparseable: string[] = [];
 
-  // Helper to read a JSON stamp file
-  function readStamp(relPath: string, extract: (obj: unknown) => string | undefined): void {
-    const fullPath = join(root, relPath);
-    if (!existsSync(fullPath)) return;
-    try {
-      const raw = readFileSync(fullPath, 'utf-8');
-      const parsed = JSON.parse(raw);
-      const value = extract(parsed);
-      if (value !== undefined) {
-        stamps.push({ label: relPath, value });
-      }
-    } catch {
-      // Present but unparseable — a load-bearing stamp we could not inspect.
-      // Record it so the check fails loud (unknown) rather than silently
-      // dropping it, which could otherwise produce a false 'pass'.
-      unparseable.push(relPath);
-    }
-  }
-
-  // package.json -> .version
-  readStamp('package.json', (obj: unknown) => {
-    if (obj && typeof obj === 'object') {
-      return (obj as Record<string, unknown>).version as string | undefined;
-    }
-    return undefined;
-  });
-
-  // .claude-plugin/plugin.json -> .version
-  readStamp('.claude-plugin/plugin.json', (obj: unknown) => {
-    if (obj && typeof obj === 'object') {
-      return (obj as Record<string, unknown>).version as string | undefined;
-    }
-    return undefined;
-  });
-
-  // .claude-plugin/marketplace.json -> plugins.find(p => p.name === 'warden').version
-  readStamp('.claude-plugin/marketplace.json', (obj: unknown) => {
-    if (obj && typeof obj === 'object') {
-      const plugins = (obj as Record<string, unknown>).plugins as unknown[] | undefined;
-      if (Array.isArray(plugins)) {
-        const warden = plugins.find((p: unknown) => p && typeof p === 'object' && (p as Record<string, unknown>).name === 'warden');
-        if (warden) {
-          return (warden as Record<string, unknown>).version as string | undefined;
-        }
-      }
-    }
-    return undefined;
-  });
-
-  // ../claude-plugins/.claude-plugin/marketplace.json (sibling marketplace, dev only)
-  readStamp('../claude-plugins/.claude-plugin/marketplace.json', (obj: unknown) => {
-    if (obj && typeof obj === 'object') {
-      const plugins = (obj as Record<string, unknown>).plugins as unknown[] | undefined;
-      if (Array.isArray(plugins)) {
-        const warden = plugins.find((p: unknown) => p && typeof p === 'object' && (p as Record<string, unknown>).name === 'warden');
-        if (warden) {
-          return (warden as Record<string, unknown>).version as string | undefined;
-        }
-      }
-    }
-    return undefined;
-  });
+  readStamp(root, 'package.json', extractVersionField, stamps, unparseable);
+  readStamp(root, '.claude-plugin/plugin.json', extractVersionField, stamps, unparseable);
+  readStamp(root, '.claude-plugin/marketplace.json', extractMarketplaceWardenVersion, stamps, unparseable);
+  readStamp(root, '../claude-plugins/.claude-plugin/marketplace.json', extractMarketplaceWardenVersion, stamps, unparseable);
 
   // A present-but-unparseable stamp could not be inspected: fail loud (unknown)
   // before any pass/skip verdict, so a corrupt stamp never reads as green.
@@ -524,17 +513,12 @@ export function checkVersionSync(env: DiagnoseEnv): CheckResult {
 
   // All reachable stamps agree -> pass
   const allSame = stamps.every(s => s.value === pkgStamp.value);
+  const detail = stamps.map(s => `${s.label}=${s.value}`).join('; ');
   if (allSame) {
-    const detail = stamps.map(s => `${s.label}=${s.value}`).join('; ');
-    return {
-      id: 'version-sync',
-      status: 'pass',
-      detail,
-    };
+    return { id: 'version-sync', status: 'pass', detail };
   }
 
   // Any stamp differs -> warn
-  const detail = stamps.map(s => `${s.label}=${s.value}`).join('; ');
   return {
     id: 'version-sync',
     status: 'warn',
