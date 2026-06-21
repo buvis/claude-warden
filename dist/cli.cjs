@@ -15293,12 +15293,6 @@ function printDiagnoseReport(checks) {
     skip: "\u2013",
     unknown: "?"
   };
-  let pass = 0;
-  let fail = 0;
-  let warn2 = 0;
-  let info = 0;
-  let skip = 0;
-  let unknown = 0;
   for (const check of checks) {
     const symbol = symbolMap[check.status] ?? "?";
     process.stdout.write(`${symbol} ${check.id}: ${check.detail}
@@ -15307,28 +15301,8 @@ function printDiagnoseReport(checks) {
       process.stdout.write(`  \u2192 fix: ${check.fix}
 `);
     }
-    switch (check.status) {
-      case "pass":
-        pass++;
-        break;
-      case "fail":
-        fail++;
-        break;
-      case "warn":
-        warn2++;
-        break;
-      case "info":
-        info++;
-        break;
-      case "skip":
-        skip++;
-        break;
-      case "unknown":
-        unknown++;
-        break;
-    }
   }
-  const problems = fail + warn2 + unknown;
+  const problems = checks.filter((c) => c.status === "fail" || c.status === "warn" || c.status === "unknown").length;
   process.stdout.write(`${checks.length} check(s), ${problems} problem(s)
 `);
 }
