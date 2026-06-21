@@ -58,6 +58,7 @@ nav:
       - YOLO Mode: guide/yolo-mode.md
       - Slash Commands: guide/slash-commands.md
       - Notifications & Audit: guide/notifications-audit.md
+      - Troubleshooting: guide/troubleshooting.md
       - FAQ: guide/faq.md
   - Developer Guide:
       - Architecture: dev/architecture.md
