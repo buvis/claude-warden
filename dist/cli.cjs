@@ -14686,6 +14686,440 @@ function formatSuggestionReport(groups, opts) {
   return lines.join("\n");
 }
 
+// src/diagnose.ts
+var import_fs4 = require("fs");
+var import_path6 = require("path");
+var import_os6 = __toESM(require("os"), 1);
+function resolvePluginRoot(env) {
+  const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
+  try {
+    if ((0, import_fs4.existsSync)(pluginsJsonPath)) {
+      const raw = (0, import_fs4.readFileSync)(pluginsJsonPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        const plugins = parsed.plugins;
+        if (plugins && typeof plugins === "object") {
+          for (const key of Object.keys(plugins)) {
+            const namePart = key.split("@")[0];
+            if (namePart === "warden") {
+              const entries = plugins[key];
+              if (Array.isArray(entries) && entries.length > 0) {
+                const first = entries[0];
+                const installPath = first.installPath;
+                if (installPath && (0, import_fs4.existsSync)(installPath)) {
+                  return { mode: "installed", root: installPath, installPath };
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {
+  }
+  const pkgPath = (0, import_path6.join)(env.repoRoot, "package.json");
+  try {
+    if ((0, import_fs4.existsSync)(pkgPath)) {
+      const raw = (0, import_fs4.readFileSync)(pkgPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed.name === "@buvis/claude-warden") {
+        return { mode: "dev", root: env.repoRoot };
+      }
+    }
+  } catch {
+  }
+  return { mode: "not-found", root: env.repoRoot };
+}
+var SETTINGS_FILES = [
+  (env) => (0, import_path6.join)(env.home, ".claude", "settings.json"),
+  (env) => (0, import_path6.join)(env.cwd, ".claude", "settings.json"),
+  (env) => (0, import_path6.join)(env.cwd, ".claude", "settings.local.json")
+];
+function isBashEntry(entry) {
+  return entry === "Bash" || entry.startsWith("Bash(");
+}
+function checkNativePermissions(env) {
+  const paths = [...new Set(SETTINGS_FILES.map((fn) => fn(env)))];
+  let unknown = false;
+  let unknownPath = "";
+  const denyBash = [];
+  const askBash = [];
+  const allowBash = [];
+  for (const path of paths) {
+    if (!(0, import_fs4.existsSync)(path)) continue;
+    try {
+      const raw = (0, import_fs4.readFileSync)(path, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null) continue;
+      const obj = parsed;
+      const perms = obj.permissions;
+      if (typeof perms !== "object" || perms === null) continue;
+      const deny = Array.isArray(perms.deny) ? perms.deny : [];
+      const ask = Array.isArray(perms.ask) ? perms.ask : [];
+      const allow = Array.isArray(perms.allow) ? perms.allow : [];
+      for (const entry of deny) {
+        if (typeof entry === "string" && isBashEntry(entry)) {
+          denyBash.push({ path, entry });
+        }
+      }
+      for (const entry of ask) {
+        if (typeof entry === "string" && isBashEntry(entry)) {
+          askBash.push({ path, entry });
+        }
+      }
+      for (const entry of allow) {
+        if (typeof entry === "string" && isBashEntry(entry)) {
+          allowBash.push({ path, entry });
+        }
+      }
+    } catch {
+      unknown = true;
+      unknownPath = path;
+    }
+  }
+  if (unknown) {
+    return {
+      id: "native-permissions",
+      status: "unknown",
+      detail: `Could not inspect ${unknownPath} - file could not be parsed as JSON.`,
+      fix: `Fix or remove the malformed settings file at ${unknownPath}.`
+    };
+  }
+  if (denyBash.length > 0 || askBash.length > 0) {
+    const findings = [...denyBash, ...askBash];
+    const detail = findings.map((f) => `${f.path}: ${f.entry}`).join("; ");
+    return {
+      id: "native-permissions",
+      status: "fail",
+      detail,
+      fix: "Remove these Bash entries from permissions.deny/ask - native CC permissions run before Warden's hook and shadow it; Warden is the single authority for Bash policy."
+    };
+  }
+  if (allowBash.length > 0) {
+    const detail = allowBash.map((f) => `${f.path}: ${f.entry}`).join("; ");
+    return {
+      id: "native-permissions",
+      status: "info",
+      detail
+    };
+  }
+  return {
+    id: "native-permissions",
+    status: "pass",
+    detail: "No Bash entries found in any settings file."
+  };
+}
+function checkHookRegistration(env) {
+  const pr = resolvePluginRoot(env);
+  if (pr.mode === "not-found") {
+    return {
+      id: "hook-registration",
+      status: "fail",
+      detail: `Warden plugin not found: no installed entry in installed_plugins.json and ${pr.root} is not the warden source tree.`,
+      fix: "Install or reinstall the Warden plugin so its PreToolUse Bash hook is registered."
+    };
+  }
+  const hooksJsonPath = (0, import_path6.join)(pr.root, "hooks", "hooks.json");
+  let hooksData;
+  try {
+    const raw = (0, import_fs4.readFileSync)(hooksJsonPath, "utf-8");
+    hooksData = JSON.parse(raw);
+  } catch {
+    return {
+      id: "hook-registration",
+      status: "unknown",
+      detail: `Could not inspect ${hooksJsonPath} - file could not be parsed as JSON.`,
+      fix: "Repair or reinstall the plugin so hooks/hooks.json is valid JSON."
+    };
+  }
+  if (hooksData && typeof hooksData === "object") {
+    const obj = hooksData;
+    const hooksObj = obj.hooks;
+    const preToolUse = hooksObj?.PreToolUse;
+    if (Array.isArray(preToolUse)) {
+      for (const entry of preToolUse) {
+        if (entry && typeof entry === "object") {
+          const e = entry;
+          if (e.matcher === "Bash") {
+            const hooks = e.hooks;
+            if (Array.isArray(hooks)) {
+              for (const h of hooks) {
+                if (h && typeof h === "object") {
+                  const cmd = h.command;
+                  if (typeof cmd === "string" && cmd.includes("dist/index.cjs")) {
+                    const modeLabel2 = pr.mode === "dev" ? "dev checkout" : "installed plugin";
+                    const pathLabel = pr.mode === "installed" && pr.installPath ? pr.installPath : pr.root;
+                    return {
+                      id: "hook-registration",
+                      status: "pass",
+                      detail: `${modeLabel2} at ${pathLabel} - Bash hook registered with dist/index.cjs.`
+                    };
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  const modeLabel = pr.mode === "dev" ? "dev checkout" : "installed plugin";
+  return {
+    id: "hook-registration",
+    status: "fail",
+    detail: `${modeLabel} at ${pr.root}: hooks.json parsed but no Bash matcher with dist/index.cjs found.`,
+    fix: "Repair or reinstall the plugin so its PreToolUse Bash hook references dist/index.cjs."
+  };
+}
+function checkBinary(env) {
+  const pr = resolvePluginRoot(env);
+  if (pr.mode === "not-found") {
+    return {
+      id: "binary",
+      status: "fail",
+      detail: `No plugin root found at ${pr.root} - cannot locate dist/index.cjs.`,
+      fix: "Install or reinstall the Warden plugin."
+    };
+  }
+  const binaryPath = (0, import_path6.join)(pr.root, "dist", "index.cjs");
+  try {
+    const st = (0, import_fs4.statSync)(binaryPath);
+    if (st.size > 0) {
+      return {
+        id: "binary",
+        status: "pass",
+        detail: `dist/index.cjs found at ${binaryPath} (${st.size} bytes).`
+      };
+    }
+    return {
+      id: "binary",
+      status: "fail",
+      detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`,
+      fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
+    };
+  } catch {
+    return {
+      id: "binary",
+      status: "fail",
+      detail: `dist/index.cjs not found at ${binaryPath}.`,
+      fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
+    };
+  }
+}
+function checkConfigHealth(env) {
+  setQuiet(true);
+  const config = loadConfig(env.cwd);
+  const warnings = config.warnings ?? [];
+  if (warnings.length === 0) {
+    return {
+      id: "config-health",
+      status: "pass",
+      detail: "No config warnings found."
+    };
+  }
+  const parseErrors = warnings.filter((w) => w.message.startsWith("failed to parse config "));
+  if (parseErrors.length > 0) {
+    const detail2 = parseErrors.map((w) => `${w.file}: ${w.message}`).join("; ");
+    return {
+      id: "config-health",
+      status: "fail",
+      detail: detail2,
+      fix: "Fix the YAML/JSON syntax errors in the config files listed above."
+    };
+  }
+  const detail = warnings.map((w) => {
+    let s = `${w.file}: ${w.path} - ${w.message}`;
+    if (w.suggestion) s += ` (did you mean ${w.suggestion}?)`;
+    return s;
+  }).join("; ");
+  return {
+    id: "config-health",
+    status: "warn",
+    detail,
+    fix: "Review and correct the config warnings listed above."
+  };
+}
+function checkAuditWritable(env) {
+  setQuiet(true);
+  const auditPath = loadConfig(env.cwd).auditPath;
+  const auditDir = (0, import_path6.dirname)(auditPath);
+  if (!(0, import_fs4.existsSync)(auditDir)) {
+    return {
+      id: "audit-writable",
+      status: "warn",
+      detail: `Audit directory ${auditDir} does not exist \u2014 Warden will silently drop audit entries.`,
+      fix: `Create the directory (mkdir -p ${auditDir}) or fix auditPath in your config.`
+    };
+  }
+  try {
+    (0, import_fs4.accessSync)(auditDir, import_fs4.constants.W_OK);
+    return {
+      id: "audit-writable",
+      status: "pass",
+      detail: `Audit directory ${auditDir} is writable.`
+    };
+  } catch (err) {
+    const code = err?.code;
+    if (code === "EACCES") {
+      return {
+        id: "audit-writable",
+        status: "fail",
+        detail: `Audit directory ${auditDir} is not writable \u2014 Warden silently drops audit entries it cannot write.`,
+        fix: `Make ${auditDir} writable (e.g. chmod u+w ${auditDir}).`
+      };
+    }
+    return {
+      id: "audit-writable",
+      status: "unknown",
+      detail: `Could not inspect writability of ${auditDir}: ${err instanceof Error ? err.message : String(err)}`,
+      fix: "Check permissions or filesystem state for the audit directory."
+    };
+  }
+}
+function checkPipelineProbe(env) {
+  try {
+    const r = wardenEvalWithConfig("echo warden-diagnose-probe", DEFAULT_CONFIG);
+    if (r.decision === "allow") {
+      return {
+        id: "pipeline-probe",
+        status: "pass",
+        detail: "In-process probe against default config returned allow."
+      };
+    }
+    return {
+      id: "pipeline-probe",
+      status: "fail",
+      detail: `Pipeline probe returned decision "${r.decision}" (reason: ${r.reason ?? "none"}). Expected allow.`,
+      fix: "The parser+evaluator pipeline is misconfigured \u2014 check Warden evaluation rules."
+    };
+  } catch (e) {
+    return {
+      id: "pipeline-probe",
+      status: "fail",
+      detail: `Pipeline probe threw: ${e instanceof Error ? e.message : String(e)}`,
+      fix: "The parser+evaluator pipeline is broken \u2014 check Warden evaluation rules."
+    };
+  }
+}
+function checkVersionSync(env) {
+  const pr = resolvePluginRoot(env);
+  const root = pr.root;
+  const stamps = [];
+  const unparseable = [];
+  function readStamp(relPath, extract) {
+    const fullPath = (0, import_path6.join)(root, relPath);
+    if (!(0, import_fs4.existsSync)(fullPath)) return;
+    try {
+      const raw = (0, import_fs4.readFileSync)(fullPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      const value = extract(parsed);
+      if (value !== void 0) {
+        stamps.push({ label: relPath, value });
+      }
+    } catch {
+      unparseable.push(relPath);
+    }
+  }
+  readStamp("package.json", (obj) => {
+    if (obj && typeof obj === "object") {
+      return obj.version;
+    }
+    return void 0;
+  });
+  readStamp(".claude-plugin/plugin.json", (obj) => {
+    if (obj && typeof obj === "object") {
+      return obj.version;
+    }
+    return void 0;
+  });
+  readStamp(".claude-plugin/marketplace.json", (obj) => {
+    if (obj && typeof obj === "object") {
+      const plugins = obj.plugins;
+      if (Array.isArray(plugins)) {
+        const warden = plugins.find((p) => p && typeof p === "object" && p.name === "warden");
+        if (warden) {
+          return warden.version;
+        }
+      }
+    }
+    return void 0;
+  });
+  readStamp("../claude-plugins/.claude-plugin/marketplace.json", (obj) => {
+    if (obj && typeof obj === "object") {
+      const plugins = obj.plugins;
+      if (Array.isArray(plugins)) {
+        const warden = plugins.find((p) => p && typeof p === "object" && p.name === "warden");
+        if (warden) {
+          return warden.version;
+        }
+      }
+    }
+    return void 0;
+  });
+  if (unparseable.length > 0) {
+    return {
+      id: "version-sync",
+      status: "unknown",
+      detail: `Could not parse version stamp(s): ${unparseable.join(", ")} (at ${root}).`,
+      fix: "Fix the JSON syntax in the listed version stamp file(s)."
+    };
+  }
+  const pkgStamp = stamps.find((s) => s.label === "package.json");
+  if (!pkgStamp) {
+    return {
+      id: "version-sync",
+      status: "skip",
+      detail: "version-sync only runs against the warden source/plugin tree."
+    };
+  }
+  const allSame = stamps.every((s) => s.value === pkgStamp.value);
+  if (allSame) {
+    const detail2 = stamps.map((s) => `${s.label}=${s.value}`).join("; ");
+    return {
+      id: "version-sync",
+      status: "pass",
+      detail: detail2
+    };
+  }
+  const detail = stamps.map((s) => `${s.label}=${s.value}`).join("; ");
+  return {
+    id: "version-sync",
+    status: "warn",
+    detail,
+    fix: "Resync the version stamps (the release script dev/bin/release resyncs them)."
+  };
+}
+function runDiagnostics(env) {
+  const resolved = {
+    home: env?.home ?? import_os6.default.homedir(),
+    cwd: env?.cwd ?? process.cwd(),
+    repoRoot: env?.repoRoot ?? (0, import_path6.resolve)(__dirname, "..")
+  };
+  const checks = [
+    { id: "native-permissions", fn: () => checkNativePermissions(resolved) },
+    { id: "hook-registration", fn: () => checkHookRegistration(resolved) },
+    { id: "binary", fn: () => checkBinary(resolved) },
+    { id: "config-health", fn: () => checkConfigHealth(resolved) },
+    { id: "audit-writable", fn: () => checkAuditWritable(resolved) },
+    { id: "pipeline-probe", fn: () => checkPipelineProbe(resolved) },
+    { id: "version-sync", fn: () => checkVersionSync(resolved) }
+  ];
+  const results = [];
+  for (const { id, fn } of checks) {
+    try {
+      results.push(fn());
+    } catch (e) {
+      results.push({
+        id,
+        status: "unknown",
+        detail: `Unexpected error running ${id}: ${e instanceof Error ? e.message : String(e)}`,
+        fix: "Check Warden diagnostics configuration."
+      });
+    }
+  }
+  return results;
+}
+
 // src/cli.ts
 setQuiet(false);
 function printHelp() {
@@ -14694,14 +15128,19 @@ function printHelp() {
       "Usage: warden eval [options] <command>",
       "       warden suggest [options]",
       "       warden validate [options]",
+      "       warden diagnose [options]",
+      "       warden doctor [options]",
       "",
       "Evaluate a shell command against Warden safety rules, suggest",
-      "warden.yaml rules from the audit log, or validate config files.",
+      "warden.yaml rules from the audit log, validate config files,",
+      "or run a diagnostics health-check.",
       "",
       "Commands:",
       "  eval       Evaluate a shell command",
       "  suggest    Suggest rules from audit log",
       "  validate   Validate warden.yaml config files",
+      "  diagnose   Run diagnostics health-check",
+      "  doctor     Alias for diagnose",
       "",
       "Options:",
       "  --cwd <dir>   Set working directory for config loading",
@@ -14711,6 +15150,7 @@ function printHelp() {
       "Exit codes:",
       "  eval/suggest: 0 = allow, 1 = ask, 2 = deny",
       "  validate:     0 = no warnings, 1 = warnings found",
+      "  diagnose:     0 = all checks pass, 1 = fail/unknown found",
       "",
       "Examples:",
       '  warden eval "ls -la"',
@@ -14720,6 +15160,8 @@ function printHelp() {
       "  warden suggest --since 7d",
       "  warden validate",
       "  warden validate --json",
+      "  warden diagnose",
+      "  warden diagnose --json",
       ""
     ].join("\n")
   );
@@ -14811,6 +15253,82 @@ function runValidate(argv) {
   }
   process.exit(warnings.length > 0 ? 1 : 0);
 }
+function parseDiagnoseArgs(argv) {
+  let cwd = process.cwd();
+  let json = false;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--cwd" && argv[i + 1]) {
+      cwd = argv[i + 1];
+      i++;
+    } else if (arg === "--json") {
+      json = true;
+    } else if (arg === "-h" || arg === "--help") {
+      printHelp();
+      process.exit(0);
+    }
+  }
+  return { cwd, json };
+}
+function printDiagnoseReport(checks) {
+  const symbolMap = {
+    pass: "\u2713",
+    fail: "\u2717",
+    warn: "\u26A0",
+    info: "\u2139",
+    skip: "\u2013",
+    unknown: "?"
+  };
+  let pass = 0;
+  let fail = 0;
+  let warn2 = 0;
+  let info = 0;
+  let skip = 0;
+  let unknown = 0;
+  for (const check of checks) {
+    const symbol = symbolMap[check.status] ?? "?";
+    process.stdout.write(`${symbol} ${check.id}: ${check.detail}
+`);
+    if ((check.status === "fail" || check.status === "warn" || check.status === "unknown") && check.fix) {
+      process.stdout.write(`  \u2192 fix: ${check.fix}
+`);
+    }
+    switch (check.status) {
+      case "pass":
+        pass++;
+        break;
+      case "fail":
+        fail++;
+        break;
+      case "warn":
+        warn2++;
+        break;
+      case "info":
+        info++;
+        break;
+      case "skip":
+        skip++;
+        break;
+      case "unknown":
+        unknown++;
+        break;
+    }
+  }
+  const problems = fail + warn2 + unknown;
+  process.stdout.write(`${checks.length} check(s), ${problems} problem(s)
+`);
+}
+function runDiagnose(argv) {
+  setQuiet(true);
+  const { cwd, json } = parseDiagnoseArgs(argv);
+  const checks = runDiagnostics({ cwd });
+  if (json) {
+    process.stdout.write(JSON.stringify({ checks }) + "\n");
+  } else {
+    printDiagnoseReport(checks);
+  }
+  process.exit(checks.some((c) => c.status === "fail" || c.status === "unknown") ? 1 : 0);
+}
 function runSuggest(argv) {
   let cwd = process.cwd();
   let json = false;
@@ -14870,6 +15388,8 @@ function main() {
     runSuggest(rest);
   } else if (subcommand === "validate") {
     runValidate(rest);
+  } else if (subcommand === "diagnose" || subcommand === "doctor") {
+    runDiagnose(rest);
   } else {
     process.stderr.write(`Unknown subcommand: ${subcommand}
 `);
