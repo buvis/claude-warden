@@ -357,6 +357,50 @@ describe('checkHookRegistration', () => {
     // installed mode resolved — pluginDir should be in the detail
     expect(result.detail).toContain(pluginDir);
   });
+
+  it('returns unknown (not dev-checkout fallback) when installed_plugins.json is corrupt JSON', () => {
+    // Proves Fix 1: a corrupt plugins.json must NOT silently fall through to the dev-checkout branch.
+    // We set repoRoot to a valid dev checkout so that a silent fallthrough would return 'pass'.
+    const home = tmpRoot();
+    const repoRoot = tmpRoot();
+    // Write a valid dev checkout at repoRoot — if resolvePluginRoot falls through, it would pass.
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(repoRoot, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    // Write a CORRUPT installed_plugins.json (file EXISTS, but is not valid JSON)
+    const pluginsDir = join(home, '.claude', 'plugins');
+    mkdirSync(pluginsDir, { recursive: true });
+    writeFileSync(join(pluginsDir, 'installed_plugins.json'), '{ not valid json at all {{');
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+    const result = checkHookRegistration(env);
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass'); // must not silently fall through to dev-checkout
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('returns unknown (not dev-checkout fallback) when installed_plugins.json is unreadable (EACCES)', () => {
+    // Skip when running as root because root bypasses file permission checks.
+    if (process.getuid && process.getuid() === 0) return;
+    const home = tmpRoot();
+    const repoRoot = tmpRoot();
+    // Valid dev checkout — a silent fallthrough would return 'pass'.
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(repoRoot, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    const pluginsDir = join(home, '.claude', 'plugins');
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginsJsonPath = join(pluginsDir, 'installed_plugins.json');
+    writeFileSync(pluginsJsonPath, JSON.stringify({ version: 2, plugins: {} }));
+    chmodSync(pluginsJsonPath, 0o000);
+    let result;
+    try {
+      const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+      result = checkHookRegistration(env);
+    } finally {
+      chmodSync(pluginsJsonPath, 0o644);
+    }
+    expect(result!.status).toBe('unknown');
+    expect(result!.status).not.toBe('pass'); // must not silently fall through to dev-checkout
+    expect(result!.fix).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -419,6 +463,85 @@ describe('checkBinary', () => {
     const result = checkBinary(env);
     expect(result.status).toBe('pass');
     expect(result.detail).toContain(pluginDir);
+  });
+
+  it('returns unknown (not dev-checkout fallback) when installed_plugins.json is corrupt JSON', () => {
+    // Fix 1: corrupt plugins.json must NOT silently fall through to dev checkout.
+    const home = tmpRoot();
+    const repoRoot = tmpRoot();
+    // Valid dev checkout with a built binary — a fallthrough would return 'pass'.
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden' });
+    writeFile(repoRoot, join('dist', 'index.cjs'), '"use strict";');
+    // Write a CORRUPT installed_plugins.json (file EXISTS, but not valid JSON)
+    const pluginsDir = join(home, '.claude', 'plugins');
+    mkdirSync(pluginsDir, { recursive: true });
+    writeFileSync(join(pluginsDir, 'installed_plugins.json'), '{ not valid json {{');
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+    const result = checkBinary(env);
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('returns unknown (not dev-checkout fallback) when installed_plugins.json is unreadable (EACCES)', () => {
+    // Skip when running as root because root bypasses file permission checks.
+    if (process.getuid && process.getuid() === 0) return;
+    const home = tmpRoot();
+    const repoRoot = tmpRoot();
+    // Valid dev checkout with a built binary — a fallthrough would return 'pass'.
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden' });
+    writeFile(repoRoot, join('dist', 'index.cjs'), '"use strict";');
+    const pluginsDir = join(home, '.claude', 'plugins');
+    mkdirSync(pluginsDir, { recursive: true });
+    const pluginsJsonPath = join(pluginsDir, 'installed_plugins.json');
+    writeFileSync(pluginsJsonPath, JSON.stringify({ version: 2, plugins: {} }));
+    chmodSync(pluginsJsonPath, 0o000);
+    let result;
+    try {
+      const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+      result = checkBinary(env);
+    } finally {
+      chmodSync(pluginsJsonPath, 0o644);
+    }
+    expect(result!.status).toBe('unknown');
+    expect(result!.status).not.toBe('pass');
+    expect(result!.fix).toBeTruthy();
+  });
+
+  it('returns unknown (not fail) when the dist/ directory is untraversable (EACCES on statSync)', () => {
+    // Fix 2: a statSync inspection error (EACCES) must yield 'unknown', not 'fail'.
+    // statSync throws EACCES when the parent directory lacks execute permission.
+    // Skip when running as root because root bypasses file permission checks.
+    if (process.getuid && process.getuid() === 0) return;
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    const distDir = join(root, 'dist');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'index.cjs'), '"use strict";');
+    // Remove execute bit from the directory so statSync on the file inside throws EACCES
+    chmodSync(distDir, 0o000);
+    let result;
+    try {
+      result = checkBinary(makeEnv(root));
+    } finally {
+      chmodSync(distDir, 0o755);
+    }
+    expect(result!.status).toBe('unknown');
+    expect(result!.status).not.toBe('fail');
+    expect(result!.fix).toBeTruthy();
+  });
+
+  it('fails when dist/index.cjs path exists but is a directory (not a regular file)', () => {
+    // Fix 2: a non-file node must return 'fail', not 'pass'.
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    // Create a DIRECTORY at the path where dist/index.cjs should be
+    const binaryPath = join(root, 'dist', 'index.cjs');
+    mkdirSync(binaryPath, { recursive: true });
+    const result = checkBinary(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
   });
 });
 
@@ -597,6 +720,22 @@ describe('checkAuditWritable', () => {
     writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(missingDir, 'warden-audit.jsonl')}\n`);
     const result = checkAuditWritable(makeEnv(root));
     expect(result.status).not.toBe('pass');
+  });
+
+  it('warns (not pass) when the audit directory path is a regular file, not a directory', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    // Create a regular FILE where the "audit dir" should be
+    const auditParent = join(root, 'audit-parent');
+    mkdirSync(auditParent, { recursive: true });
+    const auditDirAsFile = join(auditParent, 'audit-dir-is-file');
+    writeFileSync(auditDirAsFile, 'not a directory');
+    // Point auditPath so that dirname(auditPath) == auditDirAsFile (a regular file)
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(auditDirAsFile, 'warden-audit.jsonl')}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).toBe('warn');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
   });
 });
 
