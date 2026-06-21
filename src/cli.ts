@@ -2,6 +2,8 @@ import { wardenEval } from './core';
 import { setQuiet, loadConfig } from './rules';
 import { readAuditLog, aggregateAsks, parseDurationMs } from './audit-analyze';
 import { formatSuggestionReport } from './suggest';
+import { runDiagnostics } from './diagnose';
+import type { CheckResult } from './diagnose';
 import type { Decision } from './types';
 
 // CLI is interactive — surface config-loading warnings to stderr.
@@ -14,14 +16,19 @@ function printHelp(): void {
       'Usage: warden eval [options] <command>',
       '       warden suggest [options]',
       '       warden validate [options]',
+      '       warden diagnose [options]',
+      '       warden doctor [options]',
       '',
       'Evaluate a shell command against Warden safety rules, suggest',
-      'warden.yaml rules from the audit log, or validate config files.',
+      'warden.yaml rules from the audit log, validate config files,',
+      'or run a diagnostics health-check.',
       '',
       'Commands:',
       '  eval       Evaluate a shell command',
       '  suggest    Suggest rules from audit log',
       '  validate   Validate warden.yaml config files',
+      '  diagnose   Run diagnostics health-check',
+      '  doctor     Alias for diagnose',
       '',
       'Options:',
       '  --cwd <dir>   Set working directory for config loading',
@@ -31,6 +38,7 @@ function printHelp(): void {
       'Exit codes:',
       '  eval/suggest: 0 = allow, 1 = ask, 2 = deny',
       '  validate:     0 = no warnings, 1 = warnings found',
+      '  diagnose:     0 = all checks pass, 1 = fail/unknown found',
       '',
       'Examples:',
       '  warden eval "ls -la"',
@@ -40,6 +48,8 @@ function printHelp(): void {
       '  warden suggest --since 7d',
       '  warden validate',
       '  warden validate --json',
+      '  warden diagnose',
+      '  warden diagnose --json',
       '',
     ].join('\n'),
   );
@@ -145,6 +155,78 @@ function runValidate(argv: string[]): void {
   process.exit(warnings.length > 0 ? 1 : 0);
 }
 
+function parseDiagnoseArgs(argv: string[]): { cwd: string; json: boolean } {
+  let cwd = process.cwd();
+  let json = false;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--cwd' && argv[i + 1]) {
+      cwd = argv[i + 1];
+      i++;
+    } else if (arg === '--json') {
+      json = true;
+    } else if (arg === '-h' || arg === '--help') {
+      printHelp();
+      process.exit(0);
+    }
+  }
+
+  return { cwd, json };
+}
+
+function printDiagnoseReport(checks: CheckResult[]): void {
+  const symbolMap: Record<string, string> = {
+    pass: '✓',
+    fail: '✗',
+    warn: '⚠',
+    info: 'ℹ',
+    skip: '–',
+    unknown: '?',
+  };
+
+  let pass = 0;
+  let fail = 0;
+  let warn = 0;
+  let info = 0;
+  let skip = 0;
+  let unknown = 0;
+
+  for (const check of checks) {
+    const symbol = symbolMap[check.status] ?? '?';
+    process.stdout.write(`${symbol} ${check.id}: ${check.detail}\n`);
+    if ((check.status === 'fail' || check.status === 'warn' || check.status === 'unknown') && check.fix) {
+      process.stdout.write(`  → fix: ${check.fix}\n`);
+    }
+    switch (check.status) {
+      case 'pass': pass++; break;
+      case 'fail': fail++; break;
+      case 'warn': warn++; break;
+      case 'info': info++; break;
+      case 'skip': skip++; break;
+      case 'unknown': unknown++; break;
+    }
+  }
+
+  const problems = fail + warn + unknown;
+  process.stdout.write(`${checks.length} check(s), ${problems} problem(s)\n`);
+}
+
+function runDiagnose(argv: string[]): void {
+  setQuiet(true);
+
+  const { cwd, json } = parseDiagnoseArgs(argv);
+  const checks = runDiagnostics({ cwd });
+
+  if (json) {
+    process.stdout.write(JSON.stringify({ checks }) + '\n');
+  } else {
+    printDiagnoseReport(checks);
+  }
+
+  process.exit(checks.some(c => c.status === 'fail' || c.status === 'unknown') ? 1 : 0);
+}
+
 function runSuggest(argv: string[]): void {
   let cwd = process.cwd();
   let json = false;
@@ -211,6 +293,8 @@ function main(): void {
     runSuggest(rest);
   } else if (subcommand === 'validate') {
     runValidate(rest);
+  } else if (subcommand === 'diagnose' || subcommand === 'doctor') {
+    runDiagnose(rest);
   } else {
     process.stderr.write(`Unknown subcommand: ${subcommand}\n`);
     printHelp();
