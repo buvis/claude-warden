@@ -786,6 +786,18 @@ describe('heredoc field', () => {
     expect(result.commands[0].heredoc).toBeDefined();
     expect(result.commands[0].heredoc!.content).toBe('\thello\n');
   });
+
+  it('keeps heredoc for a single heredoc whose body contains << (bit-shift, not a second heredoc)', () => {
+    const result = parseCommand("python3 <<'EOF'\nprint(1 << 4)\nEOF");
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.content).toBe('print(1 << 4)\n');
+  });
+
+  it('keeps heredoc for a single heredoc whose body uses << as an operator', () => {
+    const result = parseCommand("ruby <<'EOF'\narr << item\nEOF");
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.content).toBe('arr << item\n');
+  });
 });
 
 describe('walkNode incomplete signal', () => {
