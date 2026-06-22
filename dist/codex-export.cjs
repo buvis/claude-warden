@@ -11038,6 +11038,15 @@ function isCatHeredocInterpolation(part) {
   if (!heredoc) return false;
   return heredoc.content != null && heredoc.content.includes("\n");
 }
+function extractHeredoc(cmd) {
+  const heredocs = cmd.redirects.filter(
+    (r) => r.operator === "<<" || r.operator === "<<-"
+  );
+  if (heredocs.length !== 1) return void 0;
+  const h = heredocs[0];
+  if (h.content == null || h.content.length === 0) return void 0;
+  return { content: h.content, quotedDelimiter: h.heredocQuoted === true };
+}
 function preprocessPathParentheses(input) {
   const result = [];
   let i = 0;
@@ -11147,6 +11156,8 @@ function convertCommand(cmd, chainAssignments) {
   const result = { command, originalCommand, args, envPrefixes, raw };
   if (originalCommand.includes("/")) result.originalPath = originalCommand;
   if (resolvedFrom) result.resolvedFrom = resolvedFrom;
+  const heredoc = extractHeredoc(cmd);
+  if (heredoc) result.heredoc = heredoc;
   return result;
 }
 function updateEffectiveCwd(cdCmd, result) {
@@ -11363,6 +11374,13 @@ function parseCommand(input) {
   };
   for (const stmt of ast.commands) {
     walkNode(stmt, result);
+  }
+  let heredocSkeleton = input;
+  for (const cmd of result.commands) {
+    if (cmd.heredoc) heredocSkeleton = heredocSkeleton.replace(cmd.heredoc.content, "");
+  }
+  if ((heredocSkeleton.match(/<<(?!<)/g) ?? []).length > 1) {
+    for (const cmd of result.commands) delete cmd.heredoc;
   }
   return {
     commands: result.commands,
@@ -13954,6 +13972,19 @@ function allowIfVersionFlag(cmd, flags, rule) {
 function askRepl(cmd, rule) {
   return { command: cmd.command, args: cmd.args, decision: "ask", reason: "opens interactive REPL", matchedRule: rule };
 }
+function evalHeredocScan(cmd, language, rule, config) {
+  const hd = cmd.heredoc;
+  if (!hd.quotedDelimiter && /[$`]/.test(hd.content)) {
+    return {
+      command: cmd.command,
+      args: cmd.args,
+      decision: "ask",
+      reason: "heredoc body subject to shell expansion",
+      matchedRule: rule
+    };
+  }
+  return mapScanResult(cmd, scanScriptCode(hd.content, language), rule, config);
+}
 var SAFE_PYTHON_MODULES = /* @__PURE__ */ new Set([
   "pytest",
   "unittest",
@@ -14008,7 +14039,9 @@ function evaluatePythonCommand(cmd, config, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "python", rule, config, cwd);
   }
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, "python", rule, config) : askRepl(cmd, rule);
+  }
   return null;
 }
 var NODE_SCRIPT_EXTENSIONS = /\.(js|mjs|cjs|ts|mts|cts|tsx|jsx)$/;
@@ -14038,7 +14071,9 @@ function evaluateNodeCommand(cmd, config, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "typescript", rule, config, cwd);
   }
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, "typescript", rule, config) : askRepl(cmd, rule);
+  }
   return null;
 }
 function evaluatePerlCommand(cmd, config, cwd) {
@@ -14067,7 +14102,9 @@ function evaluatePerlCommand(cmd, config, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "perl", rule, config, cwd);
   }
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, "perl", rule, config) : askRepl(cmd, rule);
+  }
   return null;
 }
 function evaluateRubyCommand(cmd, config, cwd) {
@@ -14087,7 +14124,9 @@ function evaluateRubyCommand(cmd, config, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "ruby", rule, config, cwd);
   }
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, "ruby", rule, config) : askRepl(cmd, rule);
+  }
   return null;
 }
 function evaluatePhpCommand(cmd, config, cwd) {
@@ -14107,7 +14146,9 @@ function evaluatePhpCommand(cmd, config, cwd) {
   if (scriptArg) {
     return scanScriptFile(cmd, scriptArg, "php", rule, config, cwd);
   }
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, "php", rule, config) : askRepl(cmd, rule);
+  }
   return null;
 }
 function tryScriptEval(cmd, config, cwd) {
