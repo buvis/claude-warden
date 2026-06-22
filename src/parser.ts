@@ -61,6 +61,21 @@ function isCatHeredocInterpolation(part: CommandExpansionPart): boolean {
   return heredoc.content != null && heredoc.content.includes('\n');
 }
 
+function extractHeredoc(
+  cmd: UnbashCommand,
+): { content: string; quotedDelimiter: boolean } | undefined {
+  const heredocs = cmd.redirects.filter(
+    r => r.operator === '<<' || r.operator === '<<-',
+  );
+  // v1: only a single heredoc with captured body is certifiable; 0 = none,
+  // 2+ caps at ask, empty/missing content caps at ask.
+  if (heredocs.length !== 1) return undefined;
+  const h = heredocs[0];
+  if (h.content == null || h.content.length === 0) return undefined;
+  return { content: h.content, quotedDelimiter: h.heredocQuoted === true };
+}
+
+
 /**
  * Quote unquoted parentheses in path-like tokens so the parser doesn't
  * treat them as subshells. Targets patterns like foo/(bar)/baz where parens
@@ -196,6 +211,8 @@ function convertCommand(
   const result: ParsedCommand = { command, originalCommand, args, envPrefixes, raw };
   if (originalCommand.includes('/')) result.originalPath = originalCommand;
   if (resolvedFrom) result.resolvedFrom = resolvedFrom;
+  const heredoc = extractHeredoc(cmd);
+  if (heredoc) result.heredoc = heredoc;
   return result;
 }
 
@@ -469,6 +486,19 @@ export function parseCommand(input: string): ParseResult {
 
   for (const stmt of ast.commands) {
     walkNode(stmt, result);
+  }
+
+  // Cap at ask when the input has 2+ heredoc openers: unbash captures only the
+  // first heredoc body and drops the rest, so we can't see (let alone certify)
+  // what actually executes. Strip the captured bodies before counting so a `<<`
+  // INSIDE a body (a bit-shift, Ruby's append operator) is never miscounted as a
+  // second heredoc.
+  let heredocSkeleton = input;
+  for (const cmd of result.commands) {
+    if (cmd.heredoc) heredocSkeleton = heredocSkeleton.replace(cmd.heredoc.content, '');
+  }
+  if ((heredocSkeleton.match(/<<(?!<)/g) ?? []).length > 1) {
+    for (const cmd of result.commands) delete cmd.heredoc;
   }
 
   return {

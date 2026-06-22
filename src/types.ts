@@ -7,6 +7,11 @@ export interface ParsedCommand {
   originalPath?: string;
   resolvedFrom?: string;
   effectiveCwd?: string;
+  /** Set when the command consumes a single heredoc redirect (`<<`/`<<-`) with
+   *  non-empty captured body. Absent for 0 or 2+ heredocs, or empty/missing
+   *  content (those keep the pre-existing ask). `quotedDelimiter` is true for
+   *  `<<'EOF'`/`<<"EOF"` (shell does no expansion in the body). */
+  heredoc?: { content: string; quotedDelimiter: boolean };
 }
 
 export interface ChainAssignment {
