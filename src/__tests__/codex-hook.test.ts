@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'child_process';
-import { resolve } from 'path';
+import { statSync } from 'fs';
+import { resolve, join } from 'path';
 import type { HookInput, HookOutput } from '../types';
 
 // Pins wire-level compatibility between the Claude Code hook binary
@@ -75,6 +76,26 @@ describe('Codex PreToolUse hook compatibility', () => {
     const output = parseOutput(stdout);
     expect(output.hookSpecificOutput.permissionDecision).toBe('deny');
     expect(stderr).toContain('[warden] blocked');
+  });
+
+  it('does not write to the real ~/.claude/warden-audit.jsonl (test isolation)', () => {
+    // The deny path logs to <homedir>/.claude/warden-audit.jsonl. The test
+    // setup (src/__tests__/setup.ts) redirects HOME to a sandbox so this never
+    // touches the developer's live audit log. Guard against regressing that.
+    expect(process.env.WARDEN_REAL_HOME).toBeTruthy();
+    const realAudit = join(process.env.WARDEN_REAL_HOME!, '.claude', 'warden-audit.jsonl');
+    const fingerprint = (): string | null => {
+      try {
+        const s = statSync(realAudit);
+        return `${s.size}:${s.mtimeMs}`;
+      } catch {
+        return null; // file does not exist
+      }
+    };
+
+    const before = fingerprint();
+    runHook({ tool_name: 'Bash', tool_input: { command: 'shutdown -h now' } });
+    expect(fingerprint()).toBe(before);
   });
 
   it('ignores non-Bash tool_name values', () => {
