@@ -86,6 +86,33 @@ function askRepl(cmd: ParsedCommand, rule: string): CommandEvalDetail {
   return { command: cmd.command, args: cmd.args, decision: 'ask', reason: 'opens interactive REPL', matchedRule: rule };
 }
 
+/**
+ * Bare interpreter fed by a heredoc: scan the body through the same pipeline as
+ * inline `-c`/`-e`. Returns null when a user `default: deny` rule should win
+ * (mapScanResult defers), so the dispatch falls through to command rules.
+ */
+function evalHeredocScan(
+  cmd: ParsedCommand,
+  language: Language,
+  rule: string,
+  config: WardenConfig,
+): CommandEvalDetail | null {
+  const hd = cmd.heredoc!;
+  // Expansion guard: an unquoted delimiter lets the shell rewrite the body
+  // before the interpreter sees it, so the scanned text is not the executed
+  // text — never certify it.
+  if (!hd.quotedDelimiter && /[$`]/.test(hd.content)) {
+    return {
+      command: cmd.command,
+      args: cmd.args,
+      decision: 'ask',
+      reason: 'heredoc body subject to shell expansion',
+      matchedRule: rule,
+    };
+  }
+  return mapScanResult(cmd, scanScriptCode(hd.content, language), rule, config);
+}
+
 const SAFE_PYTHON_MODULES = new Set([
   'pytest', 'unittest', 'venv', 'pip', 'json.tool', 'compileall',
   'pydoc', 'doctest', 'timeit', 'py_compile', 'black', 'ruff',
@@ -130,7 +157,9 @@ function evaluatePythonCommand(cmd: ParsedCommand, config: WardenConfig, cwd?: s
     return scanScriptFile(cmd, scriptArg, 'python', rule, config, cwd);
   }
 
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, 'python', rule, config) : askRepl(cmd, rule);
+  }
 
   // Fall through to rules
   return null;
@@ -170,7 +199,9 @@ function evaluateNodeCommand(cmd: ParsedCommand, config: WardenConfig, cwd?: str
     return scanScriptFile(cmd, scriptArg, 'typescript', rule, config, cwd);
   }
 
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, 'typescript', rule, config) : askRepl(cmd, rule);
+  }
 
   // Fall through to rules
   return null;
@@ -212,7 +243,9 @@ function evaluatePerlCommand(cmd: ParsedCommand, config: WardenConfig, cwd?: str
     return scanScriptFile(cmd, scriptArg, 'perl', rule, config, cwd);
   }
 
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, 'perl', rule, config) : askRepl(cmd, rule);
+  }
 
   // Fall through to rules
   return null;
@@ -241,7 +274,9 @@ function evaluateRubyCommand(cmd: ParsedCommand, config: WardenConfig, cwd?: str
     return scanScriptFile(cmd, scriptArg, 'ruby', rule, config, cwd);
   }
 
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, 'ruby', rule, config) : askRepl(cmd, rule);
+  }
 
   // Fall through to rules
   return null;
@@ -270,7 +305,9 @@ function evaluatePhpCommand(cmd: ParsedCommand, config: WardenConfig, cwd?: stri
     return scanScriptFile(cmd, scriptArg, 'php', rule, config, cwd);
   }
 
-  if (args.length === 0) return askRepl(cmd, rule);
+  if (args.length === 0) {
+    return cmd.heredoc ? evalHeredocScan(cmd, 'php', rule, config) : askRepl(cmd, rule);
+  }
 
   // Fall through to rules
   return null;

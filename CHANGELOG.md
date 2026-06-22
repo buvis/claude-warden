@@ -10,6 +10,7 @@
 - **hook**: the SessionStart guidance now ends with a bounded config-health note when `warden.yaml` has problems — a one-line count plus the first warning and a `warden validate` pointer, so a typo'd config surfaces in the next session instead of staying invisible in quiet hook mode. Suppressed when `sessionGuidance: false`
 - **cli**: new `warden suggest` subcommand — reads the audit log and prints the most frequent recurring ask/deny commands with suggested `warden.yaml` additions. Safety-first: only un-gated asks become allow snippets; rule-gated, denied, or specially-evaluated commands are flagged `# review manually` instead. Supports `--json`, `--top N`, `--since <dur>`, and `--cwd`
 - **script-scanner**: widened deletion/danger detection — Python `pathlib` `.unlink()`/`.rmdir()`, `importlib`, `os.replace()`, `shutil.move()`, and non-recursive JS `fs.rm`/`fs.rmSync`/`fs.rmdir`/`fs.rmdirSync` now classify as cautious/dangerous, so these scripts prompt instead of being silently allowed
+- **script-eval**: a heredoc-fed interpreter body (`python3 <<'EOF' … EOF`, and node/perl/ruby/php) is now scanned with the same four-verdict pipeline as inline `-c`/`-e` instead of always prompting — a safe-shape body with a quoted delimiter (python/node/perl) auto-allows, while unknown/dangerous bodies still ask. An unquoted-delimiter body containing shell expansion (`$` or backtick) always asks (the scanned text is not the executed text), and a user `default: deny` rule still wins
 
 ### Changed
 
