@@ -152,8 +152,11 @@ function hasBashHookForDist(hooksData: unknown): boolean {
 }
 
 // Lookup warden's install path from installed_plugins.json.
-// Returns a PluginRoot on success/error (never null when the file exists).
-// Returns null when the file does not exist (caller falls through to dev checkout).
+// Returns an 'installed' PluginRoot when a warden entry resolves to a real installPath,
+// or a 'not-found' PluginRoot carrying inspectError when the file exists but cannot be
+// read/parsed (so callers report unknown instead of a false pass).
+// Returns null when the file is absent OR present-but-valid with no usable warden entry —
+// in both cases the caller falls through to the dev-checkout branch.
 function lookupInstalledPlugin(pluginsJsonPath: string, repoRoot: string): PluginRoot | null {
   if (!existsSync(pluginsJsonPath)) return null;
   try {
