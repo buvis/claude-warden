@@ -94,7 +94,7 @@ function collectBashEntries(entries: unknown[], path: string): { path: string; e
 }
 
 // Scan a single settings file for Bash entries in deny/ask/allow buckets.
-// Returns undefined when the file cannot be parsed (caller treats as unknown).
+// Returns 'ok' when the file was read and parsed, or 'unparseable' on error.
 function scanSettingsFile(
   path: string,
   denyBash: { path: string; entry: string }[],
@@ -151,39 +151,46 @@ function hasBashHookForDist(hooksData: unknown): boolean {
   return false;
 }
 
-function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
-  // 1. Check installed_plugins.json
-  const pluginsJsonPath = join(env.home, '.claude', 'plugins', 'installed_plugins.json');
-  if (existsSync(pluginsJsonPath)) {
-    try {
-      const raw = readFileSync(pluginsJsonPath, 'utf-8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (parsed && typeof parsed === 'object') {
-        const plugins = (parsed as Record<string, unknown>).plugins as Record<string, unknown> | undefined;
-        if (plugins && typeof plugins === 'object') {
-          for (const key of Object.keys(plugins)) {
-            const namePart = key.split('@')[0];
-            if (namePart === 'warden') {
-              const entries = plugins[key] as unknown[] | undefined;
-              if (Array.isArray(entries) && entries.length > 0) {
-                const first = entries[0] as Record<string, unknown>;
-                const installPath = first.installPath as string | undefined;
-                if (installPath && existsSync(installPath)) {
-                  return { mode: 'installed', root: installPath, installPath };
-                }
+// Lookup warden's install path from installed_plugins.json.
+// Returns a PluginRoot on success/error (never null when the file exists).
+// Returns null when the file does not exist (caller falls through to dev checkout).
+function lookupInstalledPlugin(pluginsJsonPath: string, repoRoot: string): PluginRoot | null {
+  if (!existsSync(pluginsJsonPath)) return null;
+  try {
+    const raw = readFileSync(pluginsJsonPath, 'utf-8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object') {
+      const plugins = parsed.plugins as Record<string, unknown> | undefined;
+      if (plugins && typeof plugins === 'object') {
+        for (const key of Object.keys(plugins)) {
+          if (key.split('@')[0] === 'warden') {
+            const entries = plugins[key] as unknown[] | undefined;
+            if (Array.isArray(entries) && entries.length > 0) {
+              const first = entries[0] as Record<string, unknown>;
+              const installPath = first.installPath as string | undefined;
+              if (installPath && existsSync(installPath)) {
+                return { mode: 'installed', root: installPath, installPath };
               }
             }
           }
         }
       }
-    } catch (e: unknown) {
-      // File exists but could not be read or parsed — surface as inspectError so
-      // callers can distinguish this from "file absent" and report unknown instead
-      // of silently falling through to the dev-checkout branch (false pass).
-      const msg = e instanceof Error ? e.message : String(e);
-      return { mode: 'not-found', root: env.repoRoot, inspectError: `could not inspect ${pluginsJsonPath}: ${msg}` };
     }
+  } catch (e: unknown) {
+    // File exists but could not be read or parsed — surface as inspectError so
+    // callers can distinguish this from "file absent" and report unknown instead
+    // of silently falling through to the dev-checkout branch (false pass).
+    const msg = e instanceof Error ? e.message : String(e);
+    return { mode: 'not-found', root: repoRoot, inspectError: `could not inspect ${pluginsJsonPath}: ${msg}` };
   }
+  return null;
+}
+
+function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
+  // 1. Check installed_plugins.json
+  const pluginsJsonPath = join(env.home, '.claude', 'plugins', 'installed_plugins.json');
+  const installed = lookupInstalledPlugin(pluginsJsonPath, env.repoRoot);
+  if (installed !== null) return installed;
 
   // 2. Check dev checkout
   const pkgPath = join(env.repoRoot, 'package.json');
@@ -300,6 +307,32 @@ export function checkHookRegistration(env: DiagnoseEnv): CheckResult {
   };
 }
 
+// Classify a successful statSync result for dist/index.cjs into a CheckResult.
+function classifyBinaryStat(binaryPath: string, rebuildFix: string): CheckResult {
+  const st = statSync(binaryPath);
+  if (!st.isFile()) {
+    return { id: 'binary', status: 'fail', detail: `${binaryPath} exists but is not a regular file.`, fix: rebuildFix };
+  }
+  if (st.size > 0) {
+    return { id: 'binary', status: 'pass', detail: `dist/index.cjs found at ${binaryPath} (${st.size} bytes).` };
+  }
+  return { id: 'binary', status: 'fail', detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`, fix: rebuildFix };
+}
+
+// Map a statSync error for dist/index.cjs into a CheckResult.
+function classifyBinaryError(err: unknown, binaryPath: string, rebuildFix: string, permFix: string): CheckResult {
+  const code = (err as { code?: string } | undefined)?.code;
+  if (code === 'ENOENT') {
+    return { id: 'binary', status: 'fail', detail: `dist/index.cjs not found at ${binaryPath}.`, fix: rebuildFix };
+  }
+  return {
+    id: 'binary',
+    status: 'unknown',
+    detail: `Could not inspect ${binaryPath}: ${err instanceof Error ? err.message : String(err)}`,
+    fix: permFix,
+  };
+}
+
 export function checkBinary(env: DiagnoseEnv): CheckResult {
   const pr = resolvePluginRoot(env);
 
@@ -322,45 +355,14 @@ export function checkBinary(env: DiagnoseEnv): CheckResult {
   }
 
   const binaryPath = join(pr.root, 'dist', 'index.cjs');
+  const rebuildFix = pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.';
+  const permFix = pr.mode === 'dev'
+    ? 'Check permissions on dist/index.cjs, then run "pnpm run build".'
+    : 'Check permissions on the installed plugin binary or reinstall the plugin.';
   try {
-    const st = statSync(binaryPath);
-    if (!st.isFile()) {
-      return {
-        id: 'binary',
-        status: 'fail',
-        detail: `${binaryPath} exists but is not a regular file.`,
-        fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
-      };
-    }
-    if (st.size > 0) {
-      return {
-        id: 'binary',
-        status: 'pass',
-        detail: `dist/index.cjs found at ${binaryPath} (${st.size} bytes).`,
-      };
-    }
-    return {
-      id: 'binary',
-      status: 'fail',
-      detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`,
-      fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
-    };
+    return classifyBinaryStat(binaryPath, rebuildFix);
   } catch (err: unknown) {
-    const code = (err as { code?: string } | undefined)?.code;
-    if (code === 'ENOENT') {
-      return {
-        id: 'binary',
-        status: 'fail',
-        detail: `dist/index.cjs not found at ${binaryPath}.`,
-        fix: pr.mode === 'dev' ? 'Run "pnpm run build" to compile the plugin.' : 'Reinstall the plugin.',
-      };
-    }
-    return {
-      id: 'binary',
-      status: 'unknown',
-      detail: `Could not inspect ${binaryPath}: ${err instanceof Error ? err.message : String(err)}`,
-      fix: pr.mode === 'dev' ? 'Check permissions on dist/index.cjs, then run "pnpm run build".' : 'Check permissions on the installed plugin binary or reinstall the plugin.',
-    };
+    return classifyBinaryError(err, binaryPath, rebuildFix, permFix);
   }
 }
 
