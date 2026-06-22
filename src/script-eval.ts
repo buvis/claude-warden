@@ -87,9 +87,8 @@ function askRepl(cmd: ParsedCommand, rule: string): CommandEvalDetail {
 }
 
 /**
- * Bare interpreter fed by a heredoc: scan the body through the same pipeline as
- * inline `-c`/`-e`. Returns null when a user `default: deny` rule should win
- * (mapScanResult defers), so the dispatch falls through to command rules.
+ * Returns null when a user `default: deny` rule should win (mapScanResult defers),
+ * so the dispatch falls through to command rules.
  */
 function evalHeredocScan(
   cmd: ParsedCommand,
