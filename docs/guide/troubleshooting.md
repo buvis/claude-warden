@@ -78,7 +78,7 @@ An in-process probe runs a known-safe command (`echo ...`) against Warden's defa
 
 The version in `package.json`, `.claude-plugin/plugin.json`, and the marketplace repo can fall out of sync - usually a half-finished release.
 
-`warden diagnose` reports `version-sync` as **warn** when reachable stamps disagree, **unknown** when a stamp file is present but unparseable, and **skip** outside the source tree (so it never warns on a user's machine).
+`warden diagnose` reports `version-sync` as **pass** when all reachable stamps agree (whether an installed plugin or a dev checkout), **warn** when they disagree, **unknown** when a stamp file is present but unparseable, and **skip** only when the resolved plugin root has no `package.json` (not a Warden tree at all). An installed plugin ships matching stamps, so on a user's machine this normally passes rather than skips.
 
 **Fix:** resync the stamps. The release script `dev/bin/release` does this as part of cutting a release.
 
