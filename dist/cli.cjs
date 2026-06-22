@@ -14778,35 +14778,38 @@ function hasBashHookForDist(hooksData) {
   }
   return false;
 }
-function resolvePluginRoot(env) {
-  const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
-  if ((0, import_fs4.existsSync)(pluginsJsonPath)) {
-    try {
-      const raw = (0, import_fs4.readFileSync)(pluginsJsonPath, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        const plugins = parsed.plugins;
-        if (plugins && typeof plugins === "object") {
-          for (const key of Object.keys(plugins)) {
-            const namePart = key.split("@")[0];
-            if (namePart === "warden") {
-              const entries = plugins[key];
-              if (Array.isArray(entries) && entries.length > 0) {
-                const first = entries[0];
-                const installPath = first.installPath;
-                if (installPath && (0, import_fs4.existsSync)(installPath)) {
-                  return { mode: "installed", root: installPath, installPath };
-                }
+function lookupInstalledPlugin(pluginsJsonPath, repoRoot) {
+  if (!(0, import_fs4.existsSync)(pluginsJsonPath)) return null;
+  try {
+    const raw = (0, import_fs4.readFileSync)(pluginsJsonPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      const plugins = parsed.plugins;
+      if (plugins && typeof plugins === "object") {
+        for (const key of Object.keys(plugins)) {
+          if (key.split("@")[0] === "warden") {
+            const entries = plugins[key];
+            if (Array.isArray(entries) && entries.length > 0) {
+              const first = entries[0];
+              const installPath = first.installPath;
+              if (installPath && (0, import_fs4.existsSync)(installPath)) {
+                return { mode: "installed", root: installPath, installPath };
               }
             }
           }
         }
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { mode: "not-found", root: env.repoRoot, inspectError: `could not inspect ${pluginsJsonPath}: ${msg}` };
     }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { mode: "not-found", root: repoRoot, inspectError: `could not inspect ${pluginsJsonPath}: ${msg}` };
   }
+  return null;
+}
+function resolvePluginRoot(env) {
+  const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
+  const installed = lookupInstalledPlugin(pluginsJsonPath, env.repoRoot);
+  if (installed !== null) return installed;
   const pkgPath = (0, import_path6.join)(env.repoRoot, "package.json");
   try {
     if ((0, import_fs4.existsSync)(pkgPath)) {
@@ -14903,6 +14906,28 @@ function checkHookRegistration(env) {
     fix: "Repair or reinstall the plugin so its PreToolUse Bash hook references dist/index.cjs."
   };
 }
+function classifyBinaryStat(binaryPath, rebuildFix) {
+  const st = (0, import_fs4.statSync)(binaryPath);
+  if (!st.isFile()) {
+    return { id: "binary", status: "fail", detail: `${binaryPath} exists but is not a regular file.`, fix: rebuildFix };
+  }
+  if (st.size > 0) {
+    return { id: "binary", status: "pass", detail: `dist/index.cjs found at ${binaryPath} (${st.size} bytes).` };
+  }
+  return { id: "binary", status: "fail", detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`, fix: rebuildFix };
+}
+function classifyBinaryError(err, binaryPath, rebuildFix, permFix) {
+  const code = err?.code;
+  if (code === "ENOENT") {
+    return { id: "binary", status: "fail", detail: `dist/index.cjs not found at ${binaryPath}.`, fix: rebuildFix };
+  }
+  return {
+    id: "binary",
+    status: "unknown",
+    detail: `Could not inspect ${binaryPath}: ${err instanceof Error ? err.message : String(err)}`,
+    fix: permFix
+  };
+}
 function checkBinary(env) {
   const pr = resolvePluginRoot(env);
   if (pr.inspectError) {
@@ -14922,45 +14947,12 @@ function checkBinary(env) {
     };
   }
   const binaryPath = (0, import_path6.join)(pr.root, "dist", "index.cjs");
+  const rebuildFix = pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin.";
+  const permFix = pr.mode === "dev" ? 'Check permissions on dist/index.cjs, then run "pnpm run build".' : "Check permissions on the installed plugin binary or reinstall the plugin.";
   try {
-    const st = (0, import_fs4.statSync)(binaryPath);
-    if (!st.isFile()) {
-      return {
-        id: "binary",
-        status: "fail",
-        detail: `${binaryPath} exists but is not a regular file.`,
-        fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
-      };
-    }
-    if (st.size > 0) {
-      return {
-        id: "binary",
-        status: "pass",
-        detail: `dist/index.cjs found at ${binaryPath} (${st.size} bytes).`
-      };
-    }
-    return {
-      id: "binary",
-      status: "fail",
-      detail: `dist/index.cjs at ${binaryPath} is empty (0 bytes).`,
-      fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
-    };
+    return classifyBinaryStat(binaryPath, rebuildFix);
   } catch (err) {
-    const code = err?.code;
-    if (code === "ENOENT") {
-      return {
-        id: "binary",
-        status: "fail",
-        detail: `dist/index.cjs not found at ${binaryPath}.`,
-        fix: pr.mode === "dev" ? 'Run "pnpm run build" to compile the plugin.' : "Reinstall the plugin."
-      };
-    }
-    return {
-      id: "binary",
-      status: "unknown",
-      detail: `Could not inspect ${binaryPath}: ${err instanceof Error ? err.message : String(err)}`,
-      fix: pr.mode === "dev" ? 'Check permissions on dist/index.cjs, then run "pnpm run build".' : "Check permissions on the installed plugin binary or reinstall the plugin."
-    };
+    return classifyBinaryError(err, binaryPath, rebuildFix, permFix);
   }
 }
 function checkConfigHealth(env) {
