@@ -298,6 +298,17 @@ When you run an interpreter with inline code (`python -c`, `node -e`, `perl -e`,
 
 A user rule with `default: deny` always wins: a script the scanner would allow is still deferred to the deny rule. The scan only ever upgrades `ask` to `allow`, never downgrades a restriction. Set `auditAllowDecisions: true` in your `warden.yaml` to log every auto-allow for review.
 
+### Heredoc bodies
+
+Feeding an interpreter through a heredoc gets the **same four-verdict scan** as inline code. `python3 <<'EOF' … EOF` is scanned exactly like `python3 -c`: a `safe` body is allowed, and `dangerous`/`cautious`/`unknown` bodies ask. This covers `python`, `node`, `perl`, `ruby`, and `php`. (`ruby` and `php` have no safe-shape recognizer, so their benign bodies land on `unknown` and ask, identical to `ruby -e` / `php -r`.)
+
+A heredoc body is shell text before it is interpreter code, so two extra guards apply:
+
+- **Expansion guard.** Only a quoted delimiter (`<<'EOF'` or `<<"EOF"`) is expansion-free. With an unquoted delimiter (`<<EOF`), a body containing `$` or a backtick is rewritten by the shell before the interpreter sees it, so the scanned text is not the executed text. Warden caps the decision at **ask** with the reason `heredoc body subject to shell expansion`, however safe the visible code looks.
+- **Single body only.** Warden scans one heredoc with a non-empty body. Two or more heredocs on the command, an empty body, or stdin via `-` (`python3 - <<EOF`) keep the current ask.
+
+A user `default: deny` rule still wins, and non-interpreter heredocs (`cat`, `tee`, plain redirects) are unchanged: their bodies are data, not code.
+
 ## Unlisted commands
 
 Any command not listed above gets the global `defaultDecision`, which is **ask** unless overridden in your `warden.yaml`.
