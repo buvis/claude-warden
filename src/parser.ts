@@ -75,7 +75,6 @@ function extractHeredoc(
   return { content: h.content, quotedDelimiter: h.heredocQuoted === true };
 }
 
-
 /**
  * Quote unquoted parentheses in path-like tokens so the parser doesn't
  * treat them as subshells. Targets patterns like foo/(bar)/baz where parens
