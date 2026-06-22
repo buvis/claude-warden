@@ -737,6 +737,57 @@ describe('chain cwd tracking', () => {
   });
 });
 
+describe('heredoc field', () => {
+  it('captures quoted-delimiter heredoc body with quotedDelimiter true', () => {
+    const result = parseCommand("python3 <<'EOF'\nprint('hi')\nEOF");
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.quotedDelimiter).toBe(true);
+    expect(result.commands[0].heredoc!.content).toBe("print('hi')\n");
+  });
+
+  it('captures unquoted-delimiter heredoc body with quotedDelimiter false', () => {
+    const result = parseCommand('python3 <<EOF\nprint("hi")\nEOF');
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.quotedDelimiter).toBe(false);
+    expect(result.commands[0].heredoc!.content).toBe('print("hi")\n');
+  });
+
+  it('captures double-quoted-delimiter heredoc body with quotedDelimiter true', () => {
+    const result = parseCommand('cat <<"EOF"\nhello world\nEOF');
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.quotedDelimiter).toBe(true);
+    expect(result.commands[0].heredoc!.content).toBe('hello world\n');
+  });
+
+  it('sets heredoc absent for commands with no heredoc', () => {
+    const result = parseCommand('ls -la');
+    expect(result.commands[0].heredoc).toBeUndefined();
+  });
+
+  it('sets heredoc absent for empty-body heredoc', () => {
+    const result = parseCommand('cat <<EOF\nEOF');
+    expect(result.commands[0].heredoc).toBeUndefined();
+  });
+
+  it('sets heredoc absent when command has two heredocs', () => {
+    const result = parseCommand('paste <<EOF1\nfoo\nEOF1\n <<EOF2\nbar\nEOF2');
+    expect(result.commands[0].heredoc).toBeUndefined();
+  });
+
+  it('captures <<- heredoc with tabs retained in content', () => {
+    const result = parseCommand('python3 <<-EOF\n\tprint("hi")\nEOF');
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.quotedDelimiter).toBe(false);
+    expect(result.commands[0].heredoc!.content).toContain('\t');
+  });
+
+  it('captures exact content string from <<- heredoc (tabs not stripped)', () => {
+    const result = parseCommand('cat <<-EOF\n\thello\nEOF');
+    expect(result.commands[0].heredoc).toBeDefined();
+    expect(result.commands[0].heredoc!.content).toBe('\thello\n');
+  });
+});
+
 describe('walkNode incomplete signal', () => {
   function freshResult(): WalkResult {
     return {
