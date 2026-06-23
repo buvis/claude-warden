@@ -281,16 +281,23 @@ describe('evaluator', () => {
       expect(eval_("php << 'EOF'\necho 1;\nEOF").decision).toBe('ask');
     });
 
-    // Dangerous body → ask
-    it('asks for python heredoc with dangerous body', () => {
+    // Dangerous body → ask. Assert the scanner's reason, not just the decision:
+    // if the body bypassed the scanner and hit the REPL ask fallback, the
+    // decision would still be `ask`, so the reason is what binds this to intent.
+    it('asks for python heredoc with dangerous body (body reaches the scanner)', () => {
       const cmd = `python3 << 'EOF'\nimport os; ${OSSYS}('ls')\nEOF`;
-      expect(eval_(cmd).decision).toBe('ask');
+      const r = eval_(cmd);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain(OSSYS);
     });
 
-    // Evasion body → ask
-    it('asks for python heredoc with evasion pattern in body', () => {
+    // Evasion body → ask. Same intent binding: assert the evasion signal's
+    // reason so the test fails if the body never reaches the scanner.
+    it('asks for python heredoc with evasion pattern in body (evasion signal fires)', () => {
       const cmd = `python3 << 'EOF'\n${GETATTR}(os, 'sys' + 'tem')('ls')\nEOF`;
-      expect(eval_(cmd).decision).toBe('ask');
+      const r = eval_(cmd);
+      expect(r.decision).toBe('ask');
+      expect(r.reason).toContain(GETATTR);
     });
 
     // Expansion guard: unquoted delimiter + shell expansion characters → ask

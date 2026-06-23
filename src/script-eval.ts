@@ -98,10 +98,11 @@ function evalHeredocScan(
 ): CommandEvalDetail | null {
   const hd = cmd.heredoc!;
   // A user `default: deny` rule is stricter than both the expansion-guard ask
-  // and any scan verdict, so defer to it first — parity with the inline
-  // mapScanResult path, which checks userRulesWouldRestrict in every branch.
-  // Without this, an unquoted `$`/backtick body would hit the guard's `ask`
-  // below and silently downgrade the user's explicit deny.
+  // and any scan verdict, so check it first. mapScanResult only defers to a
+  // user deny on its `safe`/`unknown` branches (`dangerous`/`cautious` return
+  // `ask` directly); hoisting the check here keeps user deny winning even when
+  // the expansion guard below would otherwise `ask` an unquoted `$`/backtick
+  // body — without it, that guard `ask` would silently downgrade the deny.
   if (userRulesWouldRestrict(cmd, config)) return null;
   // Expansion guard: an unquoted delimiter lets the shell rewrite the body
   // before the interpreter sees it, so the scanned text is not the executed
