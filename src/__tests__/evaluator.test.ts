@@ -322,6 +322,27 @@ describe('evaluator', () => {
       expect(r.decision).toBe('deny');
     });
 
+    // User deny rule wins even when the expansion guard would otherwise ask:
+    // the guard caps allow, but a user `default: deny` is stricter than ask and
+    // must defer to the rule, exactly as the inline mapScanResult path does.
+    it('respects user deny rule for an expansion-guarded heredoc', () => {
+      const config: WardenConfig = {
+        ...structuredClone(DEFAULT_CONFIG),
+        layers: [
+          { alwaysAllow: [], alwaysDeny: [], rules: [{ command: 'python3', default: 'deny' as const }] },
+          ...DEFAULT_CONFIG.layers,
+        ],
+      };
+      const r = evaluate(parseCommand('python3 <<EOF\nprint("$HOME")\nEOF'), config);
+      expect(r.decision).toBe('deny');
+    });
+
+    // Unquoted delimiter + no expansion char + safe body → allow (the inverse of
+    // the expansion guard; a distinct path from the <<'EOF' quoted and <<-EOF cases)
+    it('allows unquoted <<EOF heredoc with safe expansion-free body', () => {
+      expect(eval_("python3 <<EOF\nprint('hi')\nEOF").decision).toBe('allow');
+    });
+
     // Tab-stripping delimiter (<<-) with tab-indented safe body → allow
     it('allows python <<-EOF heredoc with tab-indented safe body', () => {
       expect(eval_("python3 <<-EOF\n\tprint('hi')\nEOF").decision).toBe('allow');
