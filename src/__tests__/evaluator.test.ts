@@ -1213,6 +1213,37 @@ describe('evaluator', () => {
     });
   });
 
+  // PRD 00017: direct (non-remote) POSIX shell -c wrapper recursion parity.
+  // dash/ksh/mksh/ash -c "<cmd>" must yield the inner command's verdict,
+  // identical to bash -c. Broken recursion falls to the shell rule's default
+  // 'ask', so a benign inner -> 'allow' and a denied inner -> 'deny' are the
+  // load-bearing regression guards (both differ from that 'ask' fallback).
+  describe('POSIX shell -c wrapper parity (direct, non-remote)', () => {
+    const NEW_SHELLS = ['dash', 'ksh', 'mksh', 'ash'] as const;
+
+    for (const shell of NEW_SHELLS) {
+      it(`recurses ${shell} -c into a benign inner command (allow, not the shell rule's ask default)`, () => {
+        expect(eval_(`${shell} -c "echo hi"`).decision).toBe('allow');
+      });
+
+      it(`${shell} -c surfaces a denied inner command as deny (recursion guard)`, () => {
+        expect(eval_(`${shell} -c "sudo rm -rf /"`).decision).toBe('deny');
+      });
+
+      it(`${shell} -c verdict matches bash -c for the same inner command`, () => {
+        expect(eval_(`${shell} -c "rm -rf /tmp/x"`).decision).toBe(eval_('bash -c "rm -rf /tmp/x"').decision);
+      });
+    }
+
+    it('recurses ksh -c inside a compound chain: echo x && ksh -c "sudo rm -rf /" -> deny', () => {
+      expect(eval_('echo x && ksh -c "sudo rm -rf /"').decision).toBe('deny');
+    });
+
+    it('benign ksh -c allow matches bash -c allow (PRD success metric: identical to bash -c)', () => {
+      expect(eval_('ksh -c "echo hi"').decision).toBe(eval_('bash -c "echo hi"').decision);
+    });
+  });
+
   describe('export command', () => {
     it('allows export FOO=bar', () => {
       expect(eval_('export FOO=bar').decision).toBe('allow');
