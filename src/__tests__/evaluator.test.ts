@@ -84,6 +84,26 @@ describe('evaluator', () => {
       expect(eval_('node --version').decision).toBe('allow');
     });
 
+    it('allows bash --version', () => {
+      expect(eval_('bash --version').decision).toBe('allow');
+    });
+
+    it('allows dash --version', () => {
+      expect(eval_('dash --version').decision).toBe('allow');
+    });
+
+    it('allows ksh --help', () => {
+      expect(eval_('ksh --help').decision).toBe('allow');
+    });
+
+    it('allows mksh --version', () => {
+      expect(eval_('mksh --version').decision).toBe('allow');
+    });
+
+    it('allows ash --version', () => {
+      expect(eval_('ash --version').decision).toBe('allow');
+    });
+
     it('asks for node script.js', () => {
       expect(eval_('node script.js').decision).toBe('ask');
     });
