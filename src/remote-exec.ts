@@ -6,6 +6,7 @@ import { parseCommand } from './parser';
 import { globToRegex } from './glob';
 import { evaluate } from './evaluator';
 import { makeCommand } from './args';
+import { SHELL_INTERPRETERS } from './shells';
 
 function findMatchingTarget(value: string, targets: TrustedTarget[]): TrustedTarget | null {
   return targets.find(t => globToRegex(t.name).test(value)) || null;
@@ -18,9 +19,6 @@ function shellQuote(arg: string): string {
   }
   return arg;
 }
-
-/** Shell interpreters that are safe as interactive sessions on trusted remotes. */
-const INTERACTIVE_SHELLS = new Set(['bash', 'sh', 'zsh']);
 
 /** Build a config with trustedContextOverrides applied as the highest-priority layer. */
 function configWithContextOverrides(config: WardenConfig, target?: TrustedTarget | null): WardenConfig {
@@ -59,12 +57,12 @@ function evaluateRemoteCommand(
   const remoteCmd = remoteArgs[0];
 
   // Bare shell invocation (e.g. `bash`, `sh`) → interactive session
-  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs.length === 1) {
+  if (SHELL_INTERPRETERS.has(remoteCmd) && remoteArgs.length === 1) {
     return { decision: 'allow', reason: 'interactive shell', details: [] };
   }
 
   // Shell -c "..." → evaluate the inner command string (which preserves pipes/operators)
-  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs[1] === '-c' && remoteArgs.length >= 3) {
+  if (SHELL_INTERPRETERS.has(remoteCmd) && remoteArgs[1] === '-c' && remoteArgs.length >= 3) {
     const innerCommand = remoteArgs.slice(2).join(' ');
     const parsed = parseCommand(innerCommand);
     return evaluate(parsed, overriddenConfig, depth + 1);
