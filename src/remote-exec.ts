@@ -432,11 +432,14 @@ interface FlySSHParseResult {
   app: string | null;
   remoteArgs: string[];
   isSSH: boolean;
+  /** Raw `-C`/`--command` value: a shell command string that may chain or pipe. */
+  flyCommand: string | null;
 }
 
 function parseFlySSHArgs(args: string[]): FlySSHParseResult {
   let app: string | null = null;
   const remoteArgs: string[] = [];
+  let flyCommand: string | null = null;
   let isSSH = false;
   let foundConsole = false;
   let i = 0;
@@ -457,16 +460,9 @@ function parseFlySSHArgs(args: string[]): FlySSHParseResult {
         app = args[i + 1] || null;
       }
       if ((arg === '-C' || arg === '--command') && foundConsole) {
-        // Everything after -C is the remote command
-        const cmdValue = args[i + 1];
-        if (cmdValue) {
-          // Parse the command string into args
-          const parsed = parseCommand(cmdValue);
-          if (!parsed.parseError && parsed.commands.length > 0) {
-            const inner = parsed.commands[0];
-            remoteArgs.push(inner.command, ...inner.args);
-          }
-        }
+        // -C carries a full shell command string (it may chain/pipe). Capture it raw
+        // so the evaluator can assess every command, not just the first.
+        flyCommand = args[i + 1] ?? null;
         i += 2;
         continue;
       }
@@ -505,12 +501,36 @@ function parseFlySSHArgs(args: string[]): FlySSHParseResult {
     i++;
   }
 
-  return { app, remoteArgs, isSSH: isSSH && foundConsole };
+  return { app, remoteArgs, isSSH: isSSH && foundConsole, flyCommand };
+}
+
+/**
+ * Evaluate a Fly `-C` remote command string. Unlike docker/kubectl argv, `-C` is a
+ * full shell command string that may chain or pipe. Parse it and evaluate EVERY
+ * resulting command, combining any-deny->deny / any-ask->ask — collapsing to
+ * commands[0] silently dropped a denied tail command (a trusted-remote bypass this
+ * PRD newly exposed to dash/ksh/mksh/ash). Mirrors the ssh remote-command path.
+ */
+function evaluateFlyRemoteCommand(cmdValue: string, config: WardenConfig, target: TrustedTarget, depth: number): EvalResult {
+  const parsed = parseCommand(cmdValue);
+  if (parsed.parseError || parsed.commands.length === 0) {
+    return { decision: 'allow', reason: 'interactive', details: [] };
+  }
+  // Single command: reuse evaluateRemoteCommand's bare-shell / shell -c / allowAll handling.
+  if (parsed.commands.length === 1) {
+    const inner = parsed.commands[0];
+    return evaluateRemoteCommand([inner.command, ...inner.args], config, target, depth);
+  }
+  // Chain/pipe: a denied command anywhere must win.
+  if (target.allowAll) {
+    return { decision: 'allow', reason: 'allowAll target', details: [] };
+  }
+  return evaluate(parsed, configWithContextOverrides(config, target), depth + 1);
 }
 
 function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, targets: TrustedRemote[], depth: number = 0): CommandEvalDetail | null {
   const { command, args } = cmd;
-  const { app, remoteArgs, isSSH } = parseFlySSHArgs(args);
+  const { app, remoteArgs, isSSH, flyCommand } = parseFlySSHArgs(args);
 
   // Only handle ssh console - other fly commands fall through to regular rules
   if (!isSSH) return null;
@@ -519,7 +539,9 @@ function evaluateFlyCommand(cmd: ParsedCommand, config: WardenConfig, targets: T
   const matched = findMatchingTarget(app, targets);
   if (!matched) return null;
 
-  const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
+  const result = flyCommand !== null
+    ? evaluateFlyRemoteCommand(flyCommand, config, matched, depth)
+    : evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
     command, args,
     decision: result.decision,
