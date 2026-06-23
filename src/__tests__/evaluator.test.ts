@@ -1046,6 +1046,9 @@ describe('evaluator', () => {
     it('allows xargs with sh -c when inner commands are safe', () => expect(eval_("xargs -I {} sh -c 'echo === && head -50 foo'").decision).toBe('allow'));
     it('allows xargs with bash -c when inner commands are safe', () => expect(eval_("xargs -I {} bash -c 'echo hello && ls'").decision).toBe('allow'));
     it('denies xargs with sh -c when inner command is denied', () => expect(eval_("xargs sh -c 'sudo rm -rf /'").decision).toBe('deny'));
+    it('allows xargs with dash -c when inner commands are safe', () => expect(eval_("xargs -I {} dash -c 'echo hello && ls'").decision).toBe('allow'));
+    it('denies xargs with dash -c when inner command is denied', () => expect(eval_("xargs dash -c 'sudo rm -rf /'").decision).toBe('deny'));
+    it('allows xargs with ksh -c when inner commands are safe', () => expect(eval_("xargs -I {} ksh -c 'echo hi'").decision).toBe('allow'));
 
     // uv run - recursive evaluation
     it('asks for uv run python (arbitrary code)', () => expect(eval_('uv run python script.py').decision).toBe('ask'));
