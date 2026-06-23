@@ -13380,6 +13380,7 @@ var FLY_SSH_FLAGS_WITH_VALUE = /* @__PURE__ */ new Set([
 function parseFlySSHArgs(args) {
   let app = null;
   const remoteArgs = [];
+  let flyCommand = null;
   let isSSH = false;
   let foundConsole = false;
   let i = 0;
@@ -13395,14 +13396,7 @@ function parseFlySSHArgs(args) {
         app = args[i + 1] || null;
       }
       if ((arg === "-C" || arg === "--command") && foundConsole) {
-        const cmdValue = args[i + 1];
-        if (cmdValue) {
-          const parsed = parseCommand(cmdValue);
-          if (!parsed.parseError && parsed.commands.length > 0) {
-            const inner = parsed.commands[0];
-            remoteArgs.push(inner.command, ...inner.args);
-          }
-        }
+        flyCommand = args[i + 1] ?? null;
         i += 2;
         continue;
       }
@@ -13433,16 +13427,30 @@ function parseFlySSHArgs(args) {
     }
     i++;
   }
-  return { app, remoteArgs, isSSH: isSSH && foundConsole };
+  return { app, remoteArgs, isSSH: isSSH && foundConsole, flyCommand };
+}
+function evaluateFlyRemoteCommand(cmdValue, config, target, depth) {
+  const parsed = parseCommand(cmdValue);
+  if (parsed.parseError || parsed.commands.length === 0) {
+    return { decision: "allow", reason: "interactive", details: [] };
+  }
+  if (parsed.commands.length === 1) {
+    const inner = parsed.commands[0];
+    return evaluateRemoteCommand([inner.command, ...inner.args], config, target, depth);
+  }
+  if (target.allowAll) {
+    return { decision: "allow", reason: "allowAll target", details: [] };
+  }
+  return evaluate(parsed, configWithContextOverrides(config, target), depth + 1);
 }
 function evaluateFlyCommand(cmd, config, targets, depth = 0) {
   const { command, args } = cmd;
-  const { app, remoteArgs, isSSH } = parseFlySSHArgs(args);
+  const { app, remoteArgs, isSSH, flyCommand } = parseFlySSHArgs(args);
   if (!isSSH) return null;
   if (!app) return null;
   const matched = findMatchingTarget(app, targets);
   if (!matched) return null;
-  const result = evaluateRemoteCommand(remoteArgs, config, matched, depth);
+  const result = flyCommand !== null ? evaluateFlyRemoteCommand(flyCommand, config, matched, depth) : evaluateRemoteCommand(remoteArgs, config, matched, depth);
   return {
     command,
     args,
