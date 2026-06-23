@@ -1,5 +1,6 @@
 import { homedir } from 'os';
 import { join } from 'path';
+import { DANGEROUS_EXEC_ENV_PATTERN } from './env-danger';
 import { SHELL_INTERPRETERS } from './shells';
 import type { WardenConfig, CommandRule, ArgPattern } from './types';
 
@@ -218,11 +219,9 @@ export const DEFAULT_CONFIG: WardenConfig = {
         default: 'allow',
         argPatterns: [
           {
-            match: { anyArgMatches: [
-              '^(LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)=',
-            ]},
+            match: { anyArgMatches: [DANGEROUS_EXEC_ENV_PATTERN] },
             decision: 'ask',
-            description: 'Env vars that control library loading',
+            description: 'Env vars that control library loading or command execution',
           },
           {
             match: { anyArgMatches: [
