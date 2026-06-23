@@ -1,5 +1,6 @@
 import { homedir } from 'os';
 import { join } from 'path';
+import { SHELL_INTERPRETERS } from './shells';
 import type { WardenConfig, CommandRule, ArgPattern } from './types';
 
 // --- Shared patterns for Node.js ecosystem ---
@@ -264,7 +265,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
       })),
 
       // --- Shell interpreters ---
-      ...['bash', 'sh', 'zsh'].map((cmd): CommandRule => ({
+      ...[...SHELL_INTERPRETERS].map((cmd): CommandRule => ({
         command: cmd,
         default: 'ask',
         argPatterns: [
