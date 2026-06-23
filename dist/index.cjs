@@ -11011,6 +11011,19 @@ var Parser = class {
 // src/parser.ts
 var import_path = require("path");
 var import_os = require("os");
+
+// src/shells.ts
+var SHELL_INTERPRETERS = /* @__PURE__ */ new Set([
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "mksh",
+  "ash"
+]);
+
+// src/parser.ts
 var NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set(["TestCommand", "ArithmeticCommand"]);
 var VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
 function resolveVarRef(text, chainAssignments) {
@@ -11218,7 +11231,7 @@ function walkNode(node, result) {
         }
         break;
       }
-      if ((parsed.command === "sh" || parsed.command === "bash" || parsed.command === "zsh") && parsed.args.length >= 2 && parsed.args[0] === "-c") {
+      if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 2 && parsed.args[0] === "-c") {
         const innerResult = parseCommand(parsed.args[1]);
         if (innerResult.parseError) {
           result.commands.push(parsed);
@@ -11228,7 +11241,7 @@ function walkNode(node, result) {
           result.subshellCommands.push(...innerResult.subshellCommands);
           if (innerResult.incomplete) result.incomplete = true;
         }
-      } else if ((parsed.command === "sh" || parsed.command === "bash" || parsed.command === "zsh") && parsed.args.length >= 1) {
+      } else if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 1) {
         const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
         if (scriptIdx !== -1) {
           let scriptPath = parsed.args[scriptIdx];
@@ -11950,7 +11963,7 @@ var DEFAULT_CONFIG = {
         ]
       })),
       // --- Shell interpreters ---
-      ...["bash", "sh", "zsh"].map((cmd) => ({
+      ...[...SHELL_INTERPRETERS].map((cmd) => ({
         command: cmd,
         default: "ask",
         argPatterns: [
@@ -12988,7 +13001,6 @@ function shellQuote(arg) {
   }
   return arg;
 }
-var INTERACTIVE_SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "zsh"]);
 function configWithContextOverrides(config, target) {
   const overrideLayers = [];
   if (target?.overrides) overrideLayers.push(target.overrides);
@@ -13008,10 +13020,10 @@ function evaluateRemoteCommand(remoteArgs, config, target, depth = 0) {
     return { decision: "allow", reason: "interactive", details: [] };
   }
   const remoteCmd = remoteArgs[0];
-  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs.length === 1) {
+  if (SHELL_INTERPRETERS.has(remoteCmd) && remoteArgs.length === 1) {
     return { decision: "allow", reason: "interactive shell", details: [] };
   }
-  if (INTERACTIVE_SHELLS.has(remoteCmd) && remoteArgs[1] === "-c" && remoteArgs.length >= 3) {
+  if (SHELL_INTERPRETERS.has(remoteCmd) && remoteArgs[1] === "-c" && remoteArgs.length >= 3) {
     const innerCommand = remoteArgs.slice(2).join(" ");
     const parsed2 = parseCommand(innerCommand);
     return evaluate(parsed2, overriddenConfig, depth + 1);
@@ -13627,7 +13639,7 @@ function evaluateXargsCommand(cmd, config, depth = 0) {
       matchedRule: "xargs:subcommand"
     };
   }
-  const isShellExec = (subcommand.command === "sh" || subcommand.command === "bash" || subcommand.command === "zsh") && subcommand.args.length >= 2 && subcommand.args[0] === "-c";
+  const isShellExec = SHELL_INTERPRETERS.has(subcommand.command) && subcommand.args.length >= 2 && subcommand.args[0] === "-c";
   let parsed;
   if (isShellExec) {
     const innerResult = parseCommand(subcommand.args[1]);
