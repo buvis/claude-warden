@@ -8,6 +8,7 @@ import { pathGlobToRegex } from './glob';
 import { evaluateTargetPolicies } from './targets';
 import { warn } from './rules';
 import { tryRemoteExec } from './remote-exec';
+import { matchesDangerousEnv } from './env-danger';
 import { trySubcommandRunner } from './subcommand-runner';
 import { tryScriptEval } from './script-eval';
 
@@ -208,23 +209,48 @@ const RESOLVE_LAYERS: DecisionLayer[] = [specializedLayer, commandRulesLayer];
 export function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, chainAssignments?: Map<string, ChainAssignment>, cwd?: string): CommandEvalDetail {
   const ctx: EvalContext = { cmd, config, depth, chain: chainAssignments, cwd };
 
-  // Explicit policy first → auto-allow (skipped entirely under defaultDecision 'deny')
-  // → real evaluation → the configured default. First non-null decision wins.
   const autoAllow = config.defaultDecision === 'deny' ? [] : AUTO_ALLOW_LAYERS;
+  let result: CommandEvalDetail | null = null;
   for (const layer of [...PRE_LAYERS, ...autoAllow, ...RESOLVE_LAYERS]) {
-    const result = layer(ctx);
-    // Preserve chain-resolved provenance ($VAR → binary) on every decision for the audit log.
-    if (result) return cmd.resolvedFrom ? { ...result, resolvedFrom: cmd.resolvedFrom } : result;
+    const r = layer(ctx);
+    if (r) {
+      result = r;
+      break;
+    }
+  }
+  if (!result) {
+    result = {
+      command: cmd.command,
+      args: cmd.args,
+      decision: config.defaultDecision,
+      reason: 'unknown command',
+      matchedRule: 'default',
+    };
   }
 
-  return {
-    command: cmd.command,
-    args: cmd.args,
-    decision: config.defaultDecision,
-    reason: 'unknown command',
-    matchedRule: 'default',
-    ...(cmd.resolvedFrom ? { resolvedFrom: cmd.resolvedFrom } : {}),
-  };
+  // Env-prefix danger: a dangerous exec-control env prefix upgrades allow -> ask.
+  // ONLY `allow` is touched, so an explicit deny/ask is never downgraded.
+  // `env VAR=... cmd` puts the assignment in args (and `env` is always-allowed,
+  // shadowing any command rule), so for the `env` command also scan its args.
+  // Every other command carries env only in envPrefixes.
+  if (result.decision === 'allow') {
+    const tokens = cmd.command === 'env' ? [...cmd.envPrefixes, ...cmd.args] : cmd.envPrefixes;
+    for (const token of tokens) {
+      const name = matchesDangerousEnv(token);
+      if (name) {
+        result = {
+          ...result,
+          decision: 'ask',
+          reason: `dangerous environment variable: ${name}`,
+          matchedRule: 'dangerousEnvPrefix',
+        };
+        break;
+      }
+    }
+  }
+
+  // Preserve chain-resolved provenance ($VAR -> binary) on every decision for the audit log.
+  return cmd.resolvedFrom ? { ...result, resolvedFrom: cmd.resolvedFrom } : result;
 }
 
 function isTempDir(path: string): boolean {
