@@ -2449,6 +2449,60 @@ describe('script safety scanning', () => {
       expect(rm?.matchedRule).not.toBe('chainLocalRm');
     });
   });
+
+  describe('dangerous env-prefix detection', () => {
+    it('asks for a GIT_PAGER prefix on git (headline case)', () => {
+      expect(eval_("GIT_PAGER='rm -rf /' git log").decision).toBe('ask');
+    });
+
+    it('reason contains the variable name for the headline case', () => {
+      expect(eval_("GIT_PAGER='rm -rf /' git log").reason).toContain('GIT_PAGER');
+    });
+
+    it('asks for an LD_PRELOAD library-injection prefix on an allowed command', () => {
+      expect(eval_('LD_PRELOAD=/tmp/evil.so ls').decision).toBe('ask');
+    });
+
+    it('asks for a BASH_ENV prefix on sh -c', () => {
+      expect(eval_('BASH_ENV=/tmp/evil sh -c true').decision).toBe('ask');
+    });
+
+    it('asks for a BASH_ENV prefix on a multi-command sh -c (ask is sticky across inner chain)', () => {
+      expect(eval_('BASH_ENV=x sh -c "ls; cat f"').decision).toBe('ask');
+    });
+
+    it('asks for a dangerous var as an env command argument', () => {
+      expect(eval_('env GIT_EXTERNAL_DIFF=evil git diff').decision).toBe('ask');
+    });
+
+    it('asks for a dangerous env arg that survives leading flags like -u', () => {
+      expect(eval_('env -u LD_PRELOAD GIT_PAGER=evil git log').decision).toBe('ask');
+    });
+
+    it('allows env with no dangerous assignment (no false positive)', () => {
+      expect(eval_('env git log').decision).toBe('allow');
+    });
+
+    it('asks for GIT_PAGER even when the value looks harmless (value-agnostic)', () => {
+      expect(eval_('GIT_PAGER=cat git log').decision).toBe('ask');
+    });
+
+    it('allows a benign NODE_ENV prefix (no false positive)', () => {
+      expect(eval_('NODE_ENV=production ls').decision).toBe('allow');
+    });
+
+    it('allows a benign FOO prefix over an allowed inner command (no false positive)', () => {
+      expect(eval_('FOO=bar sh -c "ls"').decision).toBe('allow');
+    });
+
+    it('asks for LD_PRELOAD prefix on a relative-path local binary (dangerous prefix overrides auto-allow)', () => {
+      expect(eval_('LD_PRELOAD=/evil.so ./localbin').decision).toBe('ask');
+    });
+
+    it('does not downgrade a deny to ask when a dangerous prefix is present on a denied command', () => {
+      expect(eval_('LD_PRELOAD=/evil.so sudo apt install').decision).toBe('deny');
+    });
+  });
 });
 
 describe('incomplete parse handling', () => {
