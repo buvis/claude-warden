@@ -451,6 +451,24 @@ export function walkNode(node: Node, result: WalkResult): void {
   }
 }
 
+/**
+ * Cap at ask when the input has 2+ heredoc openers: unbash captures only the
+ * first heredoc body and drops the rest, so we can't see (let alone certify)
+ * what actually executes. Strip the captured bodies before counting so a `<<`
+ * INSIDE a body (a bit-shift, Ruby's append operator) is never miscounted as a
+ * second heredoc. `replaceAll` strips every occurrence — a body that recurs
+ * earlier in the input only removes more spurious `<<`, which stays fail-safe.
+ */
+function dropHeredocsIfMultiple(input: string, commands: ParsedCommand[]): void {
+  let skeleton = input;
+  for (const cmd of commands) {
+    if (cmd.heredoc) skeleton = skeleton.replaceAll(cmd.heredoc.content, '');
+  }
+  if ((skeleton.match(/<<(?!<)/g) ?? []).length > 1) {
+    for (const cmd of commands) delete cmd.heredoc;
+  }
+}
+
 export function parseCommand(input: string): ParseResult {
   if (!input || !input.trim()) {
     return {
@@ -487,18 +505,7 @@ export function parseCommand(input: string): ParseResult {
     walkNode(stmt, result);
   }
 
-  // Cap at ask when the input has 2+ heredoc openers: unbash captures only the
-  // first heredoc body and drops the rest, so we can't see (let alone certify)
-  // what actually executes. Strip the captured bodies before counting so a `<<`
-  // INSIDE a body (a bit-shift, Ruby's append operator) is never miscounted as a
-  // second heredoc.
-  let heredocSkeleton = input;
-  for (const cmd of result.commands) {
-    if (cmd.heredoc) heredocSkeleton = heredocSkeleton.replace(cmd.heredoc.content, '');
-  }
-  if ((heredocSkeleton.match(/<<(?!<)/g) ?? []).length > 1) {
-    for (const cmd of result.commands) delete cmd.heredoc;
-  }
+  dropHeredocsIfMultiple(input, result.commands);
 
   return {
     commands: result.commands,
