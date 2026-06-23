@@ -721,6 +721,50 @@ describe('evaluator', () => {
     it('allows bash -c with piped safe commands on trusted container', () => {
       expect(evalWith(`docker exec my-app bash -c 'tail -100 /tmp/app.log | grep error | tail -20'`, { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('allow');
     });
+
+    it('allows bare dash on trusted container (interactive shell)', () => {
+      expect(evalWith('docker exec my-app dash', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('allow');
+    });
+
+    it('allows bare ksh on trusted container (interactive shell)', () => {
+      expect(evalWith('docker exec my-app ksh', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('allow');
+    });
+
+    it('allows dash -c with safe command on trusted container', () => {
+      expect(evalWith('docker exec my-app dash -c "ls -la"', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('allow');
+    });
+
+    it('allows ksh -c with safe command on trusted container', () => {
+      expect(evalWith('docker exec my-app ksh -c "ls -la"', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('allow');
+    });
+
+    it('denies dash -c with dangerous command on trusted container', () => {
+      expect(evalWith('docker exec my-app dash -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('deny');
+    });
+
+    it('denies ksh -c with dangerous command on trusted container', () => {
+      expect(evalWith('docker exec my-app ksh -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('deny');
+    });
+
+    it('denies mksh -c with dangerous command on trusted container', () => {
+      expect(evalWith('docker exec my-app mksh -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('deny');
+    });
+
+    it('denies ash -c with dangerous command on trusted container', () => {
+      expect(evalWith('docker exec my-app ash -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') }).decision).toBe('deny');
+    });
+
+    it('dash -c dangerous command matches bash -c dangerous command decision', () => {
+      const bashResult = evalWith('docker exec my-app bash -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') });
+      const dashResult = evalWith('docker exec my-app dash -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') });
+      expect(dashResult.decision).toBe(bashResult.decision);
+    });
+
+    it('ksh -c dangerous command matches bash -c dangerous command decision', () => {
+      const bashResult = evalWith('docker exec my-app bash -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') });
+      const kshResult = evalWith('docker exec my-app ksh -c "sudo rm -rf /"', { trustedRemotes: toRemotes(containers, 'docker') });
+      expect(kshResult.decision).toBe(bashResult.decision);
+    });
   });
 
   describe('kubectl context whitelisting', () => {
@@ -781,6 +825,22 @@ describe('evaluator', () => {
 
     it('allows bash -c with piped safe commands on trusted context', () => {
       expect(evalWith(`kubectl exec --context minikube my-pod -- bash -c 'tail -100 /tmp/app.log | grep error | tail -20'`, { trustedRemotes: toRemotes(contexts, 'kubectl') }).decision).toBe('allow');
+    });
+
+    it('allows bare dash on trusted context (interactive shell)', () => {
+      expect(evalWith('kubectl exec --context minikube my-pod -- dash', { trustedRemotes: toRemotes(contexts, 'kubectl') }).decision).toBe('allow');
+    });
+
+    it('allows bare ksh on trusted context (interactive shell)', () => {
+      expect(evalWith('kubectl exec --context minikube my-pod -- ksh', { trustedRemotes: toRemotes(contexts, 'kubectl') }).decision).toBe('allow');
+    });
+
+    it('denies dash -c with dangerous command on trusted context', () => {
+      expect(evalWith('kubectl exec --context minikube my-pod -- dash -c "sudo rm -rf /"', { trustedRemotes: toRemotes(contexts, 'kubectl') }).decision).toBe('deny');
+    });
+
+    it('denies ksh -c with dangerous command on trusted context', () => {
+      expect(evalWith('kubectl exec --context minikube my-pod -- ksh -c "sudo rm -rf /"', { trustedRemotes: toRemotes(contexts, 'kubectl') }).decision).toBe('deny');
     });
   });
 
