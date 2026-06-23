@@ -324,6 +324,64 @@ describe('parseCommand', () => {
     expect(cmds).toContain('cd');
     expect(cmds).toContain('ls');
   });
+
+  // --- POSIX shell variants: dash, ksh, mksh, ash ---
+
+  it('recursively parses dash -c commands', () => {
+    const result = parseCommand('dash -c "rm -rf /tmp/x"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('rm');
+  });
+
+  it('recursively parses ksh -c commands', () => {
+    const result = parseCommand('ksh -c "rm -rf /tmp/x"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('rm');
+  });
+
+  it('recursively parses mksh -c commands', () => {
+    const result = parseCommand('mksh -c "echo hi"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('echo');
+  });
+
+  it('recursively parses ash -c commands', () => {
+    const result = parseCommand('ash -c "echo hi"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('echo');
+  });
+
+  it('recursively parses dash -c commands with pipe operator', () => {
+    const result = parseCommand('dash -c "cat f | wc -l"');
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].command).toBe('cat');
+    expect(result.commands[1].command).toBe('wc');
+  });
+
+  it('extracts script as command from dash script.sh', () => {
+    const result = parseCommand('dash deploy.sh');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('deploy.sh');
+    expect(result.commands[0].args).toEqual([]);
+  });
+
+  it('still recursively parses sh -c commands (regression)', () => {
+    const result = parseCommand('sh -c "echo hi"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('echo');
+  });
+
+  it('still recursively parses bash -c commands (regression)', () => {
+    const result = parseCommand('bash -c "echo hi"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('echo');
+  });
+
+  it('still recursively parses zsh -c commands (regression)', () => {
+    const result = parseCommand('zsh -c "echo hi"');
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].command).toBe('echo');
+  });
 });
 
 describe('chain-local variable tracking', () => {
