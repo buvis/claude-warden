@@ -23,6 +23,7 @@
 - **warden**: `diagnose` reports uninspectable plugin/binary/audit links as `unknown`/`warn` instead of a false pass
 - **script-scanner**: Python `open(*args)` splat calls are no longer treated as a safe single-arg read — the file mode is hidden in the unpacked args and could be a write, so these now ask instead of being silently allowed
 - **rules**: unknown keys inside an `argPattern`'s `argCount` (e.g. a `min`/`max` typo) are now reported with a "did you mean" suggestion instead of being silently dropped, so a mistyped count constraint no longer fails silent
+- **parser**: `dash`, `ksh`, `mksh`, and `ash` `-c "<command>"` wrappers (and bare `<script>` invocations) now have their inner command inspected the same way `sh`/`bash`/`zsh` already are, closing a silent-bypass gap where e.g. `dash -c "rm -rf /x"` fell through to the default decision instead of being judged by its inner command. Coverage extends across the parser, xargs subcommands, the default rule set, and trusted-remote `-c` wrappers
 
 ## [0.12.0] - 2026-06-09
 

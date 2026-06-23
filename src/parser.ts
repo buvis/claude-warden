@@ -9,6 +9,7 @@ import type {
 } from 'unbash';
 import { basename, resolve } from 'path';
 import { homedir } from 'os';
+import { SHELL_INTERPRETERS } from './shells';
 import type { ParsedCommand, ParseResult, ChainAssignment } from './types';
 
 export interface WalkResult {
@@ -291,9 +292,7 @@ export function walkNode(node: Node, result: WalkResult): void {
 
       // Handle sh/bash/zsh -c "..." recursion
       if (
-        (parsed.command === 'sh' ||
-          parsed.command === 'bash' ||
-          parsed.command === 'zsh') &&
+        SHELL_INTERPRETERS.has(parsed.command) &&
         parsed.args.length >= 2 &&
         parsed.args[0] === '-c'
       ) {
@@ -307,9 +306,7 @@ export function walkNode(node: Node, result: WalkResult): void {
           if (innerResult.incomplete) result.incomplete = true;
         }
       } else if (
-        (parsed.command === 'sh' ||
-          parsed.command === 'bash' ||
-          parsed.command === 'zsh') &&
+        SHELL_INTERPRETERS.has(parsed.command) &&
         parsed.args.length >= 1
       ) {
         // Handle sh/bash/zsh <script> - extract script as the command
