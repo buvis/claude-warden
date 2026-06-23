@@ -300,7 +300,16 @@ export function walkNode(node: Node, result: WalkResult): void {
         if (innerResult.parseError) {
           result.commands.push(parsed);
         } else {
-          result.commands.push(...innerResult.commands);
+          if (parsed.envPrefixes.length > 0) {
+            result.commands.push(
+              ...innerResult.commands.map(cmd => ({
+                ...cmd,
+                envPrefixes: [...parsed.envPrefixes, ...cmd.envPrefixes],
+              })),
+            );
+          } else {
+            result.commands.push(...innerResult.commands);
+          }
           if (innerResult.hasSubshell) result.hasSubshell = true;
           result.subshellCommands.push(...innerResult.subshellCommands);
           if (innerResult.incomplete) result.incomplete = true;
