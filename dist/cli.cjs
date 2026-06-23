@@ -11236,7 +11236,16 @@ function walkNode(node, result) {
         if (innerResult.parseError) {
           result.commands.push(parsed);
         } else {
-          result.commands.push(...innerResult.commands);
+          if (parsed.envPrefixes.length > 0) {
+            result.commands.push(
+              ...innerResult.commands.map((cmd2) => ({
+                ...cmd2,
+                envPrefixes: [...parsed.envPrefixes, ...cmd2.envPrefixes]
+              }))
+            );
+          } else {
+            result.commands.push(...innerResult.commands);
+          }
           if (innerResult.hasSubshell) result.hasSubshell = true;
           result.subshellCommands.push(...innerResult.subshellCommands);
           if (innerResult.incomplete) result.incomplete = true;
@@ -11476,6 +11485,35 @@ var import_path3 = require("path");
 // src/defaults.ts
 var import_os2 = require("os");
 var import_path2 = require("path");
+
+// src/env-danger.ts
+var DANGEROUS_EXEC_ENV = /* @__PURE__ */ new Set([
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+  "DYLD_FRAMEWORK_PATH",
+  "PAGER",
+  "GIT_PAGER",
+  "GIT_EXTERNAL_DIFF",
+  "GIT_SEQUENCE_EDITOR",
+  "GIT_EDITOR",
+  "GIT_SSH_COMMAND",
+  "BASH_ENV",
+  "ENV",
+  "PROMPT_COMMAND",
+  "PERL5OPT",
+  "PYTHONSTARTUP"
+]);
+function matchesDangerousEnv(token) {
+  const idx = token.indexOf("=");
+  if (idx === -1) return null;
+  const name = token.slice(0, idx);
+  return DANGEROUS_EXEC_ENV.has(name) ? name : null;
+}
+var DANGEROUS_EXEC_ENV_PATTERN = `^(${[...DANGEROUS_EXEC_ENV].join("|")})=`;
+
+// src/defaults.ts
 var SAFE_DEV_TOOLS = [
   "jest",
   "vitest",
@@ -11918,11 +11956,9 @@ var DEFAULT_CONFIG = {
         default: "allow",
         argPatterns: [
           {
-            match: { anyArgMatches: [
-              "^(LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)="
-            ] },
+            match: { anyArgMatches: [DANGEROUS_EXEC_ENV_PATTERN] },
             decision: "ask",
-            description: "Env vars that control library loading"
+            description: "Env vars that control library loading or command execution"
           },
           {
             match: { anyArgMatches: [
@@ -14315,18 +14351,39 @@ var RESOLVE_LAYERS = [specializedLayer, commandRulesLayer];
 function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
   const ctx = { cmd, config, depth, chain: chainAssignments, cwd };
   const autoAllow = config.defaultDecision === "deny" ? [] : AUTO_ALLOW_LAYERS;
+  let result = null;
   for (const layer of [...PRE_LAYERS, ...autoAllow, ...RESOLVE_LAYERS]) {
-    const result = layer(ctx);
-    if (result) return cmd.resolvedFrom ? { ...result, resolvedFrom: cmd.resolvedFrom } : result;
+    const r = layer(ctx);
+    if (r) {
+      result = r;
+      break;
+    }
   }
-  return {
-    command: cmd.command,
-    args: cmd.args,
-    decision: config.defaultDecision,
-    reason: "unknown command",
-    matchedRule: "default",
-    ...cmd.resolvedFrom ? { resolvedFrom: cmd.resolvedFrom } : {}
-  };
+  if (!result) {
+    result = {
+      command: cmd.command,
+      args: cmd.args,
+      decision: config.defaultDecision,
+      reason: "unknown command",
+      matchedRule: "default"
+    };
+  }
+  if (result.decision === "allow") {
+    const tokens = cmd.command === "env" ? [...cmd.envPrefixes, ...cmd.args] : cmd.envPrefixes;
+    for (const token of tokens) {
+      const name = matchesDangerousEnv(token);
+      if (name) {
+        result = {
+          ...result,
+          decision: "ask",
+          reason: `dangerous environment variable: ${name}`,
+          matchedRule: "dangerousEnvPrefix"
+        };
+        break;
+      }
+    }
+  }
+  return cmd.resolvedFrom ? { ...result, resolvedFrom: cmd.resolvedFrom } : result;
 }
 function isTempDir(path) {
   if (path === "/tmp" || path.startsWith("/tmp/")) return true;
