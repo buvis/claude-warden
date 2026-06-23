@@ -1311,6 +1311,40 @@ describe('evaluator', () => {
     });
   });
 
+  describe('export dangerous env-var arg form', () => {
+    it('asks when exporting BASH_ENV (shell-init var)', () => {
+      expect(eval_('export BASH_ENV=/tmp/x').decision).toBe('ask');
+    });
+
+    it('asks when exporting GIT_PAGER (git/pager var)', () => {
+      expect(eval_('export GIT_PAGER=evil').decision).toBe('ask');
+    });
+
+    it('asks when exporting GIT_SSH_COMMAND (git-exec var with = inside value)', () => {
+      expect(eval_("export GIT_SSH_COMMAND='ssh -o foo=bar'").decision).toBe('ask');
+    });
+
+    it('asks when exporting PERL5OPT (interpreter-init var)', () => {
+      expect(eval_('export PERL5OPT=-Mevil').decision).toBe('ask');
+    });
+
+    it('asks when exporting LD_PRELOAD (library-loading var — regression)', () => {
+      expect(eval_('export LD_PRELOAD=/tmp/evil.so').decision).toBe('ask');
+    });
+
+    it('allows a benign export with no dangerous name', () => {
+      expect(eval_('export FOO=bar').decision).toBe('allow');
+    });
+
+    it('allows a PATH extension that preserves PATH (regression guard)', () => {
+      expect(eval_('export PATH=$PATH:/usr/local/bin').decision).toBe('allow');
+    });
+
+    it('asks for a PATH replacement that drops the existing PATH (regression guard)', () => {
+      expect(eval_('export PATH=/only/this').decision).toBe('ask');
+    });
+  });
+
   describe('full-path whitelist', () => {
     it('full-path in alwaysAllow matches only that exact path', () => {
       const layer: ConfigLayer = { alwaysAllow: ['/home/user/bin/my-script.sh'], alwaysDeny: [], rules: [] };
