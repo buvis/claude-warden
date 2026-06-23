@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { SHELL_INTERPRETERS } from '../shells';
 
 /**
  * PRD 00017 single-source-of-truth guard.
@@ -19,7 +20,9 @@ import { join } from 'path';
  * threshold keeps it from tripping on `[...SHELL_INTERPRETERS]` spreads, flag-only
  * sets like `['-b','-c',...]`, or incidental substrings.
  */
-const SHELL_NAMES = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'ash'];
+// Derived from the single source of truth so the detector vocabulary tracks
+// SHELL_INTERPRETERS automatically (no second copy of the list to drift).
+const SHELL_NAMES = [...SHELL_INTERPRETERS];
 
 /** Bracket literals in `content` that hardcode 2+ distinct quoted shell names. */
 function hardcodedShellArrays(content: string): string[] {

@@ -290,7 +290,7 @@ export function walkNode(node: Node, result: WalkResult): void {
         break;
       }
 
-      // Handle sh/bash/zsh -c "..." recursion
+      // Handle POSIX shell (SHELL_INTERPRETERS) -c "..." recursion
       if (
         SHELL_INTERPRETERS.has(parsed.command) &&
         parsed.args.length >= 2 &&
@@ -309,7 +309,7 @@ export function walkNode(node: Node, result: WalkResult): void {
         SHELL_INTERPRETERS.has(parsed.command) &&
         parsed.args.length >= 1
       ) {
-        // Handle sh/bash/zsh <script> - extract script as the command
+        // Handle POSIX shell (SHELL_INTERPRETERS) <script> - extract script as the command
         const scriptIdx = parsed.args.findIndex(a => !a.startsWith('-'));
         if (scriptIdx !== -1) {
           let scriptPath = parsed.args[scriptIdx];

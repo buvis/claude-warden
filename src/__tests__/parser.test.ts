@@ -358,8 +358,8 @@ describe('parseCommand', () => {
     expect(result.commands[1].command).toBe('wc');
   });
 
-  it('extracts script as command from dash script.sh', () => {
-    const result = parseCommand('dash deploy.sh');
+  it.each(['dash', 'ksh', 'mksh', 'ash'])('extracts script as command from %s script.sh', (shell) => {
+    const result = parseCommand(`${shell} deploy.sh`);
     expect(result.commands).toHaveLength(1);
     expect(result.commands[0].command).toBe('deploy.sh');
     expect(result.commands[0].args).toEqual([]);
