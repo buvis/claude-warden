@@ -2,6 +2,7 @@ import type { ParsedCommand, ParseResult, WardenConfig, CommandEvalDetail } from
 import { parseCommand } from './parser';
 import { evaluate, evaluateCommand } from './evaluator';
 import { makeCommand, skipLeadingFlags } from './args';
+import { SHELL_INTERPRETERS } from './shells';
 
 /** Wrap a single ParsedCommand as a standalone ParseResult for recursive evaluation. */
 function asParseResult(cmd: ParsedCommand): ParseResult {
@@ -185,9 +186,9 @@ function evaluateXargsCommand(cmd: ParsedCommand, config: WardenConfig, depth: n
     };
   }
 
-  // Handle sh/bash/zsh -c "..." - recursively parse inner command
+  // Handle sh/bash/zsh/dash/ksh/mksh/ash -c "..." - recursively parse inner command
   const isShellExec =
-    (subcommand.command === 'sh' || subcommand.command === 'bash' || subcommand.command === 'zsh') &&
+    SHELL_INTERPRETERS.has(subcommand.command) &&
     subcommand.args.length >= 2 &&
     subcommand.args[0] === '-c';
 
