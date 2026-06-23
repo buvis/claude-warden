@@ -1661,6 +1661,18 @@ describe('evaluator', () => {
     it('allows bare bash on trusted app (interactive shell)', () => {
       expect(evalWith('fly ssh console -a my-app -C "bash"', { trustedRemotes: toRemotes(apps, 'fly') }).decision).toBe('allow');
     });
+
+    it('denies a -C chain whose tail command is denied (no commands[0] collapse)', () => {
+      expect(evalWith('fly ssh console -a my-app -C "echo ok && sudo rm -rf /"', { trustedRemotes: toRemotes(apps, 'fly') }).decision).toBe('deny');
+    });
+
+    it('denies a -C dash -c chain hiding a denied command (PRD-exposed bypass)', () => {
+      expect(evalWith('fly ssh console -a my-app -C "dash -c \\"echo ok && sudo rm -rf /\\""', { trustedRemotes: toRemotes(apps, 'fly') }).decision).toBe('deny');
+    });
+
+    it('still allows a -C chain when every command is safe', () => {
+      expect(evalWith('fly ssh console -a my-app -C "echo ok && ls -la"', { trustedRemotes: toRemotes(apps, 'fly') }).decision).toBe('allow');
+    });
   });
 
   describe('composio', () => {
