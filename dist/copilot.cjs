@@ -11341,6 +11341,15 @@ function walkNode(node, result) {
       break;
   }
 }
+function dropHeredocsIfMultiple(input, commands) {
+  let skeleton = input;
+  for (const cmd of commands) {
+    if (cmd.heredoc) skeleton = skeleton.replaceAll(cmd.heredoc.content, "");
+  }
+  if ((skeleton.match(/<<(?!<)/g) ?? []).length > 1) {
+    for (const cmd of commands) delete cmd.heredoc;
+  }
+}
 function parseCommand(input) {
   if (!input || !input.trim()) {
     return {
@@ -11371,13 +11380,7 @@ function parseCommand(input) {
   for (const stmt of ast.commands) {
     walkNode(stmt, result);
   }
-  let heredocSkeleton = input;
-  for (const cmd of result.commands) {
-    if (cmd.heredoc) heredocSkeleton = heredocSkeleton.replace(cmd.heredoc.content, "");
-  }
-  if ((heredocSkeleton.match(/<<(?!<)/g) ?? []).length > 1) {
-    for (const cmd of result.commands) delete cmd.heredoc;
-  }
+  dropHeredocsIfMultiple(input, result.commands);
   return {
     commands: result.commands,
     hasSubshell: result.hasSubshell,
@@ -13967,6 +13970,7 @@ function askRepl(cmd, rule) {
 }
 function evalHeredocScan(cmd, language, rule, config) {
   const hd = cmd.heredoc;
+  if (userRulesWouldRestrict(cmd, config)) return null;
   if (!hd.quotedDelimiter && /[$`]/.test(hd.content)) {
     return {
       command: cmd.command,
