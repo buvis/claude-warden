@@ -913,3 +913,43 @@ describe('walkNode incomplete signal', () => {
     expect(result.incomplete).toBeFalsy();
   });
 });
+
+describe('sh -c envPrefixes propagation', () => {
+  it('propagates BASH_ENV prefix onto inner node command', () => {
+    const result = parseCommand('BASH_ENV=/tmp/e sh -c "node y"');
+    const node = result.commands.find(c => c.command === 'node');
+    expect(node).toBeDefined();
+    expect(node!.envPrefixes).toContain('BASH_ENV=/tmp/e');
+  });
+
+  it('propagates simple FOO=bar prefix onto inner ls command', () => {
+    const result = parseCommand('FOO=bar sh -c "ls"');
+    const ls = result.commands.find(c => c.command === 'ls');
+    expect(ls).toBeDefined();
+    expect(ls!.envPrefixes).toContain('FOO=bar');
+  });
+
+  it('propagates BASH_ENV prefix onto every inner command when multiple inner commands are present', () => {
+    const result = parseCommand('BASH_ENV=x sh -c "ls; node y"');
+    const ls = result.commands.find(c => c.command === 'ls');
+    const node = result.commands.find(c => c.command === 'node');
+    expect(ls).toBeDefined();
+    expect(node).toBeDefined();
+    expect(ls!.envPrefixes).toContain('BASH_ENV=x');
+    expect(node!.envPrefixes).toContain('BASH_ENV=x');
+  });
+
+  it('does not add spurious envPrefixes when the sh -c wrapper has no prefix', () => {
+    const result = parseCommand('sh -c "echo hi"');
+    const echo = result.commands.find(c => c.command === 'echo');
+    expect(echo).toBeDefined();
+    expect(echo!.envPrefixes).toHaveLength(0);
+  });
+
+  it('propagates LD_PRELOAD prefix onto inner node command via bash -c', () => {
+    const result = parseCommand('LD_PRELOAD=/a.so bash -c "node y"');
+    const node = result.commands.find(c => c.command === 'node');
+    expect(node).toBeDefined();
+    expect(node!.envPrefixes).toContain('LD_PRELOAD=/a.so');
+  });
+});
