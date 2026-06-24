@@ -14372,8 +14372,9 @@ function evaluateCommand(cmd, config, depth = 0, chainAssignments, cwd) {
       matchedRule: "default"
     };
   }
-  if (result.decision === "allow") {
-    const tokens = cmd.command === "env" ? [...cmd.envPrefixes, ...cmd.args] : cmd.envPrefixes;
+  if (result.decision !== "deny") {
+    const ARG_SCAN_CMDS = /* @__PURE__ */ new Set(["env", "set", "declare"]);
+    const tokens = ARG_SCAN_CMDS.has(cmd.command) ? [...cmd.envPrefixes, ...cmd.args] : cmd.envPrefixes;
     for (const token of tokens) {
       const name = matchesDangerousEnv(token);
       if (name) {
