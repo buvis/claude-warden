@@ -343,13 +343,16 @@ describe('checkVersionSync', () => {
     expect(result.status).not.toBe('fail');
   });
 
-  it('passes when only package.json stamp is present and has a valid version', () => {
+  it('returns unknown when only package.json is present and the required plugin.json stamp is missing', () => {
+    // Finding 6: .claude-plugin/plugin.json is now a REQUIRED stamp in a warden tree.
+    // A tree with only package.json can no longer report a clean pass — the missing
+    // required stamp is uninspectable, so the honest verdict is unknown.
     const root = tmpRoot();
     writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.2.3' });
     const result = checkVersionSync(makeEnv(root));
-    expect(result.status).toBe('pass');
-    expect(result.status).not.toBe('skip');
-    expect(result.detail).toContain('1.2.3');
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
   });
 
   it('passes when package.json and plugin.json agree', () => {
@@ -390,8 +393,12 @@ describe('checkVersionSync', () => {
   });
 
   it('warns when marketplace.json disagrees with package.json', () => {
+    // Finding 6: plugin.json is required, so include it (agreeing with package.json)
+    // to reach the version-drift warn path; the optional marketplace.json is the one
+    // that disagrees.
     const root = tmpRoot();
     writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '1.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '1.0.0' });
     writeJson(root, join('.claude-plugin', 'marketplace.json'), { plugins: [{ name: 'warden', version: '9.9.9' }] });
     const result = checkVersionSync(makeEnv(root));
     expect(result.status).toBe('warn');
@@ -399,14 +406,17 @@ describe('checkVersionSync', () => {
     expect(result.detail).toContain('9.9.9');
   });
 
-  it('absent stamp files are silently omitted and do not fail the check', () => {
-    // Only package.json present — no plugin.json, no marketplace.json
+  it('absent OPTIONAL marketplace stamps are omitted and the check still passes', () => {
+    // Finding 6: both REQUIRED stamps present (package.json + plugin.json); the
+    // optional marketplace.json stamps are absent and must be silently omitted,
+    // not flip the check to unknown or fail.
     const root = tmpRoot();
     writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: '4.0.0' });
+    writeJson(root, join('.claude-plugin', 'plugin.json'), { version: '4.0.0' });
     const result = checkVersionSync(makeEnv(root));
     expect(result.status).toBe('pass');
     expect(result.status).not.toBe('skip');
-    expect(result.status).not.toBe('fail');
+    expect(result.status).not.toBe('unknown');
   });
 
   it('pass detail lists each present stamp and its value', () => {
@@ -438,6 +448,28 @@ describe('checkVersionSync', () => {
     const result = checkVersionSync(makeEnv(root));
     expect(result.status).toBe('unknown');
     expect(result.status).not.toBe('skip');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('returns unknown when package.json version is a number, not a string', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden', version: 123 });
+    const result = checkVersionSync(makeEnv(root));
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('returns unknown when installed_plugins.json is corrupt, even with a fully-stamped warden checkout at repoRoot', () => {
+    const home = tmpRoot();
+    const repoRoot = tmpRoot();
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden', version: '1.0.0' });
+    writeJson(repoRoot, join('.claude-plugin', 'plugin.json'), { version: '1.0.0' });
+    writeFile(home, join('.claude', 'plugins', 'installed_plugins.json'), '{ not valid json {{');
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+    const result = checkVersionSync(env);
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass');
     expect(result.fix).toBeTruthy();
   });
 });
