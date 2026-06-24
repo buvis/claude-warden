@@ -175,6 +175,14 @@ function lookupInstalledPlugin(pluginsJsonPath: string, repoRoot: string): Plugi
                 return { mode: 'installed', root: installPath, installPath };
               }
             }
+            // Warden key present but stale: entries not a non-empty array, or installPath
+            // missing / nonexistent on disk -> uninspectable, report unknown (not a silent
+            // dev-checkout fall-through that would produce a false pass).
+            return {
+              mode: 'not-found',
+              root: repoRoot,
+              inspectError: `installed_plugins.json has a warden entry but its installPath is missing or does not exist (${pluginsJsonPath})`,
+            };
           }
         }
       }
@@ -189,27 +197,33 @@ function lookupInstalledPlugin(pluginsJsonPath: string, repoRoot: string): Plugi
   return null;
 }
 
-function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
-  // 1. Check installed_plugins.json
-  const pluginsJsonPath = join(env.home, '.claude', 'plugins', 'installed_plugins.json');
-  const installed = lookupInstalledPlugin(pluginsJsonPath, env.repoRoot);
-  if (installed !== null) return installed;
-
-  // 2. Check dev checkout
-  const pkgPath = join(env.repoRoot, 'package.json');
+function isWardenSourceTree(repoRoot: string): boolean {
+  const pkgPath = join(repoRoot, 'package.json');
   try {
     if (existsSync(pkgPath)) {
       const raw = readFileSync(pkgPath, 'utf-8');
       const parsed = JSON.parse(raw) as { name?: string };
       if (parsed.name === '@buvis/claude-warden') {
-        return { mode: 'dev', root: env.repoRoot };
+        return true;
       }
     }
   } catch {
     // ignore
   }
+  return false;
+}
 
-  // 3. Not found
+function resolvePluginRoot(env: DiagnoseEnv): PluginRoot {
+  const pluginsJsonPath = join(env.home, '.claude', 'plugins', 'installed_plugins.json');
+  const installed = lookupInstalledPlugin(pluginsJsonPath, env.repoRoot);
+  // 1. Registry could not be inspected (corrupt/unreadable) OR a warden entry is
+  //    present-but-stale -> unknown, regardless of any dev checkout.
+  if (installed && installed.inspectError) return installed;
+  // 2. The executing Warden: if repoRoot is the warden source tree, that is the
+  //    install actually running -- prefer it over an unrelated installed cache.
+  if (isWardenSourceTree(env.repoRoot)) return { mode: 'dev', root: env.repoRoot };
+  // 3. A valid installed entry located via the registry.
+  if (installed) return installed;
   return { mode: 'not-found', root: env.repoRoot };
 }
 
