@@ -468,6 +468,32 @@ describe('checkHookRegistration', () => {
     expect(result!.status).not.toBe('pass'); // must not silently fall through to dev-checkout
     expect(result!.fix).toBeTruthy();
   });
+
+  it('fails when the Bash hook type is not command even though command contains dist/index.cjs', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(root, join('hooks', 'hooks.json'), {
+      hooks: {
+        PreToolUse: [
+          { matcher: 'Bash', hooks: [{ type: 'notification', command: 'node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"' }] },
+        ],
+      },
+    });
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('fails when the hook command targets dist/index.cjs.bak instead of dist/index.cjs', () => {
+    const root = tmpRoot();
+    writeJson(root, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(root, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs.bak"'));
+    const result = checkHookRegistration(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
