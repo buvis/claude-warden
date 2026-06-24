@@ -8,7 +8,8 @@
 //   'command'  - extracted into parsed.commands (handled construct bodies)
 //   'subshell' - extracted into parsed.subshellCommands (command substitution / backticks)
 //   'flag'     - surfaced only via parsed.hasSubshell or parsed.incomplete
-//                (process substitution; or an unhandled node that fails loud)
+//                (arithmetic operand substitution; unbash flattens the operand,
+//                 so the command-sub cannot be extracted — marked incomplete)
 //
 // The sentinel target string lets tests recognize the planted command after
 // the parser normalizes the command path to its basename.
@@ -157,5 +158,20 @@ export const SHELL_CORPUS: CorpusEntry[] = [
     name: 'arithmetic operand substitution',
     snippet: `(( $(${SENTINEL_CMD}) ))`,
     surface: 'flag',
+  },
+  {
+    name: 'compound-statement redirect substitution',
+    snippet: `{ echo hi; } > "$(${SENTINEL_CMD})"`,
+    surface: 'subshell',
+  },
+  {
+    name: 'case pattern substitution',
+    snippet: `case x in $(${SENTINEL_CMD})) echo hi ;; esac`,
+    surface: 'subshell',
+  },
+  {
+    name: 'array assignment value substitution',
+    snippet: `arr=($(${SENTINEL_CMD})) && echo ok`,
+    surface: 'subshell',
   },
 ];
