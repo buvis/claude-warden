@@ -72,7 +72,8 @@ describe('process substitution body is caught regardless of askOnSubshell', () =
 // Wrap the sentinel in random nestings of recursive constructs, with a fixed
 // seed so the generated set is identical on every run (CI-stable, no flake).
 // The safety property mirrors the corpus: every generated snippet must surface
-// the sentinel in parsed.commands OR set parsed.incomplete - never silently drop.
+// the sentinel in parsed.commands / parsed.subshellCommands, OR fail loud via
+// parsed.incomplete / parsed.parseError (both resolve to ask) - never silently drop.
 
 /** mulberry32: a tiny deterministic PRNG, no dependency. */
 function mulberry32(seed: number): () => number {
@@ -97,8 +98,12 @@ const NESTERS: ((inner: string) => string)[] = [
   inner => `{ ${inner}; }`,
   inner => `for ((i=0; i<1; i++)); do ${inner}; done`,
   inner => `cat < <(${inner})`,
-  inner => `x=$(${inner}); echo done`,
-  inner => `echo \${y:-$(${inner})}`,
+  // Space after `$(` so a `(`-leading inner (the subshell nester) stays a
+  // command substitution of a subshell (`$( ( ... ) )`) instead of collapsing
+  // into `$((` arithmetic expansion — which bash evaluates without running the
+  // command, a benign construct the harness must not demand surfacing for.
+  inner => `x=$( ${inner} ); echo done`,
+  inner => `echo \${y:-$( ${inner} )}`,
   inner => `cat <(${inner})`,
 ];
 
@@ -120,7 +125,8 @@ describe('parser completeness: sentinel fuzz harness', () => {
       const surfaced =
         commandsCarrySentinel(parsed) ||
         subshellsCarrySentinel(parsed) ||
-        parsed.incomplete === true;
+        parsed.incomplete === true ||
+        parsed.parseError === true;
       if (!surfaced) failures.push(snippet);
     }
     expect(failures).toEqual([]);
