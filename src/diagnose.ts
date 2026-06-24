@@ -35,7 +35,8 @@ interface PluginRoot {
 // Extract a plain `.version` field from a parsed JSON object.
 function extractVersionField(obj: unknown): string | undefined {
   if (obj && typeof obj === 'object') {
-    return (obj as Record<string, unknown>).version as string | undefined;
+    const v = (obj as Record<string, unknown>).version;
+    return typeof v === 'string' ? v : undefined;
   }
   return undefined;
 }
@@ -56,14 +57,16 @@ function extractMarketplaceWardenVersion(obj: unknown): string | undefined {
   return undefined;
 }
 
-// Read a JSON stamp file relative to root; push the extracted value into stamps
-// or push relPath into unparseable when the file exists but cannot be parsed.
+// Read a JSON stamp file relative to root; push the extracted value into stamps,
+// push relPath into unparseable when the file exists but cannot be parsed, or push
+// relPath into invalid when it parses but has no usable string version field.
 function readStamp(
   root: string,
   relPath: string,
   extract: (obj: unknown) => string | undefined,
   stamps: { label: string; value: string }[],
-  unparseable: string[]
+  unparseable: string[],
+  invalid: string[]
 ): void {
   const fullPath = join(root, relPath);
   if (!existsSync(fullPath)) return;
@@ -73,11 +76,13 @@ function readStamp(
     const value = extract(parsed);
     if (value !== undefined) {
       stamps.push({ label: relPath, value });
+    } else {
+      // Present and parseable but no usable version field — uninspectable, so the
+      // caller fails loud (unknown) rather than silently omitting it (false pass).
+      invalid.push(relPath);
     }
   } catch {
     // Present but unparseable — a load-bearing stamp we could not inspect.
-    // Record it so the check fails loud (unknown) rather than silently
-    // dropping it, which could otherwise produce a false 'pass'.
     unparseable.push(relPath);
   }
 }
@@ -546,18 +551,37 @@ export function checkPipelineProbe(env: DiagnoseEnv): CheckResult {
 
 export function checkVersionSync(env: DiagnoseEnv): CheckResult {
   const pr = resolvePluginRoot(env);
+  if (pr.inspectError) {
+    return {
+      id: 'version-sync',
+      status: 'unknown',
+      detail: pr.inspectError,
+      fix: 'Fix or restore ~/.claude/plugins/installed_plugins.json so the Warden tree can be located.',
+    };
+  }
   const root = pr.root;
+
+  // version-sync only runs against a warden tree: skip when no package.json exists
+  // at the resolved root. A present-but-unparseable package.json is NOT a skip — it
+  // falls through to the unparseable -> unknown branch below.
+  if (!existsSync(join(root, 'package.json'))) {
+    return {
+      id: 'version-sync',
+      status: 'skip',
+      detail: 'version-sync only runs against the warden source/plugin tree.',
+    };
+  }
 
   const stamps: { label: string; value: string }[] = [];
   const unparseable: string[] = [];
+  const invalid: string[] = [];
 
-  readStamp(root, 'package.json', extractVersionField, stamps, unparseable);
-  readStamp(root, '.claude-plugin/plugin.json', extractVersionField, stamps, unparseable);
-  readStamp(root, '.claude-plugin/marketplace.json', extractMarketplaceWardenVersion, stamps, unparseable);
-  readStamp(root, '../claude-plugins/.claude-plugin/marketplace.json', extractMarketplaceWardenVersion, stamps, unparseable);
+  readStamp(root, 'package.json', extractVersionField, stamps, unparseable, invalid);
+  readStamp(root, '.claude-plugin/plugin.json', extractVersionField, stamps, unparseable, invalid);
+  readStamp(root, '.claude-plugin/marketplace.json', extractMarketplaceWardenVersion, stamps, unparseable, invalid);
+  readStamp(root, '../claude-plugins/.claude-plugin/marketplace.json', extractMarketplaceWardenVersion, stamps, unparseable, invalid);
 
-  // A present-but-unparseable stamp could not be inspected: fail loud (unknown)
-  // before any pass/skip verdict, so a corrupt stamp never reads as green.
+  // A present-but-unparseable stamp could not be inspected: fail loud (unknown).
   if (unparseable.length > 0) {
     return {
       id: 'version-sync',
@@ -567,24 +591,35 @@ export function checkVersionSync(env: DiagnoseEnv): CheckResult {
     };
   }
 
-  // If no package.json stamp found, skip
-  const pkgStamp = stamps.find(s => s.label === 'package.json');
-  if (!pkgStamp) {
+  // A present, parseable stamp with no usable string version is uninspectable.
+  if (invalid.length > 0) {
     return {
       id: 'version-sync',
-      status: 'skip',
-      detail: 'version-sync only runs against the warden source/plugin tree.',
+      status: 'unknown',
+      detail: `Version stamp(s) missing a string "version" field: ${invalid.join(', ')} (at ${root}).`,
+      fix: 'Add a string "version" field to the listed stamp file(s).',
     };
   }
 
-  // All reachable stamps agree -> pass
+  // package.json and .claude-plugin/plugin.json are required in a warden tree.
+  const REQUIRED = ['package.json', '.claude-plugin/plugin.json'];
+  const missingRequired = REQUIRED.filter(label => !stamps.some(s => s.label === label));
+  if (missingRequired.length > 0) {
+    return {
+      id: 'version-sync',
+      status: 'unknown',
+      detail: `Required version stamp(s) missing: ${missingRequired.join(', ')} (at ${root}).`,
+      fix: 'Restore the missing version stamp file(s) in the warden tree.',
+    };
+  }
+
+  const pkgStamp = stamps.find(s => s.label === 'package.json')!;
   const allSame = stamps.every(s => s.value === pkgStamp.value);
   const detail = stamps.map(s => `${s.label}=${s.value}`).join('; ');
   if (allSame) {
     return { id: 'version-sync', status: 'pass', detail };
   }
 
-  // Any stamp differs -> warn
   return {
     id: 'version-sync',
     status: 'warn',
