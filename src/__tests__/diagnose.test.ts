@@ -139,6 +139,37 @@ describe('checkNativePermissions', () => {
     expect(result.detail).toContain('settings.json');
     expect(result.detail).toContain('settings.local.json');
   });
+
+  it('unknown detail includes both the shadowing deny entry and the unparseable file path', () => {
+    // Criterion 1: a naive impl that drops shadowing entries from the unknown detail would pass
+    // the status check alone. This test binds to both pieces of required information.
+    const homeDir = tmpRoot();
+    const projectDir = tmpRoot();
+    const homeDotClaude = join(homeDir, '.claude');
+    mkdirSync(homeDotClaude, { recursive: true });
+    writeFileSync(join(homeDotClaude, 'settings.json'), 'INVALID');
+    writeSettings(projectDir, 'settings.json', { permissions: { deny: ['Bash(rm:*)'] } });
+    const env: DiagnoseEnv = { home: homeDir, cwd: projectDir, repoRoot: projectDir };
+    const result = checkNativePermissions(env);
+    expect(result.status).toBe('unknown');
+    expect(result.detail).toContain('Bash(rm:*)');
+    expect(result.detail).toContain(join(homeDotClaude, 'settings.json'));
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('names all unparseable files in detail when two different files have invalid JSON', () => {
+    // Criterion 2: a naive impl that names only the last unparseable file fails here.
+    const root = tmpRoot();
+    const dotClaude = join(root, '.claude');
+    mkdirSync(dotClaude, { recursive: true });
+    writeFileSync(join(dotClaude, 'settings.json'), 'NOT JSON');
+    writeFileSync(join(dotClaude, 'settings.local.json'), 'ALSO NOT JSON');
+    const result = checkNativePermissions(makeEnv(root));
+    expect(result.status).toBe('unknown');
+    expect(result.detail).toContain(join(dotClaude, 'settings.json'));
+    expect(result.detail).toContain(join(dotClaude, 'settings.local.json'));
+    expect(result.fix).toBeTruthy();
+  });
 });
 
 describe('runDiagnostics', () => {
