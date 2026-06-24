@@ -339,23 +339,61 @@ describe('checkHookRegistration', () => {
     expect(result.detail).toContain(root);
   });
 
-  it('prefers installed mode over dev mode when both are present', () => {
+  it('prefers the executing checkout over an unrelated installed cache', () => {
+    // Finding 2: when repoRoot IS a Warden source checkout with a valid hooks.json,
+    // the diagnostics must describe the EXECUTING checkout (repoRoot), not the
+    // unrelated installed cache entry.
     const home = tmpRoot();
-    const pluginDir = tmpRoot();
-    // installed plugin with passing hooks.json
-    writeJson(pluginDir, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+    const repoRoot = tmpRoot(); // separate from home so paths are distinguishable
+    const pluginDir = tmpRoot(); // unrelated installed cache — different from repoRoot
+
+    // Valid dev checkout at repoRoot with a passing hooks.json
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(repoRoot, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+
+    // Registry entry pointing at a different, unrelated directory
     writeJson(home, join('.claude', 'plugins', 'installed_plugins.json'), {
       version: 2,
       plugins: {
         'warden@https://marketplace.example.com': [{ installPath: pluginDir }],
       },
     });
-    // repoRoot also looks like a dev clone
-    writeJson(home, 'package.json', { name: '@buvis/claude-warden' });
-    const env: DiagnoseEnv = { home, cwd: home, repoRoot: home };
+
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot };
     const result = checkHookRegistration(env);
-    // installed mode resolved — pluginDir should be in the detail
-    expect(result.detail).toContain(pluginDir);
+
+    // Executing checkout wins: result describes repoRoot, not the unrelated pluginDir
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain(repoRoot);
+    expect(result.detail).not.toContain(pluginDir);
+  });
+
+  it('returns unknown when registry has a stale warden entry (installPath does not exist)', () => {
+    // Finding 4: a registry entry whose installPath is missing/nonexistent is stale.
+    // The check must return unknown — even when repoRoot is a valid dev checkout
+    // that would otherwise pass, to prevent a silent false-pass fallthrough.
+    const home = tmpRoot();
+    const repoRoot = tmpRoot();
+
+    // Valid dev checkout at repoRoot — a silent fallthrough would return 'pass'
+    writeJson(repoRoot, 'package.json', { name: '@buvis/claude-warden' });
+    writeJson(repoRoot, join('hooks', 'hooks.json'), makeHooksJson('node "${CLAUDE_PLUGIN_ROOT}/dist/index.cjs"'));
+
+    // Registry with a warden entry pointing at a nonexistent path (stale)
+    const nonexistentPath = join(home, 'does-not-exist', 'warden-plugin');
+    writeJson(home, join('.claude', 'plugins', 'installed_plugins.json'), {
+      version: 2,
+      plugins: {
+        'warden@https://marketplace.example.com': [{ installPath: nonexistentPath }],
+      },
+    });
+
+    const env: DiagnoseEnv = { home, cwd: home, repoRoot };
+    const result = checkHookRegistration(env);
+
+    expect(result.status).toBe('unknown');
+    expect(result.status).not.toBe('pass'); // must not silently fall through to dev-checkout
+    expect(result.fix).toBeTruthy();
   });
 
   it('returns unknown (not dev-checkout fallback) when installed_plugins.json is corrupt JSON', () => {
