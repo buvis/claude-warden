@@ -228,13 +228,14 @@ export function evaluateCommand(cmd: ParsedCommand, config: WardenConfig, depth:
     };
   }
 
-  // Env-prefix danger: a dangerous exec-control env prefix upgrades allow -> ask.
-  // ONLY `allow` is touched, so an explicit deny/ask is never downgraded.
-  // `env VAR=... cmd` puts the assignment in args (and `env` is always-allowed,
-  // shadowing any command rule), so for the `env` command also scan its args.
-  // Every other command carries env only in envPrefixes.
-  if (result.decision === 'allow') {
-    const tokens = cmd.command === 'env' ? [...cmd.envPrefixes, ...cmd.args] : cmd.envPrefixes;
+  // Env-prefix danger: forces at least `ask` and names the variable when a dangerous
+  // exec-control env var is found. Upgrades `allow` -> `ask` and annotates an already-`ask`
+  // decision's reason to name the variable. A `deny` is never touched.
+  // `env VAR=... cmd`, `set VAR=...`, and `declare [-flags] VAR=...` carry the assignment
+  // in args; every other command carries env only in envPrefixes.
+  if (result.decision !== 'deny') {
+    const ARG_SCAN_CMDS = new Set(['env', 'set', 'declare']);
+    const tokens = ARG_SCAN_CMDS.has(cmd.command) ? [...cmd.envPrefixes, ...cmd.args] : cmd.envPrefixes;
     for (const token of tokens) {
       const name = matchesDangerousEnv(token);
       if (name) {
