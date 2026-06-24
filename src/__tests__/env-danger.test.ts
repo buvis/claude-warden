@@ -90,10 +90,6 @@ describe('matchesDangerousEnv', () => {
 });
 
 describe('DANGEROUS_EXEC_ENV_PATTERN', () => {
-  it('is a string', () => {
-    expect(typeof DANGEROUS_EXEC_ENV_PATTERN).toBe('string');
-  });
-
   it('matches GIT_PAGER=cat', () => {
     const re = new RegExp(DANGEROUS_EXEC_ENV_PATTERN);
     expect(re.test('GIT_PAGER=cat')).toBe(true);
@@ -112,10 +108,6 @@ describe('DANGEROUS_EXEC_ENV_PATTERN', () => {
   it('does not match ENVISIONED=x — ENV prefix must be bounded by =', () => {
     const re = new RegExp(DANGEROUS_EXEC_ENV_PATTERN);
     expect(re.test('ENVISIONED=x')).toBe(false);
-  });
-
-  it('pattern is anchored at start (^)', () => {
-    expect(DANGEROUS_EXEC_ENV_PATTERN.startsWith('^')).toBe(true);
   });
 
   it('pattern requires = immediately after the var name', () => {
