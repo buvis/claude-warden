@@ -2537,6 +2537,33 @@ describe('script safety scanning', () => {
       expect(eval_('LD_PRELOAD=/evil.so sudo apt install').decision).toBe('deny');
     });
   });
+
+  describe('dangerous env-prefix detection: set/declare argument form', () => {
+    it('asks for GIT_PAGER set via the always-allowed `set` builtin (danger check overrides always-allow)', () => {
+      expect(eval_('set GIT_PAGER=evil').decision).toBe('ask');
+    });
+
+    it('reason names GIT_PAGER when set via the `set` builtin', () => {
+      expect(eval_('set GIT_PAGER=evil').reason).toContain('GIT_PAGER');
+    });
+
+    it('reason names GIT_PAGER when assigned via `declare` (generic ask is not enough)', () => {
+      expect(eval_('declare GIT_PAGER=evil').reason).toContain('GIT_PAGER');
+    });
+
+    it('asks and names BASH_ENV when a leading flag precedes the assignment in declare', () => {
+      expect(eval_('declare -x BASH_ENV=/tmp/x').decision).toBe('ask');
+      expect(eval_('declare -x BASH_ENV=/tmp/x').reason).toContain('BASH_ENV');
+    });
+
+    it('allows set with a benign unknown variable (no false positive)', () => {
+      expect(eval_('set foo=bar').decision).toBe('allow');
+    });
+
+    it('allows set with a known-benign variable like NODE_ENV (no false positive)', () => {
+      expect(eval_('set NODE_ENV=production').decision).toBe('allow');
+    });
+  });
 });
 
 describe('incomplete parse handling', () => {
