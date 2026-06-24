@@ -11251,6 +11251,14 @@ function walkNode(node, result) {
           if (innerResult.hasSubshell) result.hasSubshell = true;
           result.subshellCommands.push(...innerResult.subshellCommands);
           if (innerResult.incomplete) result.incomplete = true;
+          if (innerResult.incompleteNodeTypes) {
+            result.incompleteNodeTypes ??= [];
+            for (const t of innerResult.incompleteNodeTypes) {
+              if (!result.incompleteNodeTypes.includes(t)) {
+                result.incompleteNodeTypes.push(t);
+              }
+            }
+          }
         }
       } else if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 1) {
         const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
