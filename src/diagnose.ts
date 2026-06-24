@@ -242,21 +242,27 @@ export function checkNativePermissions(env: DiagnoseEnv): CheckResult {
   const denyBash: { path: string; entry: string }[] = [];
   const askBash: { path: string; entry: string }[] = [];
   const allowBash: { path: string; entry: string }[] = [];
-  let unknownPath = '';
+  const unparseablePaths: string[] = [];
 
   for (const path of paths) {
     if (!existsSync(path)) continue;
     if (scanSettingsFile(path, denyBash, askBash, allowBash) === 'unparseable') {
-      unknownPath = path;
+      unparseablePaths.push(path);
     }
   }
 
-  if (unknownPath) {
+  if (unparseablePaths.length > 0) {
+    const shadowing = [...denyBash, ...askBash];
+    const parts: string[] = [];
+    if (shadowing.length > 0) {
+      parts.push(shadowing.map(f => `${f.path}: ${f.entry}`).join('; '));
+    }
+    parts.push(`could not parse: ${unparseablePaths.join(', ')}`);
     return {
       id: 'native-permissions',
       status: 'unknown',
-      detail: `Could not inspect ${unknownPath} - file could not be parsed as JSON.`,
-      fix: `Fix or remove the malformed settings file at ${unknownPath}.`,
+      detail: parts.join('; '),
+      fix: `Fix or remove the malformed settings file(s): ${unparseablePaths.join(', ')}.`,
     };
   }
 
