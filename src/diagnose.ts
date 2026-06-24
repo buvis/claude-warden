@@ -128,8 +128,12 @@ function readHooksJson(root: string): [unknown, null] | [null, string] {
   }
 }
 
+// dist/index.cjs as a path tail: followed by end-of-string, whitespace, or a
+// closing quote — NOT a further path char, so dist/index.cjs.bak is rejected.
+const DIST_INDEX_CJS_TARGET = /dist\/index\.cjs(?=$|[\s"'])/;
+
 // Return true if hooks.json data contains a PreToolUse Bash matcher whose
-// command includes 'dist/index.cjs'.
+// command references dist/index.cjs as a path tail and the hook type is 'command'.
 function hasBashHookForDist(hooksData: unknown): boolean {
   if (!hooksData || typeof hooksData !== 'object') return false;
   const obj = hooksData as Record<string, unknown>;
@@ -144,8 +148,12 @@ function hasBashHookForDist(hooksData: unknown): boolean {
     if (!Array.isArray(hooks)) continue;
     for (const h of hooks) {
       if (!h || typeof h !== 'object') continue;
-      const cmd = (h as Record<string, unknown>).command as string | undefined;
-      if (typeof cmd === 'string' && cmd.includes('dist/index.cjs')) return true;
+      const h2 = h as Record<string, unknown>;
+      if (h2.type !== 'command') continue;
+      const cmd = h2.command;
+      if (typeof cmd !== 'string') continue;
+      if (!DIST_INDEX_CJS_TARGET.test(cmd)) continue;
+      return true;
     }
   }
   return false;
