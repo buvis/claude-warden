@@ -11028,7 +11028,7 @@ var SHELL_INTERPRETERS = /* @__PURE__ */ new Set([
 ]);
 
 // src/parser.ts
-var NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set(["TestCommand", "ArithmeticCommand"]);
+var NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set([]);
 var VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
 function resolveVarRef(text, chainAssignments) {
   const m = text.match(VAR_REF_REGEX);
@@ -11076,7 +11076,7 @@ function preprocessPathParentheses(input) {
       i = j + 1;
       continue;
     }
-    if (ch === "$" && i + 1 < input.length && input[i + 1] === "(") {
+    if ((ch === "$" || ch === "<" || ch === ">") && i + 1 < input.length && input[i + 1] === "(") {
       let depth = 1;
       let j = i + 2;
       while (j < input.length && depth > 0) {
@@ -11112,29 +11112,57 @@ function extractExpansionCommand(text) {
   if (text.startsWith("`") && text.endsWith("`")) return text.slice(1, -1);
   return text;
 }
+function scanWordPart(part, result) {
+  switch (part.type) {
+    case "CommandExpansion":
+      if (isCatHeredocInterpolation(part)) break;
+      result.hasSubshell = true;
+      result.subshellCommands.push(extractExpansionCommand(part.text));
+      break;
+    case "ProcessSubstitution":
+      result.hasSubshell = true;
+      result.subshellCommands.push(
+        part.inner ?? part.text.replace(/^[<>]\(/, "").replace(/\)$/, "")
+      );
+      break;
+    case "DoubleQuoted":
+    case "LocaleString":
+      for (const child of part.parts) scanWordPart(child, result);
+      break;
+    case "ParameterExpansion":
+      if (part.operand) collectExpansionsFromWord(part.operand, result);
+      if (part.slice?.offset) collectExpansionsFromWord(part.slice.offset, result);
+      if (part.slice?.length) collectExpansionsFromWord(part.slice.length, result);
+      if (part.replace?.pattern) collectExpansionsFromWord(part.replace.pattern, result);
+      if (part.replace?.replacement) collectExpansionsFromWord(part.replace.replacement, result);
+      break;
+    case "ArithmeticExpansion":
+      break;
+  }
+}
 function collectExpansionsFromWord(word, result) {
   if (!word.parts) return;
-  for (const part of word.parts) {
-    switch (part.type) {
-      case "CommandExpansion":
-        if (isCatHeredocInterpolation(part)) break;
-        result.hasSubshell = true;
-        result.subshellCommands.push(extractExpansionCommand(part.text));
-        break;
-      case "DoubleQuoted":
-      case "LocaleString":
-        for (const child of part.parts) {
-          if (child.type === "CommandExpansion") {
-            if (isCatHeredocInterpolation(child)) continue;
-            result.hasSubshell = true;
-            result.subshellCommands.push(extractExpansionCommand(child.text));
-          }
-        }
-        break;
-      case "ProcessSubstitution":
-        result.hasSubshell = true;
-        break;
-    }
+  for (const part of word.parts) scanWordPart(part, result);
+}
+function scanTestExpression(expr, result) {
+  switch (expr.type) {
+    case "TestUnary":
+      collectExpansionsFromWord(expr.operand, result);
+      break;
+    case "TestBinary":
+      collectExpansionsFromWord(expr.left, result);
+      collectExpansionsFromWord(expr.right, result);
+      break;
+    case "TestLogical":
+      scanTestExpression(expr.left, result);
+      scanTestExpression(expr.right, result);
+      break;
+    case "TestNot":
+      scanTestExpression(expr.operand, result);
+      break;
+    case "TestGroup":
+      scanTestExpression(expr.expression, result);
+      break;
   }
 }
 function extractAssignments(cmd) {
@@ -11218,6 +11246,10 @@ function walkNode(node, result) {
   switch (node.type) {
     case "Statement": {
       const stmt = node;
+      for (const r of stmt.redirects) {
+        if (r.target) collectExpansionsFromWord(r.target, result);
+        if (r.body) collectExpansionsFromWord(r.body, result);
+      }
       walkNode(stmt.command, result);
       break;
     }
@@ -11225,6 +11257,14 @@ function walkNode(node, result) {
       const cmd = node;
       if (cmd.name) collectExpansionsFromWord(cmd.name, result);
       for (const s of cmd.suffix) collectExpansionsFromWord(s, result);
+      for (const r of cmd.redirects) {
+        if (r.target) collectExpansionsFromWord(r.target, result);
+        if (r.body) collectExpansionsFromWord(r.body, result);
+      }
+      for (const p of cmd.prefix) {
+        if (p.value) collectExpansionsFromWord(p.value, result);
+        if (p.array) for (const w of p.array) collectExpansionsFromWord(w, result);
+      }
       const parsed = convertCommand(cmd, result.chainAssignments);
       if (!parsed) {
         for (const a of extractAssignments(cmd)) {
@@ -11328,11 +11368,16 @@ function walkNode(node, result) {
       break;
     }
     case "For": {
-      walkCompoundList(node.body, result);
+      const f = node;
+      for (const w of f.wordlist) collectExpansionsFromWord(w, result);
+      walkCompoundList(f.body, result);
       break;
     }
     case "Case": {
-      for (const item of node.items) {
+      const c = node;
+      collectExpansionsFromWord(c.word, result);
+      for (const item of c.items) {
+        for (const p of item.pattern) collectExpansionsFromWord(p, result);
         walkCompoundList(item.body, result);
       }
       break;
@@ -11354,7 +11399,9 @@ function walkNode(node, result) {
       break;
     }
     case "Select": {
-      walkCompoundList(node.body, result);
+      const s = node;
+      for (const w of s.wordlist) collectExpansionsFromWord(w, result);
+      walkCompoundList(s.body, result);
       break;
     }
     case "Coproc": {
@@ -11366,15 +11413,33 @@ function walkNode(node, result) {
       walkCompoundList(node.body, result);
       break;
     }
-    default:
-      if (!NO_COMMAND_NODE_TYPES.has(node.type)) {
+    case "TestCommand": {
+      const e = node.expression;
+      if (e) scanTestExpression(e, result);
+      break;
+    }
+    case "ArithmeticCommand": {
+      const body = node.body;
+      if (/\$\((?!\()|`/.test(body)) {
         result.incomplete = true;
         result.incompleteNodeTypes ??= [];
-        if (!result.incompleteNodeTypes.includes(node.type)) {
-          result.incompleteNodeTypes.push(node.type);
+        if (!result.incompleteNodeTypes.includes("ArithmeticCommand")) {
+          result.incompleteNodeTypes.push("ArithmeticCommand");
         }
       }
       break;
+    }
+    default: {
+      const nodeType = node.type;
+      if (!NO_COMMAND_NODE_TYPES.has(nodeType)) {
+        result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes(nodeType)) {
+          result.incompleteNodeTypes.push(nodeType);
+        }
+      }
+      break;
+    }
   }
 }
 function dropHeredocsIfMultiple(input, commands) {
@@ -12187,6 +12252,7 @@ var DEFAULT_CONFIG = {
       },
       { command: "mkdir", default: "allow" },
       { command: "touch", default: "allow" },
+      { command: "mktemp", default: "allow" },
       { command: "cp", default: "allow" },
       { command: "mv", default: "allow" },
       { command: "ln", default: "allow" },
@@ -14286,9 +14352,6 @@ function evaluate(parsed, config, depth = 0, cwd) {
     const reason = types && types.length ? `unrecognized shell construct: ${types.join(", ")}` : "unrecognized shell construct";
     return { decision: "ask", reason, details: [] };
   }
-  if (parsed.commands.length === 0) {
-    return { decision: "allow", reason: "Empty command", details: [] };
-  }
   if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
     for (const subCmd of parsed.subshellCommands) {
       const subParsed = parseCommand(subCmd);
@@ -14302,6 +14365,9 @@ function evaluate(parsed, config, depth = 0, cwd) {
     }
   } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
     return { decision: "ask", reason: "contains subshell", details: [] };
+  }
+  if (parsed.commands.length === 0) {
+    return { decision: "allow", reason: "Empty command", details: [] };
   }
   const details = [];
   for (const cmd of parsed.commands) {
