@@ -133,4 +133,29 @@ export const SHELL_CORPUS: CorpusEntry[] = [
     snippet: `cat <(${SENTINEL_CMD} ')')`,
     surface: 'subshell',
   },
+  {
+    name: 'for-header in-list substitution',
+    snippet: `for f in $(${SENTINEL_CMD}); do echo "$f"; done`,
+    surface: 'subshell',
+  },
+  {
+    name: 'select in-list substitution',
+    snippet: `select x in $(${SENTINEL_CMD}); do echo "$x"; done`,
+    surface: 'subshell',
+  },
+  {
+    name: 'case selector substitution (empty arm)',
+    snippet: `case $(${SENTINEL_CMD}) in a) ;; esac`,
+    surface: 'subshell',
+  },
+  {
+    name: 'test operand substitution (body-less)',
+    snippet: `[[ -n $(${SENTINEL_CMD}) ]]`,
+    surface: 'subshell',
+  },
+  {
+    name: 'arithmetic operand substitution',
+    snippet: `(( $(${SENTINEL_CMD}) ))`,
+    surface: 'flag',
+  },
 ];

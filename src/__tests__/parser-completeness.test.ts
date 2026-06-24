@@ -105,6 +105,8 @@ const NESTERS: ((inner: string) => string)[] = [
   inner => `x=$( ${inner} ); echo done`,
   inner => `echo \${y:-$( ${inner} )}`,
   inner => `cat <(${inner})`,
+  inner => `for f in $( ${inner} ); do :; done`,
+  inner => `[[ -n $( ${inner} ) ]]`,
 ];
 
 describe('parser completeness: sentinel fuzz harness', () => {
@@ -146,5 +148,26 @@ describe('parser completeness: benign word-position expansions stay allow', () =
     expect(
       evaluate(parseCommand('TMPDIR=$(mktemp -d) && rm -rf $TMPDIR'), DEFAULT_CONFIG).decision,
     ).toBe('allow');
+  });
+
+  it('keeps a benign test command allow', () => {
+    expect(evaluate(parseCommand('[[ -n "$x" ]]'), DEFAULT_CONFIG).decision).toBe('allow');
+  });
+
+  it('keeps a benign arithmetic command allow', () => {
+    expect(evaluate(parseCommand('(( i++ ))'), DEFAULT_CONFIG).decision).toBe('allow');
+  });
+
+  it('keeps a benign for-loop over a literal list allow', () => {
+    expect(evaluate(parseCommand('for f in a b c; do echo "$f"; done'), DEFAULT_CONFIG).decision).toBe('allow');
+  });
+});
+
+describe('parser completeness: documented arithmetic command-sub tradeoff', () => {
+  it('asks (never allows) a benign arithmetic command substitution', () => {
+    // (( $(echo 1) )) — unbash flattens arithmetic operands to strings, so the
+    // command-sub cannot be precisely extracted; it is marked incomplete -> ask.
+    // Fail-safe (never a silent allow); pins the accepted tradeoff.
+    expect(evaluate(parseCommand('(( $(echo 1) ))'), DEFAULT_CONFIG).decision).toBe('ask');
   });
 });
