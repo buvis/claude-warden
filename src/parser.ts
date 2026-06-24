@@ -6,6 +6,7 @@ import type {
   Subshell, BraceGroup, CompoundList,
   Select, Coproc, ArithmeticFor,
   Word, WordPart, DoubleQuotedChild, CommandExpansionPart, Redirect,
+  TestCommand, ArithmeticCommand, TestExpression,
 } from 'unbash';
 import { basename, resolve } from 'path';
 import { homedir } from 'os';
@@ -27,7 +28,9 @@ export interface WalkResult {
  * case treats every OTHER unhandled type as incomplete (fail loud), so adding a
  * new no-command construct here is the one place to suppress a false ask.
  */
-const NO_COMMAND_NODE_TYPES = new Set(['TestCommand', 'ArithmeticCommand']);
+// No-command node types are now all handled by explicit cases. Keep this as the
+// single suppression point for any future no-command construct; empty today.
+const NO_COMMAND_NODE_TYPES = new Set<string>([]);
 
 const VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
 
@@ -183,6 +186,18 @@ function scanWordPart(part: WordPart | DoubleQuotedChild, result: WalkResult): v
 function collectExpansionsFromWord(word: Word, result: WalkResult): void {
   if (!word.parts) return;
   for (const part of word.parts) scanWordPart(part, result);
+}
+
+function scanTestExpression(expr: TestExpression, result: WalkResult): void {
+  switch (expr.type) {
+    case 'TestUnary':   collectExpansionsFromWord(expr.operand, result); break;
+    case 'TestBinary':  collectExpansionsFromWord(expr.left, result);
+                        collectExpansionsFromWord(expr.right, result); break;
+    case 'TestLogical': scanTestExpression(expr.left, result);
+                        scanTestExpression(expr.right, result); break;
+    case 'TestNot':     scanTestExpression(expr.operand, result); break;
+    case 'TestGroup':   scanTestExpression(expr.expression, result); break;
+  }
 }
 
 /** Extract chain assignments from a Command with no name (standalone VAR=value). */
@@ -448,12 +463,17 @@ export function walkNode(node: Node, result: WalkResult): void {
     }
 
     case 'For': {
-      walkCompoundList((node as For).body, result);
+      const f = node as For;
+      for (const w of f.wordlist) collectExpansionsFromWord(w, result);
+      walkCompoundList(f.body, result);
       break;
     }
 
     case 'Case': {
-      for (const item of (node as Case).items) {
+      const c = node as Case;
+      collectExpansionsFromWord(c.word, result);
+      for (const item of c.items) {
+        for (const p of item.pattern) collectExpansionsFromWord(p, result);
         walkCompoundList(item.body, result);
       }
       break;
@@ -484,7 +504,9 @@ export function walkNode(node: Node, result: WalkResult): void {
     }
 
     case 'Select': {
-      walkCompoundList((node as Select).body, result);
+      const s = node as Select;
+      for (const w of s.wordlist) collectExpansionsFromWord(w, result);
+      walkCompoundList(s.body, result);
       break;
     }
 
@@ -499,15 +521,38 @@ export function walkNode(node: Node, result: WalkResult): void {
       break;
     }
 
-    default:
-      if (!NO_COMMAND_NODE_TYPES.has(node.type)) {
+    case 'TestCommand': {
+      const e = (node as TestCommand).expression;
+      if (e) scanTestExpression(e, result);
+      break;
+    }
+
+    case 'ArithmeticCommand': {
+      const body = (node as ArithmeticCommand).body;
+      if (/\$\((?!\()|`/.test(body)) {
         result.incomplete = true;
         result.incompleteNodeTypes ??= [];
-        if (!result.incompleteNodeTypes.includes(node.type)) {
-          result.incompleteNodeTypes.push(node.type);
+        if (!result.incompleteNodeTypes.includes('ArithmeticCommand')) {
+          result.incompleteNodeTypes.push('ArithmeticCommand');
         }
       }
       break;
+    }
+
+    default: {
+      // Every Node union member now has an explicit case, so `node` narrows to
+      // `never` here. This branch stays as a fail-loud guard for any future
+      // node type unbash adds; read the discriminant through a widened alias.
+      const nodeType = (node as Node).type;
+      if (!NO_COMMAND_NODE_TYPES.has(nodeType)) {
+        result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes(nodeType)) {
+          result.incompleteNodeTypes.push(nodeType);
+        }
+      }
+      break;
+    }
   }
 }
 

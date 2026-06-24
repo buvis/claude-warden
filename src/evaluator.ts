@@ -74,10 +74,6 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
     return { decision: 'ask', reason, details: [] };
   }
 
-  if (parsed.commands.length === 0) {
-    return { decision: 'allow', reason: 'Empty command', details: [] };
-  }
-
   // Recursively evaluate extracted subshell commands
   if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
     for (const subCmd of parsed.subshellCommands) {
@@ -93,6 +89,10 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
   } else if (parsed.hasSubshell && parsed.subshellCommands.length === 0 && config.askOnSubshell) {
     // Unparseable subshell (heredocs, complex constructs) - fall back to ask
     return { decision: 'ask', reason: 'contains subshell', details: [] };
+  }
+
+  if (parsed.commands.length === 0) {
+    return { decision: 'allow', reason: 'Empty command', details: [] };
   }
 
   const details: CommandEvalDetail[] = [];
