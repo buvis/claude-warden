@@ -191,15 +191,15 @@ describe('checkAuditWritable', () => {
     expect(result!.fix).toBeTruthy();
   });
 
-  it('warns when the configured audit directory does not exist', () => {
+  it('fails when the configured audit directory does not exist', () => {
     const root = tmpRoot();
     process.env.HOME = root;
     const missingDir = join(root, 'nonexistent', 'subdir');
     writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(missingDir, 'warden-audit.jsonl')}\n`);
     const result = checkAuditWritable(makeEnv(root));
-    expect(result.status).toBe('warn');
+    expect(result.status).toBe('fail');
     expect(result.status).not.toBe('pass');
-    expect(result.status).not.toBe('fail');
+    expect(result.status).not.toBe('warn');
     expect(result.fix).toBeTruthy();
   });
 
@@ -212,7 +212,68 @@ describe('checkAuditWritable', () => {
     expect(result.status).not.toBe('pass');
   });
 
-  it('warns (not pass) when the audit directory path is a regular file, not a directory', () => {
+  it('passes when the audit file exists, is a regular file, and is writable', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const auditDir = join(root, 'audit-exists');
+    mkdirSync(auditDir, { recursive: true });
+    const auditFile = join(auditDir, 'warden-audit.jsonl');
+    writeFileSync(auditFile, '');
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${auditFile}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.status).not.toBe('fail');
+    expect(result.status).not.toBe('warn');
+  });
+
+  it.skipIf(process.getuid?.() === 0)('fails when the audit file exists but is not writable', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const auditDir = join(root, 'audit-ro-file');
+    mkdirSync(auditDir, { recursive: true });
+    const auditFile = join(auditDir, 'warden-audit.jsonl');
+    writeFileSync(auditFile, '');
+    chmodSync(auditFile, 0o444);
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${auditFile}\n`);
+    let result;
+    try {
+      result = checkAuditWritable(makeEnv(root));
+    } finally {
+      chmodSync(auditFile, 0o644);
+    }
+    expect(result!.status).toBe('fail');
+    expect(result!.status).not.toBe('pass');
+    expect(result!.fix).toBeTruthy();
+  });
+
+  it('fails when the audit path points at a directory, not a file', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const auditDir = join(root, 'audit-is-dir');
+    mkdirSync(auditDir, { recursive: true });
+    // auditPath itself is a directory (not a file)
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${auditDir}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).toBe('fail');
+    expect(result.status).not.toBe('pass');
+    expect(result.fix).toBeTruthy();
+  });
+
+  it('passes when the audit file is absent and the parent directory is writable', () => {
+    const root = tmpRoot();
+    process.env.HOME = root;
+    const auditDir = join(root, 'audit-writable-parent');
+    mkdirSync(auditDir, { recursive: true });
+    // auditFile does not exist — only the parent dir does
+    const auditFile = join(auditDir, 'warden-audit.jsonl');
+    writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${auditFile}\n`);
+    const result = checkAuditWritable(makeEnv(root));
+    expect(result.status).toBe('pass');
+    expect(result.status).not.toBe('fail');
+    expect(result.status).not.toBe('warn');
+  });
+
+  it('fails when the audit directory path is a regular file, not a directory', () => {
     const root = tmpRoot();
     process.env.HOME = root;
     // Create a regular FILE where the "audit dir" should be
@@ -223,8 +284,9 @@ describe('checkAuditWritable', () => {
     // Point auditPath so that dirname(auditPath) == auditDirAsFile (a regular file)
     writeFile(root, join('.claude', 'warden.yaml'), `auditPath: ${join(auditDirAsFile, 'warden-audit.jsonl')}\n`);
     const result = checkAuditWritable(makeEnv(root));
-    expect(result.status).toBe('warn');
+    expect(result.status).toBe('fail');
     expect(result.status).not.toBe('pass');
+    expect(result.status).not.toBe('warn');
     expect(result.fix).toBeTruthy();
   });
 });
