@@ -11235,6 +11235,8 @@ function walkNode(node, result) {
         const innerResult = parseCommand(parsed.args[1]);
         if (innerResult.parseError) {
           result.commands.push(parsed);
+        } else if (innerResult.commands.length === 0 && parsed.envPrefixes.length > 0) {
+          result.commands.push(parsed);
         } else {
           if (parsed.envPrefixes.length > 0) {
             result.commands.push(
