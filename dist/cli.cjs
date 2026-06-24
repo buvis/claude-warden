@@ -14891,7 +14891,8 @@ var import_path6 = require("path");
 var import_os6 = __toESM(require("os"), 1);
 function extractVersionField(obj) {
   if (obj && typeof obj === "object") {
-    return obj.version;
+    const v = obj.version;
+    return typeof v === "string" ? v : void 0;
   }
   return void 0;
 }
@@ -14909,7 +14910,7 @@ function extractMarketplaceWardenVersion(obj) {
   }
   return void 0;
 }
-function readStamp(root, relPath, extract, stamps, unparseable) {
+function readStamp(root, relPath, extract, stamps, unparseable, invalid) {
   const fullPath = (0, import_path6.join)(root, relPath);
   if (!(0, import_fs4.existsSync)(fullPath)) return;
   try {
@@ -14918,6 +14919,8 @@ function readStamp(root, relPath, extract, stamps, unparseable) {
     const value = extract(parsed);
     if (value !== void 0) {
       stamps.push({ label: relPath, value });
+    } else {
+      invalid.push(relPath);
     }
   } catch {
     unparseable.push(relPath);
@@ -14957,6 +14960,7 @@ function readHooksJson(root) {
     return [null, hooksJsonPath];
   }
 }
+var DIST_INDEX_CJS_TARGET = /dist\/index\.cjs(?=$|[\s"'])/;
 function hasBashHookForDist(hooksData) {
   if (!hooksData || typeof hooksData !== "object") return false;
   const obj = hooksData;
@@ -14971,8 +14975,12 @@ function hasBashHookForDist(hooksData) {
     if (!Array.isArray(hooks)) continue;
     for (const h of hooks) {
       if (!h || typeof h !== "object") continue;
-      const cmd = h.command;
-      if (typeof cmd === "string" && cmd.includes("dist/index.cjs")) return true;
+      const h2 = h;
+      if (h2.type !== "command") continue;
+      const cmd = h2.command;
+      if (typeof cmd !== "string") continue;
+      if (!DIST_INDEX_CJS_TARGET.test(cmd)) continue;
+      return true;
     }
   }
   return false;
@@ -14995,6 +15003,11 @@ function lookupInstalledPlugin(pluginsJsonPath, repoRoot) {
                 return { mode: "installed", root: installPath, installPath };
               }
             }
+            return {
+              mode: "not-found",
+              root: repoRoot,
+              inspectError: `installed_plugins.json has a warden entry but its installPath is missing or does not exist (${pluginsJsonPath})`
+            };
           }
         }
       }
@@ -15005,21 +15018,26 @@ function lookupInstalledPlugin(pluginsJsonPath, repoRoot) {
   }
   return null;
 }
-function resolvePluginRoot(env) {
-  const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
-  const installed = lookupInstalledPlugin(pluginsJsonPath, env.repoRoot);
-  if (installed !== null) return installed;
-  const pkgPath = (0, import_path6.join)(env.repoRoot, "package.json");
+function isWardenSourceTree(repoRoot) {
+  const pkgPath = (0, import_path6.join)(repoRoot, "package.json");
   try {
     if ((0, import_fs4.existsSync)(pkgPath)) {
       const raw = (0, import_fs4.readFileSync)(pkgPath, "utf-8");
       const parsed = JSON.parse(raw);
       if (parsed.name === "@buvis/claude-warden") {
-        return { mode: "dev", root: env.repoRoot };
+        return true;
       }
     }
   } catch {
   }
+  return false;
+}
+function resolvePluginRoot(env) {
+  const pluginsJsonPath = (0, import_path6.join)(env.home, ".claude", "plugins", "installed_plugins.json");
+  const installed = lookupInstalledPlugin(pluginsJsonPath, env.repoRoot);
+  if (installed && installed.inspectError) return installed;
+  if (isWardenSourceTree(env.repoRoot)) return { mode: "dev", root: env.repoRoot };
+  if (installed) return installed;
   return { mode: "not-found", root: env.repoRoot };
 }
 var SETTINGS_FILES = [
@@ -15035,19 +15053,25 @@ function checkNativePermissions(env) {
   const denyBash = [];
   const askBash = [];
   const allowBash = [];
-  let unknownPath = "";
+  const unparseablePaths = [];
   for (const path of paths) {
     if (!(0, import_fs4.existsSync)(path)) continue;
     if (scanSettingsFile(path, denyBash, askBash, allowBash) === "unparseable") {
-      unknownPath = path;
+      unparseablePaths.push(path);
     }
   }
-  if (unknownPath) {
+  if (unparseablePaths.length > 0) {
+    const shadowing = [...denyBash, ...askBash];
+    const parts = [];
+    if (shadowing.length > 0) {
+      parts.push(shadowing.map((f) => `${f.path}: ${f.entry}`).join("; "));
+    }
+    parts.push(`could not parse: ${unparseablePaths.join(", ")}`);
     return {
       id: "native-permissions",
       status: "unknown",
-      detail: `Could not inspect ${unknownPath} - file could not be parsed as JSON.`,
-      fix: `Fix or remove the malformed settings file at ${unknownPath}.`
+      detail: parts.join("; "),
+      fix: `Fix or remove the malformed settings file(s): ${unparseablePaths.join(", ")}.`
     };
   }
   if (denyBash.length > 0 || askBash.length > 0) {
@@ -15189,12 +15213,13 @@ function checkConfigHealth(env) {
 }
 function checkAuditWritable(env) {
   setQuiet(true);
-  const auditPath = loadConfig(env.cwd).auditPath;
+  const rawAuditPath = loadConfig(env.cwd).auditPath;
+  const auditPath = (0, import_path6.isAbsolute)(rawAuditPath) ? rawAuditPath : (0, import_path6.resolve)(env.cwd, rawAuditPath);
   const auditDir = (0, import_path6.dirname)(auditPath);
   if (!(0, import_fs4.existsSync)(auditDir)) {
     return {
       id: "audit-writable",
-      status: "warn",
+      status: "fail",
       detail: `Audit directory ${auditDir} does not exist \u2014 Warden will silently drop audit entries.`,
       fix: `Create the directory (mkdir -p ${auditDir}) or fix auditPath in your config.`
     };
@@ -15202,18 +15227,13 @@ function checkAuditWritable(env) {
   if (!(0, import_fs4.statSync)(auditDir).isDirectory()) {
     return {
       id: "audit-writable",
-      status: "warn",
+      status: "fail",
       detail: `Audit path's parent ${auditDir} is not a directory \u2014 Warden will drop audit entries.`,
       fix: `Remove ${auditDir} and create it as a directory, or fix auditPath in your config.`
     };
   }
   try {
     (0, import_fs4.accessSync)(auditDir, import_fs4.constants.W_OK);
-    return {
-      id: "audit-writable",
-      status: "pass",
-      detail: `Audit directory ${auditDir} is writable.`
-    };
   } catch (err) {
     const code = err?.code;
     if (code === "EACCES") {
@@ -15231,6 +15251,40 @@ function checkAuditWritable(env) {
       fix: "Check permissions or filesystem state for the audit directory."
     };
   }
+  if ((0, import_fs4.existsSync)(auditPath)) {
+    if (!(0, import_fs4.statSync)(auditPath).isFile()) {
+      return {
+        id: "audit-writable",
+        status: "fail",
+        detail: `Audit path ${auditPath} is not a regular file \u2014 Warden requires a file for audit entries.`,
+        fix: `Remove ${auditPath} and ensure it is a regular file, or fix auditPath in your config.`
+      };
+    }
+    try {
+      (0, import_fs4.accessSync)(auditPath, import_fs4.constants.W_OK);
+    } catch (err) {
+      const code = err?.code;
+      if (code === "EACCES") {
+        return {
+          id: "audit-writable",
+          status: "fail",
+          detail: `Audit file ${auditPath} is not writable \u2014 Warden silently drops audit entries it cannot write.`,
+          fix: `Make ${auditPath} writable (e.g. chmod u+w ${auditPath}).`
+        };
+      }
+      return {
+        id: "audit-writable",
+        status: "unknown",
+        detail: `Could not inspect writability of ${auditPath}: ${err instanceof Error ? err.message : String(err)}`,
+        fix: "Check permissions or filesystem state for the audit file."
+      };
+    }
+  }
+  return {
+    id: "audit-writable",
+    status: "pass",
+    detail: `Audit path ${auditPath} is writable.`
+  };
 }
 function checkPipelineProbe(env) {
   try {
@@ -15259,13 +15313,29 @@ function checkPipelineProbe(env) {
 }
 function checkVersionSync(env) {
   const pr = resolvePluginRoot(env);
+  if (pr.inspectError) {
+    return {
+      id: "version-sync",
+      status: "unknown",
+      detail: pr.inspectError,
+      fix: "Fix or restore ~/.claude/plugins/installed_plugins.json so the Warden tree can be located."
+    };
+  }
   const root = pr.root;
+  if (!(0, import_fs4.existsSync)((0, import_path6.join)(root, "package.json"))) {
+    return {
+      id: "version-sync",
+      status: "skip",
+      detail: "version-sync only runs against the warden source/plugin tree."
+    };
+  }
   const stamps = [];
   const unparseable = [];
-  readStamp(root, "package.json", extractVersionField, stamps, unparseable);
-  readStamp(root, ".claude-plugin/plugin.json", extractVersionField, stamps, unparseable);
-  readStamp(root, ".claude-plugin/marketplace.json", extractMarketplaceWardenVersion, stamps, unparseable);
-  readStamp(root, "../claude-plugins/.claude-plugin/marketplace.json", extractMarketplaceWardenVersion, stamps, unparseable);
+  const invalid = [];
+  readStamp(root, "package.json", extractVersionField, stamps, unparseable, invalid);
+  readStamp(root, ".claude-plugin/plugin.json", extractVersionField, stamps, unparseable, invalid);
+  readStamp(root, ".claude-plugin/marketplace.json", extractMarketplaceWardenVersion, stamps, unparseable, invalid);
+  readStamp(root, "../claude-plugins/.claude-plugin/marketplace.json", extractMarketplaceWardenVersion, stamps, unparseable, invalid);
   if (unparseable.length > 0) {
     return {
       id: "version-sync",
@@ -15274,14 +15344,25 @@ function checkVersionSync(env) {
       fix: "Fix the JSON syntax in the listed version stamp file(s)."
     };
   }
-  const pkgStamp = stamps.find((s) => s.label === "package.json");
-  if (!pkgStamp) {
+  if (invalid.length > 0) {
     return {
       id: "version-sync",
-      status: "skip",
-      detail: "version-sync only runs against the warden source/plugin tree."
+      status: "unknown",
+      detail: `Version stamp(s) missing a string "version" field: ${invalid.join(", ")} (at ${root}).`,
+      fix: 'Add a string "version" field to the listed stamp file(s).'
     };
   }
+  const REQUIRED = ["package.json", ".claude-plugin/plugin.json"];
+  const missingRequired = REQUIRED.filter((label) => !stamps.some((s) => s.label === label));
+  if (missingRequired.length > 0) {
+    return {
+      id: "version-sync",
+      status: "unknown",
+      detail: `Required version stamp(s) missing: ${missingRequired.join(", ")} (at ${root}).`,
+      fix: "Restore the missing version stamp file(s) in the warden tree."
+    };
+  }
+  const pkgStamp = stamps.find((s) => s.label === "package.json");
   const allSame = stamps.every((s) => s.value === pkgStamp.value);
   const detail = stamps.map((s) => `${s.label}=${s.value}`).join("; ");
   if (allSame) {
