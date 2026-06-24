@@ -12,7 +12,10 @@ function commandsCarrySentinel(parsed: ParseResult): boolean {
 }
 
 function subshellsCarrySentinel(parsed: ParseResult): boolean {
-  return parsed.subshellCommands.some(s => s.includes(SENTINEL));
+  // Require the full sentinel COMMAND (`rm -rf /SENTINEL`), not just the target
+  // path. A parser bug that surfaces only the redirect/word target (`/SENTINEL`)
+  // instead of the whole substitution body would pass a bare-`SENTINEL` check.
+  return parsed.subshellCommands.some(s => s.includes(SENTINEL_CMD));
 }
 
 /** The parser-layer safety property: the planted sentinel is never silently dropped. */
@@ -20,7 +23,6 @@ function surfacedSomehow(parsed: ParseResult): boolean {
   return (
     commandsCarrySentinel(parsed) ||
     subshellsCarrySentinel(parsed) ||
-    parsed.hasSubshell ||
     parsed.incomplete === true
   );
 }
@@ -55,6 +57,16 @@ describe('parser completeness: construct corpus', () => {
   }
 });
 
+describe('process substitution body is caught regardless of askOnSubshell', () => {
+  it('never evaluates a process-sub body sentinel to allow when askOnSubshell is false', () => {
+    const decision = evaluate(parseCommand('cat <(rm -rf /SENTINEL)'), {
+      ...DEFAULT_CONFIG,
+      askOnSubshell: false,
+    }).decision;
+    expect(decision).not.toBe('allow');
+  });
+});
+
 // Deterministic sentinel fuzz harness.
 //
 // Wrap the sentinel in random nestings of recursive constructs, with a fixed
@@ -84,6 +96,10 @@ const NESTERS: ((inner: string) => string)[] = [
   inner => `( ${inner} )`,
   inner => `{ ${inner}; }`,
   inner => `for ((i=0; i<1; i++)); do ${inner}; done`,
+  inner => `cat < <(${inner})`,
+  inner => `x=$(${inner}); echo done`,
+  inner => `echo \${y:-$(${inner})}`,
+  inner => `cat <(${inner})`,
 ];
 
 describe('parser completeness: sentinel fuzz harness', () => {
@@ -101,9 +117,28 @@ describe('parser completeness: sentinel fuzz harness', () => {
         snippet = NESTERS[Math.floor(rand() * NESTERS.length)](snippet);
       }
       const parsed = parseCommand(snippet);
-      const surfaced = commandsCarrySentinel(parsed) || parsed.incomplete === true;
+      const surfaced =
+        commandsCarrySentinel(parsed) ||
+        subshellsCarrySentinel(parsed) ||
+        parsed.incomplete === true;
       if (!surfaced) failures.push(snippet);
     }
     expect(failures).toEqual([]);
+  });
+});
+
+describe('parser completeness: benign word-position expansions stay allow', () => {
+  it('keeps a benign parameter expansion allow', () => {
+    expect(evaluate(parseCommand('echo "${HOME}"'), DEFAULT_CONFIG).decision).toBe('allow');
+  });
+
+  it('keeps a redirect from a literal file allow', () => {
+    expect(evaluate(parseCommand('cat < file'), DEFAULT_CONFIG).decision).toBe('allow');
+  });
+
+  it('keeps the chain-local mktemp rm-cleanup idiom allow', () => {
+    expect(
+      evaluate(parseCommand('TMPDIR=$(mktemp -d) && rm -rf $TMPDIR'), DEFAULT_CONFIG).decision,
+    ).toBe('allow');
   });
 });

@@ -106,6 +106,31 @@ export const SHELL_CORPUS: CorpusEntry[] = [
   {
     name: 'process substitution',
     snippet: `cat <(${SENTINEL_CMD})`,
-    surface: 'flag',
+    surface: 'subshell',
+  },
+  {
+    name: 'redirect target process substitution',
+    snippet: `cat < <(${SENTINEL_CMD})`,
+    surface: 'subshell',
+  },
+  {
+    name: 'redirect target command substitution',
+    snippet: `cat > "$(${SENTINEL_CMD})"`,
+    surface: 'subshell',
+  },
+  {
+    name: 'standalone assignment value substitution',
+    snippet: `TMP=$(${SENTINEL_CMD}) && echo ok`,
+    surface: 'subshell',
+  },
+  {
+    name: 'parameter-expansion default operand',
+    snippet: `echo \${x:-$(${SENTINEL_CMD})}`,
+    surface: 'subshell',
+  },
+  {
+    name: 'process substitution body, inner paren',
+    snippet: `cat <(${SENTINEL_CMD} ')')`,
+    surface: 'subshell',
   },
 ];
