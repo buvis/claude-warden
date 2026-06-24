@@ -433,6 +433,7 @@ export const DEFAULT_CONFIG: WardenConfig = {
       },
       { command: 'mkdir', default: 'allow' },
       { command: 'touch', default: 'allow' },
+      { command: 'mktemp', default: 'allow' },
       { command: 'cp', default: 'allow' },
       { command: 'mv', default: 'allow' },
       { command: 'ln', default: 'allow' },

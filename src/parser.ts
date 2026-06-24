@@ -5,7 +5,7 @@ import type {
   Function as UnbashFunction,
   Subshell, BraceGroup, CompoundList,
   Select, Coproc, ArithmeticFor,
-  Word, CommandExpansionPart, Redirect,
+  Word, WordPart, DoubleQuotedChild, CommandExpansionPart, Redirect,
 } from 'unbash';
 import { basename, resolve } from 'path';
 import { homedir } from 'os';
@@ -97,7 +97,11 @@ function preprocessPathParentheses(input: string): string {
       i = j + 1;
       continue;
     }
-    if (ch === '$' && i + 1 < input.length && input[i + 1] === '(') {
+    if (
+      (ch === '$' || ch === '<' || ch === '>') &&
+      i + 1 < input.length &&
+      input[i + 1] === '('
+    ) {
       let depth = 1;
       let j = i + 2;
       while (j < input.length && depth > 0) {
@@ -136,31 +140,49 @@ function extractExpansionCommand(text: string): string {
   return text;
 }
 
+/** Scan a single word part for command expansions and process substitutions. */
+function scanWordPart(part: WordPart | DoubleQuotedChild, result: WalkResult): void {
+  switch (part.type) {
+    case 'CommandExpansion':
+      if (isCatHeredocInterpolation(part)) break;
+      result.hasSubshell = true;
+      result.subshellCommands.push(extractExpansionCommand(part.text));
+      break;
+    case 'ProcessSubstitution':
+      result.hasSubshell = true;
+      result.subshellCommands.push(
+        part.inner ?? part.text.replace(/^[<>]\(/, '').replace(/\)$/, ''),
+      );
+      break;
+    case 'DoubleQuoted':
+    case 'LocaleString':
+      for (const child of part.parts) scanWordPart(child, result);
+      break;
+    case 'ParameterExpansion':
+      if (part.operand) collectExpansionsFromWord(part.operand, result);
+      if (part.slice?.offset) collectExpansionsFromWord(part.slice.offset, result);
+      if (part.slice?.length) collectExpansionsFromWord(part.slice.length, result);
+      if (part.replace?.pattern) collectExpansionsFromWord(part.replace.pattern, result);
+      if (part.replace?.replacement) collectExpansionsFromWord(part.replace.replacement, result);
+      break;
+    case 'ArithmeticExpansion':
+      // `$(( ... ))` arithmetic expansion is out of v1 scope. Bash evaluates the
+      // arithmetic and does not run a bare token as a command, so `$(( a + b ))`
+      // is benign: no-op, and do NOT flag incomplete (that would ask on every
+      // benign `echo $(( 1 + 2 ))`).
+      // KNOWN v1 LIMITATION: a command substitution nested inside arithmetic
+      // (`$(( $(cmd) ))`) is NOT surfaced. unbash flattens it into the arithmetic
+      // token text with no nested CommandExpansion part to scan, so its inner
+      // command is currently dropped. Pre-existing gap, documented in the design
+      // doc Risks; closing it needs arithmetic-body extraction (v2).
+      break;
+  }
+}
+
 /** Scan a Word for command expansions and process substitutions. */
 function collectExpansionsFromWord(word: Word, result: WalkResult): void {
   if (!word.parts) return;
-  for (const part of word.parts) {
-    switch (part.type) {
-      case 'CommandExpansion':
-        if (isCatHeredocInterpolation(part)) break;
-        result.hasSubshell = true;
-        result.subshellCommands.push(extractExpansionCommand(part.text));
-        break;
-      case 'DoubleQuoted':
-      case 'LocaleString':
-        for (const child of part.parts) {
-          if (child.type === 'CommandExpansion') {
-            if (isCatHeredocInterpolation(child)) continue;
-            result.hasSubshell = true;
-            result.subshellCommands.push(extractExpansionCommand(child.text));
-          }
-        }
-        break;
-      case 'ProcessSubstitution':
-        result.hasSubshell = true;
-        break;
-    }
-  }
+  for (const part of word.parts) scanWordPart(part, result);
 }
 
 /** Extract chain assignments from a Command with no name (standalone VAR=value). */
@@ -267,6 +289,10 @@ export function walkNode(node: Node, result: WalkResult): void {
   switch (node.type) {
     case 'Statement': {
       const stmt = node as Statement;
+      for (const r of stmt.redirects) {
+        if (r.target) collectExpansionsFromWord(r.target, result);
+        if (r.body) collectExpansionsFromWord(r.body, result);
+      }
       walkNode(stmt.command, result);
       break;
     }
@@ -277,6 +303,18 @@ export function walkNode(node: Node, result: WalkResult): void {
       // Collect command expansions from name and suffix words
       if (cmd.name) collectExpansionsFromWord(cmd.name, result);
       for (const s of cmd.suffix) collectExpansionsFromWord(s, result);
+
+      // Collect from redirect words (target/body)
+      for (const r of cmd.redirects) {
+        if (r.target) collectExpansionsFromWord(r.target, result);
+        if (r.body) collectExpansionsFromWord(r.body, result);
+      }
+
+      // Collect from prefix-assignment values (in addition to chain tracking)
+      for (const p of cmd.prefix) {
+        if (p.value) collectExpansionsFromWord(p.value, result);
+        if (p.array) for (const w of p.array) collectExpansionsFromWord(w, result);
+      }
 
       const parsed = convertCommand(cmd, result.chainAssignments);
       if (!parsed) {
