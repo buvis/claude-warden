@@ -299,6 +299,14 @@ export function walkNode(node: Node, result: WalkResult): void {
         const innerResult = parseCommand(parsed.args[1]);
         if (innerResult.parseError) {
           result.commands.push(parsed);
+        } else if (
+          innerResult.commands.length === 0 &&
+          parsed.envPrefixes.length > 0
+        ) {
+          // Empty/comment-only/assignment-only inner body yields no commands.
+          // Keep the wrapper so its env prefix stays evaluable (the evaluator's
+          // env-prefix post-pass names any dangerous variable it carries).
+          result.commands.push(parsed);
         } else {
           if (parsed.envPrefixes.length > 0) {
             result.commands.push(
