@@ -2615,3 +2615,40 @@ describe('incomplete parse handling', () => {
     expect(r.reason).toBe('unrecognized shell construct: Coproc');
   });
 });
+
+describe('dangerous env prefix on empty-body shell -c wrapper', () => {
+  it('asks and names BASH_ENV for empty-body bash -c carrying BASH_ENV', () => {
+    const r = eval_('BASH_ENV=/tmp/x bash -c ""');
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toContain('BASH_ENV');
+  });
+
+  it('asks and names BASH_ENV for comment-only bash -c carrying BASH_ENV', () => {
+    const r = eval_('BASH_ENV=/tmp/x bash -c "# noop"');
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toContain('BASH_ENV');
+  });
+
+  it('asks and names BASH_ENV for assignment-only bash -c carrying BASH_ENV', () => {
+    const r = eval_('BASH_ENV=/tmp/x bash -c "FOO=bar"');
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toContain('BASH_ENV');
+  });
+
+  it('asks and names LD_PRELOAD for empty-body sh -c carrying LD_PRELOAD', () => {
+    const r = eval_('LD_PRELOAD=/tmp/x.so sh -c ""');
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toContain('LD_PRELOAD');
+  });
+
+  it('allows empty-body bash -c with no env prefix', () => {
+    const r = eval_('bash -c ""');
+    expect(r.decision).toBe('allow');
+  });
+
+  it('asks and names BASH_ENV for non-empty-body sh -c carrying BASH_ENV', () => {
+    const r = eval_('BASH_ENV=/tmp/evil sh -c true');
+    expect(r.decision).toBe('ask');
+    expect(r.reason).toContain('BASH_ENV');
+  });
+});
