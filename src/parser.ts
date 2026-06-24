@@ -28,8 +28,6 @@ export interface WalkResult {
  * case treats every OTHER unhandled type as incomplete (fail loud), so adding a
  * new no-command construct here is the one place to suppress a false ask.
  */
-// No-command node types are now all handled by explicit cases. Keep this as the
-// single suppression point for any future no-command construct; empty today.
 const NO_COMMAND_NODE_TYPES = new Set<string>([]);
 
 const VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
