@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, statSync, accessSync, constants } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, isAbsolute } from 'path';
 import os from 'os';
 import { loadConfig, setQuiet } from './rules';
 import { DEFAULT_CONFIG } from './defaults';
@@ -410,13 +410,14 @@ export function checkConfigHealth(env: DiagnoseEnv): CheckResult {
 
 export function checkAuditWritable(env: DiagnoseEnv): CheckResult {
   setQuiet(true);
-  const auditPath = loadConfig(env.cwd).auditPath;
+  const rawAuditPath = loadConfig(env.cwd).auditPath;
+  const auditPath = isAbsolute(rawAuditPath) ? rawAuditPath : resolve(env.cwd, rawAuditPath);
   const auditDir = dirname(auditPath);
 
   if (!existsSync(auditDir)) {
     return {
       id: 'audit-writable',
-      status: 'warn',
+      status: 'fail',
       detail: `Audit directory ${auditDir} does not exist — Warden will silently drop audit entries.`,
       fix: `Create the directory (mkdir -p ${auditDir}) or fix auditPath in your config.`,
     };
@@ -425,7 +426,7 @@ export function checkAuditWritable(env: DiagnoseEnv): CheckResult {
   if (!statSync(auditDir).isDirectory()) {
     return {
       id: 'audit-writable',
-      status: 'warn',
+      status: 'fail',
       detail: `Audit path's parent ${auditDir} is not a directory — Warden will drop audit entries.`,
       fix: `Remove ${auditDir} and create it as a directory, or fix auditPath in your config.`,
     };
@@ -433,11 +434,6 @@ export function checkAuditWritable(env: DiagnoseEnv): CheckResult {
 
   try {
     accessSync(auditDir, constants.W_OK);
-    return {
-      id: 'audit-writable',
-      status: 'pass',
-      detail: `Audit directory ${auditDir} is writable.`,
-    };
   } catch (err: unknown) {
     const code = (err as { code?: string } | undefined)?.code;
     if (code === 'EACCES') {
@@ -455,6 +451,43 @@ export function checkAuditWritable(env: DiagnoseEnv): CheckResult {
       fix: 'Check permissions or filesystem state for the audit directory.',
     };
   }
+
+  // Target file exists — validate it is a regular file and is writable.
+  if (existsSync(auditPath)) {
+    if (!statSync(auditPath).isFile()) {
+      return {
+        id: 'audit-writable',
+        status: 'fail',
+        detail: `Audit path ${auditPath} is not a regular file — Warden requires a file for audit entries.`,
+        fix: `Remove ${auditPath} and ensure it is a regular file, or fix auditPath in your config.`,
+      };
+    }
+    try {
+      accessSync(auditPath, constants.W_OK);
+    } catch (err: unknown) {
+      const code = (err as { code?: string } | undefined)?.code;
+      if (code === 'EACCES') {
+        return {
+          id: 'audit-writable',
+          status: 'fail',
+          detail: `Audit file ${auditPath} is not writable — Warden silently drops audit entries it cannot write.`,
+          fix: `Make ${auditPath} writable (e.g. chmod u+w ${auditPath}).`,
+        };
+      }
+      return {
+        id: 'audit-writable',
+        status: 'unknown',
+        detail: `Could not inspect writability of ${auditPath}: ${err instanceof Error ? err.message : String(err)}`,
+        fix: 'Check permissions or filesystem state for the audit file.',
+      };
+    }
+  }
+
+  return {
+    id: 'audit-writable',
+    status: 'pass',
+    detail: `Audit path ${auditPath} is writable.`,
+  };
 }
 
 export function checkPipelineProbe(env: DiagnoseEnv): CheckResult {
