@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-01
+
 ### Added
 
 - **cli**: new `warden diagnose` subcommand (alias `doctor`) — checks the full decision chain between Claude and Warden (native-permission shadowing in `settings.json`, plugin hook registration, the `dist/index.cjs` binary, config health, audit-log writability, an in-process pipeline probe, and version-stamp drift) and reports each link with a concrete fix. Exits 1 when any check fails or cannot be inspected, 0 when the setup is healthy. Supports `--cwd` and `--json`
