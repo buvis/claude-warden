@@ -14929,7 +14929,7 @@ async function main() {
     process.exit(0);
   }
   const config = loadConfig(input.cwd);
-  const result = wardenEvalWithConfig(command, config, input.cwd);
+  let result = wardenEvalWithConfig(command, config, input.cwd);
   const elapsed = Date.now() - startTime;
   const yoloState = getYoloState(input.session_id);
   if (yoloState) {
@@ -14947,6 +14947,13 @@ async function main() {
       process.stdout.write(JSON.stringify(output2));
       process.exit(0);
     }
+  }
+  if (result.decision === "ask" && (process.env.WARDEN_UNATTENDED === "true" || process.env.WARDEN_UNATTENDED === "1")) {
+    result = {
+      ...result,
+      decision: "deny",
+      reason: `${result.reason} [unattended: ask not answerable, denied \u2014 allowlist to permit]`
+    };
   }
   if (result.decision === "allow") {
     logDecision(config, input, result, elapsed, false);

@@ -126,7 +126,7 @@ async function main() {
   }
 
   const config = loadConfig(input.cwd);
-  const result = wardenEvalWithConfig(command, config, input.cwd);
+  let result = wardenEvalWithConfig(command, config, input.cwd);
   const elapsed = Date.now() - startTime;
 
   // Check YOLO mode
@@ -150,6 +150,24 @@ async function main() {
       process.stdout.write(JSON.stringify(output));
       process.exit(0);
     }
+  }
+
+  // Unattended mode (e.g. the autopilot loop): no human can answer an
+  // interactive permission prompt, so an `ask` would block the run forever — a
+  // subagent's `chmod +x` deadlocked an autopilot loop 1h51m on 2026-06-30.
+  // Convert `ask` -> `deny` so the run fails fast instead of hanging. `allow`
+  // and `deny` are untouched, so warden's catch is preserved; allowlist any
+  // safe command (warden.yaml / `/warden:allow`) so it resolves to `allow` and
+  // is permitted even here.
+  if (
+    result.decision === 'ask'
+    && (process.env.WARDEN_UNATTENDED === 'true' || process.env.WARDEN_UNATTENDED === '1')
+  ) {
+    result = {
+      ...result,
+      decision: 'deny',
+      reason: `${result.reason} [unattended: ask not answerable, denied — allowlist to permit]`,
+    };
   }
 
   if (result.decision === 'allow') {
