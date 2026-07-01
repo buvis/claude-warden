@@ -2,6 +2,9 @@
 .claude/
 .local/
 
+# Serena tool project dir (cache, memories, local config)
+.serena/
+
 # Logs
 logs
 *.log
