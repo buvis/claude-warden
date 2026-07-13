@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **release**: releasing warden no longer overwrites every other plugin's version in the buvis/claude-plugins marketplace. The release script stamped all entries with warden's version (this caused the clobbers on v0.11.1, v0.12.0, v0.13.0); it now updates only warden's entry and aborts the push if any other entry changed
+
 ## [0.13.0] - 2026-07-01
 
 ### Added

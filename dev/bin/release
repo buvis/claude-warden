@@ -86,6 +86,7 @@ fi
 step "bumping version ($BUMP)"
 pnpm version "$BUMP" --no-git-tag-version
 VERSION=$(jq -r .version package.json)
+PLUGIN_NAME=$(jq -r .name .claude-plugin/plugin.json)
 DATE=$(date +%Y-%m-%d)
 
 step "stamping CHANGELOG.md with v$VERSION ($DATE)"
@@ -104,10 +105,29 @@ git commit -m "chore: release v$VERSION"
 step "pushing to origin"
 git push
 
-step "bumping marketplace.json to v$VERSION"
-perl -i -pe "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MARKETPLACE"
+step "bumping $PLUGIN_NAME's entry in marketplace.json to v$VERSION"
+jq --arg name "$PLUGIN_NAME" --arg v "$VERSION" '
+  .plugins = (.plugins | map(if .name == $name then .version = $v else . end))
+' "$MARKETPLACE" > "$MARKETPLACE.tmp"
+mv "$MARKETPLACE.tmp" "$MARKETPLACE"
+
+step "verifying marketplace stamp touched only $PLUGIN_NAME"
+STAMPED=$(jq -r --arg name "$PLUGIN_NAME" '.plugins[] | select(.name == $name).version' "$MARKETPLACE")
+if [ "$STAMPED" != "$VERSION" ]; then
+  echo "Error: no marketplace entry named $PLUGIN_NAME was stamped to v$VERSION" >&2
+  git -C "$MARKETPLACE_ROOT" checkout -- .claude-plugin/marketplace.json
+  exit 1
+fi
+if ! git -C "$MARKETPLACE_ROOT" show HEAD:.claude-plugin/marketplace.json \
+    | jq --arg name "$PLUGIN_NAME" '[.plugins[] | select(.name != $name)]' \
+    | cmp -s - <(jq --arg name "$PLUGIN_NAME" '[.plugins[] | select(.name != $name)]' "$MARKETPLACE"); then
+  echo "Error: marketplace stamp changed other plugins' entries - reverting, not pushing" >&2
+  git -C "$MARKETPLACE_ROOT" checkout -- .claude-plugin/marketplace.json
+  exit 1
+fi
+
 git -C "$MARKETPLACE_ROOT" add .claude-plugin/marketplace.json
-git -C "$MARKETPLACE_ROOT" commit -m "chore: bump warden to v$VERSION"
+git -C "$MARKETPLACE_ROOT" commit -m "chore: bump $PLUGIN_NAME to v$VERSION"
 
 step "pushing marketplace"
 git -C "$MARKETPLACE_ROOT" push
