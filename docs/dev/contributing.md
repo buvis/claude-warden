@@ -47,7 +47,11 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"},"session_id":"test
 
 ## Releasing
 
-Releases publish via CI when a GitHub release is created - not locally.
+npm publishing happens via CI when a GitHub release is created. The version bump itself runs locally through the shared release script in [buvis/claude-plugins](https://github.com/buvis/claude-plugins) (`scripts/release-plugin`), so clone that repo beside this one first:
+
+```bash
+git clone git@github.com:buvis/claude-plugins.git ../claude-plugins
+```
 
 ```bash
 pnpm run release           # patch bump
@@ -55,7 +59,7 @@ pnpm run release:minor     # minor bump
 pnpm run release:major     # major bump
 ```
 
-This bumps the version, updates the changelog, commits, pushes, and updates the marketplace. Then create a GitHub release manually:
+This runs the checks, bumps the version, updates the changelog, builds `dist/`, commits, tags `vX.Y.Z`, pushes, and bumps warden's entry in the central marketplace. Then create a GitHub release manually:
 
 ```bash
 gh release create vX.Y.Z --target master --title "vX.Y.Z" --notes "..."

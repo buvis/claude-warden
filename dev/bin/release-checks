@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Pre-release checks for warden.
+# Run by claude-plugins/scripts/release-plugin with CWD = repo root.
+set -euo pipefail
+
+if ! pnpm run test --silent; then
+  echo "Error: tests fail - re-run 'pnpm run test' to see failures" >&2
+  exit 1
+fi

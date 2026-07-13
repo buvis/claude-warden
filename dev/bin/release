@@ -1,138 +1,20 @@
 #!/usr/bin/env bash
+# Thin shim: the shared release logic lives in the claude-plugins repo, next
+# to the central marketplace.json it stamps. Repo-specific steps hook in via
+# dev/bin/release-checks (pre-bump) and dev/bin/release-build (post-bump).
 set -euo pipefail
 
-BUMP="${1:-patch}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-MARKETPLACE_ROOT="$REPO_ROOT/../claude-plugins"
-MARKETPLACE="$MARKETPLACE_ROOT/.claude-plugin/marketplace.json"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CENTRAL_REPO="$REPO_ROOT/../claude-plugins"
+RELEASE="$CENTRAL_REPO/scripts/release-plugin"
 
-CURRENT_STEP=""
-on_error() {
-  local exit_code=$?
-  local line=$1
-  echo "" >&2
-  if [ -n "$CURRENT_STEP" ]; then
-    echo "[release] FAILED during: $CURRENT_STEP" >&2
-  fi
-  echo "[release] exit $exit_code at line $line" >&2
-  exit "$exit_code"
-}
-trap 'on_error $LINENO' ERR
-
-step() {
-  CURRENT_STEP="$1"
-  echo "[release] $CURRENT_STEP"
-}
-
-case "$BUMP" in
-  patch|minor|major) ;;
-  *) echo "Usage: $0 [patch|minor|major] (default: patch)" >&2 && exit 1 ;;
-esac
-
-# --- Preflight checks ---
-
-step "checking CHANGELOG.md has [Unreleased] section"
-if ! grep -q '## \[Unreleased\]' CHANGELOG.md; then
-  echo "Error: no [Unreleased] section in CHANGELOG.md" >&2
-  exit 1
-fi
-UNRELEASED=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md)
-if ! echo "$UNRELEASED" | grep -q '^### '; then
-  echo "Error: [Unreleased] section has no entries - add changelog entries before releasing" >&2
+if [ ! -x "$RELEASE" ]; then
+  echo "Error: $RELEASE not found - clone buvis/claude-plugins beside this repo" >&2
   exit 1
 fi
 
-step "checking marketplace repo at $MARKETPLACE_ROOT"
-if [ ! -d "$MARKETPLACE_ROOT" ]; then
-  echo "Error: marketplace repo not cloned at $MARKETPLACE_ROOT" >&2
-  echo "       Run: git clone git@github.com:buvis/claude-plugins.git $MARKETPLACE_ROOT" >&2
-  exit 1
-fi
-MARKETPLACE_ROOT="$(cd "$MARKETPLACE_ROOT" && pwd)"
-MARKETPLACE="$MARKETPLACE_ROOT/.claude-plugin/marketplace.json"
-if [ ! -f "$MARKETPLACE" ]; then
-  echo "Error: marketplace.json not found at $MARKETPLACE" >&2
-  exit 1
-fi
-if [ -n "$(git -C "$MARKETPLACE_ROOT" status --porcelain)" ]; then
-  echo "Error: marketplace repo has uncommitted changes" >&2
-  exit 1
-fi
+echo "[release] pulling latest claude-plugins (shared script + marketplace)"
+git -C "$CENTRAL_REPO" pull --ff-only
 
-step "checking working tree is clean"
-if [ -n "$(git status --porcelain)" ]; then
-  echo "Error: working tree has uncommitted changes" >&2
-  git status --short >&2
-  exit 1
-fi
-
-step "checking required tools (jq, perl, pnpm)"
-for cmd in jq perl pnpm; do
-  if ! command -v "$cmd" &>/dev/null; then
-    echo "Error: $cmd not found in PATH" >&2
-    exit 1
-  fi
-done
-
-step "running tests"
-if ! pnpm run test --silent; then
-  echo "Error: tests fail before release - re-run 'pnpm run test' to see failures" >&2
-  exit 1
-fi
-
-# --- Release ---
-
-step "bumping version ($BUMP)"
-pnpm version "$BUMP" --no-git-tag-version
-VERSION=$(jq -r .version package.json)
-PLUGIN_NAME=$(jq -r .name .claude-plugin/plugin.json)
-DATE=$(date +%Y-%m-%d)
-
-step "stamping CHANGELOG.md with v$VERSION ($DATE)"
-perl -i -pe "s/^## \\[Unreleased\\]/## [Unreleased]\\n\\n## [$VERSION] - $DATE/" CHANGELOG.md
-
-step "syncing plugin/marketplace versions"
-pnpm run sync-plugin-version
-
-step "building dist"
-pnpm run build
-
-step "committing release v$VERSION"
-git add -A
-git commit -m "chore: release v$VERSION"
-
-step "pushing to origin"
-git push
-
-step "bumping $PLUGIN_NAME's entry in marketplace.json to v$VERSION"
-jq --arg name "$PLUGIN_NAME" --arg v "$VERSION" '
-  .plugins = (.plugins | map(if .name == $name then .version = $v else . end))
-' "$MARKETPLACE" > "$MARKETPLACE.tmp"
-mv "$MARKETPLACE.tmp" "$MARKETPLACE"
-
-step "verifying marketplace stamp touched only $PLUGIN_NAME"
-STAMPED=$(jq -r --arg name "$PLUGIN_NAME" '.plugins[] | select(.name == $name).version' "$MARKETPLACE")
-if [ "$STAMPED" != "$VERSION" ]; then
-  echo "Error: no marketplace entry named $PLUGIN_NAME was stamped to v$VERSION" >&2
-  git -C "$MARKETPLACE_ROOT" checkout -- .claude-plugin/marketplace.json
-  exit 1
-fi
-if ! git -C "$MARKETPLACE_ROOT" show HEAD:.claude-plugin/marketplace.json \
-    | jq --arg name "$PLUGIN_NAME" '[.plugins[] | select(.name != $name)]' \
-    | cmp -s - <(jq --arg name "$PLUGIN_NAME" '[.plugins[] | select(.name != $name)]' "$MARKETPLACE"); then
-  echo "Error: marketplace stamp changed other plugins' entries - reverting, not pushing" >&2
-  git -C "$MARKETPLACE_ROOT" checkout -- .claude-plugin/marketplace.json
-  exit 1
-fi
-
-git -C "$MARKETPLACE_ROOT" add .claude-plugin/marketplace.json
-git -C "$MARKETPLACE_ROOT" commit -m "chore: bump $PLUGIN_NAME to v$VERSION"
-
-step "pushing marketplace"
-git -C "$MARKETPLACE_ROOT" push
-
-CURRENT_STEP=""
-echo ""
-echo "[release] ✓ released v$VERSION"
-echo "[release] ✓ marketplace updated to v$VERSION"
+cd "$REPO_ROOT"
+exec "$RELEASE" "$@"

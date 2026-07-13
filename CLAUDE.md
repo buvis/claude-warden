@@ -48,7 +48,7 @@ The hook communicates with Claude Code via the PreToolUse hook protocol:
 
 ## Releasing
 
-Use `dev/bin/release [patch|minor|major]`. The script bumps `package.json`, syncs `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, stamps `CHANGELOG.md` (replaces `[Unreleased]` heading with the version + date), builds `dist/`, commits as `chore: release vX.Y.Z`, pushes, then bumps the sibling marketplace repo at `../claude-plugins` and pushes that. CI publishes to npm via OIDC.
+Use `dev/bin/release [patch|minor|major]`. It is a thin shim around the shared release script in the sibling marketplace repo (`../claude-plugins/scripts/release-plugin` - a required checkout for development). That script runs `dev/bin/release-checks` (tests), bumps `package.json`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`, stamps `CHANGELOG.md` (inserts the version + date below `[Unreleased]`), runs `dev/bin/release-build` (`dist/`), commits as `chore: release vX.Y.Z`, tags `vX.Y.Z`, pushes, then bumps only warden's entry in the central marketplace and pushes that (a guard aborts if any other plugin's entry changed). CI publishes to npm via OIDC.
 
 **Do not pre-bump versions or pre-stamp the changelog.** The release script does both. Land feature commits with the entry under `[Unreleased]` and a clean working tree, then run the script.
 
