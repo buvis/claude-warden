@@ -6,6 +6,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -25,6 +28,4303 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+
+// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/chars.js
+var CH_TAB, CH_NL, CH_SPACE, CH_BANG, CH_DQUOTE, CH_HASH, CH_DOLLAR, CH_PERCENT, CH_AMP, CH_SQUOTE, CH_LPAREN, CH_RPAREN, CH_STAR, CH_PLUS, CH_COMMA, CH_DASH, CH_SLASH, CH_0, CH_9, CH_COLON, CH_SEMI, CH_LT, CH_EQ, CH_GT, CH_QUESTION, CH_AT, CH_A, CH_Z, CH_LBRACKET, CH_BACKSLASH, CH_RBRACKET, CH_CARET, CH_UNDERSCORE, CH_BACKTICK, CH_a, CH_z, CH_LBRACE, CH_PIPE, CH_RBRACE, CH_TILDE;
+var init_chars = __esm({
+  "node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/chars.js"() {
+    "use strict";
+    CH_TAB = 9;
+    CH_NL = 10;
+    CH_SPACE = 32;
+    CH_BANG = 33;
+    CH_DQUOTE = 34;
+    CH_HASH = 35;
+    CH_DOLLAR = 36;
+    CH_PERCENT = 37;
+    CH_AMP = 38;
+    CH_SQUOTE = 39;
+    CH_LPAREN = 40;
+    CH_RPAREN = 41;
+    CH_STAR = 42;
+    CH_PLUS = 43;
+    CH_COMMA = 44;
+    CH_DASH = 45;
+    CH_SLASH = 47;
+    CH_0 = 48;
+    CH_9 = 57;
+    CH_COLON = 58;
+    CH_SEMI = 59;
+    CH_LT = 60;
+    CH_EQ = 61;
+    CH_GT = 62;
+    CH_QUESTION = 63;
+    CH_AT = 64;
+    CH_A = 65;
+    CH_Z = 90;
+    CH_LBRACKET = 91;
+    CH_BACKSLASH = 92;
+    CH_RBRACKET = 93;
+    CH_CARET = 94;
+    CH_UNDERSCORE = 95;
+    CH_BACKTICK = 96;
+    CH_a = 97;
+    CH_z = 122;
+    CH_LBRACE = 123;
+    CH_PIPE = 124;
+    CH_RBRACE = 125;
+    CH_TILDE = 126;
+  }
+});
+
+// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/arithmetic.js
+function opPrec(op) {
+  switch (op) {
+    case ",":
+      return 1;
+    case "=":
+    case "+=":
+    case "-=":
+    case "*=":
+    case "/=":
+    case "%=":
+    case "<<=":
+    case ">>=":
+    case "&=":
+    case "|=":
+    case "^=":
+      return 2;
+    case "||":
+      return 4;
+    case "&&":
+      return 5;
+    case "|":
+      return 6;
+    case "^":
+      return 7;
+    case "&":
+      return 8;
+    case "==":
+    case "!=":
+      return 9;
+    case "<":
+    case "<=":
+    case ">":
+    case ">=":
+      return 10;
+    case "<<":
+    case ">>":
+      return 11;
+    case "+":
+    case "-":
+      return 12;
+    case "*":
+    case "/":
+    case "%":
+      return 13;
+    case "**":
+      return 14;
+    default:
+      return -1;
+  }
+}
+function opRightAssoc(op) {
+  switch (op) {
+    case "=":
+    case "+=":
+    case "-=":
+    case "*=":
+    case "/=":
+    case "%=":
+    case "<<=":
+    case ">>=":
+    case "&=":
+    case "|=":
+    case "^=":
+    case "**":
+      return true;
+    default:
+      return false;
+  }
+}
+function parseArithmeticExpression(src, offset = 0) {
+  let pos = 0;
+  const len = src.length;
+  function skipWS() {
+    while (pos < len) {
+      const c = src.charCodeAt(pos);
+      if (c === CH_SPACE || c === CH_TAB || c === CH_NL)
+        pos++;
+      else
+        break;
+    }
+  }
+  function tryReadBinOp() {
+    if (pos >= len)
+      return null;
+    const c = src.charCodeAt(pos);
+    const nc = pos + 1 < len ? src.charCodeAt(pos + 1) : 0;
+    const nnc = pos + 2 < len ? src.charCodeAt(pos + 2) : 0;
+    switch (c) {
+      case CH_COMMA:
+        pos++;
+        return ",";
+      case CH_EQ:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "==";
+        }
+        pos++;
+        return "=";
+      case CH_BANG:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "!=";
+        }
+        return null;
+      // unary
+      case CH_LT:
+        if (nc === CH_LT) {
+          if (nnc === CH_EQ) {
+            pos += 3;
+            return "<<=";
+          }
+          pos += 2;
+          return "<<";
+        }
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "<=";
+        }
+        pos++;
+        return "<";
+      case CH_GT:
+        if (nc === CH_GT) {
+          if (nnc === CH_EQ) {
+            pos += 3;
+            return ">>=";
+          }
+          pos += 2;
+          return ">>";
+        }
+        if (nc === CH_EQ) {
+          pos += 2;
+          return ">=";
+        }
+        pos++;
+        return ">";
+      case CH_PLUS:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "+=";
+        }
+        if (nc === CH_PLUS)
+          return null;
+        pos++;
+        return "+";
+      case CH_DASH:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "-=";
+        }
+        if (nc === CH_DASH)
+          return null;
+        pos++;
+        return "-";
+      case CH_STAR:
+        if (nc === CH_STAR) {
+          pos += 2;
+          return "**";
+        }
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "*=";
+        }
+        pos++;
+        return "*";
+      case CH_SLASH:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "/=";
+        }
+        pos++;
+        return "/";
+      case CH_PERCENT:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "%=";
+        }
+        pos++;
+        return "%";
+      case CH_PIPE:
+        if (nc === CH_PIPE) {
+          pos += 2;
+          return "||";
+        }
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "|=";
+        }
+        pos++;
+        return "|";
+      case CH_AMP:
+        if (nc === CH_AMP) {
+          pos += 2;
+          return "&&";
+        }
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "&=";
+        }
+        pos++;
+        return "&";
+      case CH_CARET:
+        if (nc === CH_EQ) {
+          pos += 2;
+          return "^=";
+        }
+        pos++;
+        return "^";
+      case CH_QUESTION:
+        pos++;
+        return "?";
+      default:
+        return null;
+    }
+  }
+  function parseBinExpr(minPrec) {
+    let left = parseUnaryExpr();
+    while (true) {
+      skipWS();
+      if (pos >= len)
+        break;
+      const saved = pos;
+      const op = tryReadBinOp();
+      if (!op)
+        break;
+      if (op === "?") {
+        if (3 < minPrec) {
+          pos = saved;
+          break;
+        }
+        const consequent = parseBinExpr(1);
+        skipWS();
+        if (pos < len && src.charCodeAt(pos) === CH_COLON)
+          pos++;
+        const alternate = parseBinExpr(3);
+        left = { type: "ArithmeticTernary", pos: left.pos, end: alternate.end, test: left, consequent, alternate };
+        continue;
+      }
+      const prec = opPrec(op);
+      if (prec < minPrec) {
+        pos = saved;
+        break;
+      }
+      const nextPrec = opRightAssoc(op) ? prec : prec + 1;
+      const right = parseBinExpr(nextPrec);
+      left = { type: "ArithmeticBinary", pos: left.pos, end: right.end, operator: op, left, right };
+    }
+    return left;
+  }
+  function parseUnaryExpr() {
+    skipWS();
+    if (pos >= len)
+      return { type: "ArithmeticWord", pos: pos + offset, end: pos + offset, value: "" };
+    const start = pos;
+    const c = src.charCodeAt(pos);
+    const nc = pos + 1 < len ? src.charCodeAt(pos + 1) : 0;
+    if (c === CH_PLUS && nc === CH_PLUS) {
+      pos += 2;
+      const operand = parseUnaryExpr();
+      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "++", operand, prefix: true };
+    }
+    if (c === CH_DASH && nc === CH_DASH) {
+      pos += 2;
+      const operand = parseUnaryExpr();
+      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "--", operand, prefix: true };
+    }
+    if (c === CH_BANG) {
+      pos++;
+      const operand = parseUnaryExpr();
+      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "!", operand, prefix: true };
+    }
+    if (c === CH_TILDE) {
+      pos++;
+      const operand = parseUnaryExpr();
+      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "~", operand, prefix: true };
+    }
+    if (c === CH_PLUS && nc !== CH_PLUS && nc !== CH_EQ) {
+      pos++;
+      const operand = parseUnaryExpr();
+      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "+", operand, prefix: true };
+    }
+    if (c === CH_DASH && nc !== CH_DASH && nc !== CH_EQ) {
+      pos++;
+      const operand = parseUnaryExpr();
+      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "-", operand, prefix: true };
+    }
+    return parsePostfixExpr();
+  }
+  function parsePostfixExpr() {
+    const operand = parseAtom();
+    skipWS();
+    if (pos + 1 < len) {
+      const c = src.charCodeAt(pos);
+      const nc = src.charCodeAt(pos + 1);
+      if (c === CH_PLUS && nc === CH_PLUS) {
+        pos += 2;
+        return { type: "ArithmeticUnary", pos: operand.pos, end: pos + offset, operator: "++", operand, prefix: false };
+      }
+      if (c === CH_DASH && nc === CH_DASH) {
+        pos += 2;
+        return { type: "ArithmeticUnary", pos: operand.pos, end: pos + offset, operator: "--", operand, prefix: false };
+      }
+    }
+    return operand;
+  }
+  function parseAtom() {
+    skipWS();
+    if (pos >= len)
+      return { type: "ArithmeticWord", pos: pos + offset, end: pos + offset, value: "" };
+    const c = src.charCodeAt(pos);
+    if (c === CH_LPAREN) {
+      const start = pos;
+      pos++;
+      const expr = parseBinExpr(0);
+      skipWS();
+      if (pos < len && src.charCodeAt(pos) === CH_RPAREN)
+        pos++;
+      return { type: "ArithmeticGroup", pos: start + offset, end: pos + offset, expression: expr };
+    }
+    if (c === CH_DOLLAR) {
+      return readDollarAtom();
+    }
+    return readWordAtom();
+  }
+  function readDollarAtom() {
+    const start = pos;
+    pos++;
+    if (pos >= len)
+      return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: "$" };
+    const c = src.charCodeAt(pos);
+    if (c === CH_LPAREN) {
+      if (pos + 1 < len && src.charCodeAt(pos + 1) === CH_LPAREN) {
+        pos += 2;
+        let depth = 1;
+        while (pos < len && depth > 0) {
+          if (src.charCodeAt(pos) === CH_LPAREN && pos + 1 < len && src.charCodeAt(pos + 1) === CH_LPAREN) {
+            depth++;
+            pos += 2;
+          } else if (src.charCodeAt(pos) === CH_RPAREN && pos + 1 < len && src.charCodeAt(pos + 1) === CH_RPAREN) {
+            depth--;
+            if (depth > 0)
+              pos += 2;
+            else
+              pos += 2;
+          } else
+            pos++;
+        }
+      } else {
+        pos++;
+        let depth = 1;
+        while (pos < len && depth > 0) {
+          const ch = src.charCodeAt(pos);
+          if (ch === CH_LPAREN)
+            depth++;
+          else if (ch === CH_RPAREN)
+            depth--;
+          pos++;
+        }
+      }
+    } else if (c === CH_LBRACE) {
+      pos++;
+      let depth = 1;
+      while (pos < len && depth > 0) {
+        const ch = src.charCodeAt(pos);
+        if (ch === CH_LBRACE)
+          depth++;
+        else if (ch === CH_RBRACE)
+          depth--;
+        pos++;
+      }
+    } else {
+      while (pos < len) {
+        const ch = src.charCodeAt(pos);
+        if (ch >= CH_a && ch <= CH_z || ch >= CH_A && ch <= CH_Z || ch >= CH_0 && ch <= CH_9 || ch === CH_UNDERSCORE)
+          pos++;
+        else
+          break;
+      }
+    }
+    return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: src.slice(start, pos) };
+  }
+  function readWordAtom() {
+    const start = pos;
+    while (pos < len) {
+      const c = src.charCodeAt(pos);
+      if (c >= CH_0 && c <= CH_9 || c >= CH_A && c <= CH_Z || c >= CH_a && c <= CH_z || c === CH_UNDERSCORE || c === 35) {
+        pos++;
+      } else
+        break;
+    }
+    if (pos > start && pos < len && src.charCodeAt(pos) === CH_LBRACKET) {
+      pos++;
+      let depth = 1;
+      while (pos < len && depth > 0) {
+        const c = src.charCodeAt(pos);
+        if (c === CH_LBRACKET)
+          depth++;
+        else if (c === CH_RBRACKET)
+          depth--;
+        pos++;
+      }
+    }
+    if (pos === start) {
+      pos++;
+      return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: src.slice(start, pos) };
+    }
+    return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: src.slice(start, pos) };
+  }
+  skipWS();
+  if (pos >= len)
+    return null;
+  const result = parseBinExpr(0);
+  skipWS();
+  return result;
+}
+var init_arithmetic = __esm({
+  "node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/arithmetic.js"() {
+    "use strict";
+    init_chars();
+  }
+});
+
+// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/word.js
+function dequoteValue(parts) {
+  let s = "";
+  for (const c of parts)
+    s += c.type === "Literal" ? c.value : c.text;
+  return s;
+}
+var WordImpl;
+var init_word = __esm({
+  "node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/word.js"() {
+    "use strict";
+    WordImpl = class _WordImpl {
+      static _resolve;
+      text;
+      pos;
+      end;
+      #source;
+      #parts;
+      #value = null;
+      constructor(text, pos, end, source) {
+        this.text = text;
+        this.pos = pos;
+        this.end = end;
+        this.#source = source ?? "";
+        this.#parts = source !== void 0 ? null : void 0;
+      }
+      get value() {
+        if (this.#value === null) {
+          const parts = this.parts;
+          if (!parts) {
+            this.#value = this.text;
+          } else {
+            let s = "";
+            for (const p of parts) {
+              switch (p.type) {
+                case "Literal":
+                case "SingleQuoted":
+                case "AnsiCQuoted":
+                  s += p.value;
+                  break;
+                case "DoubleQuoted":
+                case "LocaleString":
+                  s += dequoteValue(p.parts);
+                  break;
+                default:
+                  s += p.text;
+                  break;
+              }
+            }
+            this.#value = s;
+          }
+        }
+        return this.#value;
+      }
+      get parts() {
+        if (this.#parts === null) {
+          this.#parts = _WordImpl._resolve(this.#source, this) ?? void 0;
+        }
+        return this.#parts;
+      }
+      set parts(v) {
+        this.#parts = v ?? void 0;
+      }
+      toJSON() {
+        return { text: this.text, pos: this.pos, end: this.end, parts: this.parts, value: this.value };
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/lexer.js
+function findUnnested(s, target) {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === CH_BACKSLASH) {
+      i++;
+      continue;
+    }
+    if (c === CH_LBRACE) {
+      depth++;
+      continue;
+    }
+    if (c === CH_RBRACE) {
+      if (depth > 0)
+        depth--;
+      continue;
+    }
+    if (c === CH_SQUOTE) {
+      i++;
+      while (i < s.length && s.charCodeAt(i) !== CH_SQUOTE)
+        i++;
+      continue;
+    }
+    if (c === CH_DQUOTE) {
+      i++;
+      while (i < s.length && s.charCodeAt(i) !== CH_DQUOTE) {
+        if (s.charCodeAt(i) === CH_BACKSLASH)
+          i++;
+        i++;
+      }
+      continue;
+    }
+    if (c === target && depth === 0)
+      return i;
+  }
+  return -1;
+}
+function isDQChild(p) {
+  const t = p.type;
+  return t === "Literal" || t === "SimpleExpansion" || t === "ParameterExpansion" || t === "CommandExpansion" || t === "ArithmeticExpansion";
+}
+function isAllDigits(text) {
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c < CH_0 || c > CH_9)
+      return false;
+  }
+  return text.length > 0;
+}
+function isAssignmentWord(text) {
+  const eqIdx = text.indexOf("=");
+  if (eqIdx <= 0)
+    return false;
+  let c = text.charCodeAt(0);
+  if (c >= 128 || !(isIdChar[c] & 1))
+    return false;
+  let i = 1;
+  for (; i < eqIdx; i++) {
+    c = text.charCodeAt(i);
+    if (c >= 128 || !(isIdChar[c] & 2))
+      break;
+  }
+  if (i === eqIdx)
+    return true;
+  if (c === CH_PLUS && i + 1 === eqIdx)
+    return true;
+  if (c === CH_LBRACKET) {
+    const rbIdx = text.indexOf("]", i + 1);
+    if (rbIdx > i && (rbIdx + 1 === eqIdx || text.charCodeAt(rbIdx + 1) === CH_PLUS && rbIdx + 2 === eqIdx))
+      return true;
+  }
+  return false;
+}
+function setToken(out, token, value, pos = 0, end = 0) {
+  out.token = token;
+  out.value = value;
+  out.pos = pos;
+  out.end = end;
+  out.fileDescriptor = void 0;
+  out.variableName = void 0;
+  out.content = void 0;
+}
+function scanBraceExpansion(src, pos, len) {
+  const nextCh = pos + 1 < len ? src.charCodeAt(pos + 1) : 0;
+  if (nextCh <= CH_SPACE || nextCh === CH_RBRACE)
+    return -1;
+  let depth = 1;
+  let hasSep = false;
+  let scanPos = pos + 1;
+  while (scanPos < len && depth > 0) {
+    const bc = src.charCodeAt(scanPos);
+    if (bc === CH_LBRACE)
+      depth++;
+    else if (bc === CH_RBRACE) {
+      if (--depth === 0)
+        break;
+    } else if (bc <= CH_SPACE || bc === CH_SEMI || bc === CH_PIPE || bc === CH_AMP)
+      return -1;
+    else if (depth === 1 && (bc === 44 || bc === 46 && scanPos + 1 < len && src.charCodeAt(scanPos + 1) === 46))
+      hasSep = true;
+    if (bc === CH_BACKSLASH)
+      scanPos++;
+    scanPos++;
+  }
+  if (depth === 0 && hasSep)
+    return scanPos + 1;
+  return -1;
+}
+var Token, TokenValue, RESERVED_WORDS, charType, isIdChar, extglobPrefix, extglobOp, LexContext, Lexer;
+var init_lexer = __esm({
+  "node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/lexer.js"() {
+    "use strict";
+    init_arithmetic();
+    init_word();
+    init_chars();
+    Token = {
+      Word: 0,
+      Assignment: 1,
+      Semi: 2,
+      Newline: 3,
+      Pipe: 4,
+      And: 5,
+      Or: 6,
+      Amp: 7,
+      LParen: 8,
+      RParen: 9,
+      LBrace: 10,
+      RBrace: 11,
+      Bang: 12,
+      If: 13,
+      Then: 14,
+      Else: 15,
+      Elif: 16,
+      Fi: 17,
+      Do: 18,
+      Done: 19,
+      For: 20,
+      While: 21,
+      Until: 22,
+      In: 23,
+      Case: 24,
+      Esac: 25,
+      Function: 26,
+      DoubleSemi: 27,
+      SemiAmp: 28,
+      DoubleSemiAmp: 29,
+      Select: 30,
+      DblLBracket: 31,
+      DblRBracket: 32,
+      EOF: 33,
+      ArithCmd: 34,
+      Coproc: 35,
+      Redirect: 36
+    };
+    TokenValue = class {
+      token = Token.EOF;
+      value = "";
+      pos = 0;
+      end = 0;
+      fileDescriptor = void 0;
+      variableName = void 0;
+      content = void 0;
+      targetPos = 0;
+      targetEnd = 0;
+      reset() {
+        this.token = Token.EOF;
+        this.value = "";
+        this.pos = 0;
+        this.end = 0;
+        this.fileDescriptor = void 0;
+        this.variableName = void 0;
+        this.content = void 0;
+        this.targetPos = 0;
+        this.targetEnd = 0;
+      }
+      copyFrom(other) {
+        this.token = other.token;
+        this.value = other.value;
+        this.pos = other.pos;
+        this.end = other.end;
+        this.fileDescriptor = other.fileDescriptor;
+        this.variableName = other.variableName;
+        this.content = other.content;
+        this.targetPos = other.targetPos;
+        this.targetEnd = other.targetEnd;
+      }
+    };
+    RESERVED_WORDS = {
+      if: Token.If,
+      then: Token.Then,
+      else: Token.Else,
+      elif: Token.Elif,
+      fi: Token.Fi,
+      do: Token.Do,
+      done: Token.Done,
+      for: Token.For,
+      while: Token.While,
+      until: Token.Until,
+      in: Token.In,
+      case: Token.Case,
+      esac: Token.Esac,
+      function: Token.Function,
+      select: Token.Select,
+      coproc: Token.Coproc,
+      "!": Token.Bang,
+      "{": Token.LBrace,
+      "}": Token.RBrace
+    };
+    charType = new Uint8Array(128);
+    charType[CH_PIPE] = 1;
+    charType[CH_AMP] = 1;
+    charType[CH_SEMI] = 1;
+    charType[CH_LPAREN] = 1;
+    charType[CH_RPAREN] = 1;
+    charType[CH_LT] = 1;
+    charType[CH_GT] = 1;
+    charType[CH_SPACE] = 1;
+    charType[CH_TAB] = 1;
+    charType[CH_NL] = 1;
+    charType[CH_BACKSLASH] = 2;
+    charType[CH_SQUOTE] = 2;
+    charType[CH_DQUOTE] = 2;
+    charType[CH_DOLLAR] = 2;
+    charType[CH_BACKTICK] = 2;
+    charType[CH_LBRACE] = 2;
+    isIdChar = new Uint8Array(128);
+    for (let i = CH_a; i <= CH_z; i++)
+      isIdChar[i] = 3;
+    for (let i = CH_A; i <= CH_Z; i++)
+      isIdChar[i] = 3;
+    for (let i = CH_0; i <= CH_9; i++)
+      isIdChar[i] = 2;
+    isIdChar[CH_UNDERSCORE] = 3;
+    extglobPrefix = new Uint8Array(128);
+    extglobPrefix[CH_QUESTION] = 1;
+    extglobPrefix[CH_AT] = 1;
+    extglobPrefix[CH_STAR] = 1;
+    extglobPrefix[CH_PLUS] = 1;
+    extglobPrefix[CH_BANG] = 1;
+    extglobPrefix[CH_EQ] = 1;
+    extglobOp = {
+      [CH_QUESTION]: "?",
+      [CH_AT]: "@",
+      [CH_STAR]: "*",
+      [CH_PLUS]: "+",
+      [CH_BANG]: "!"
+    };
+    LexContext = {
+      Normal: 0,
+      CommandStart: 1,
+      TestMode: 2
+    };
+    Lexer = class {
+      src;
+      pos;
+      current;
+      nextState;
+      hasPeek;
+      pendingHereDocs;
+      collectedExpansions;
+      _errors = null;
+      _buildParts = false;
+      constructor(src) {
+        this.src = src;
+        this.pos = 0;
+        this.current = new TokenValue();
+        this.nextState = new TokenValue();
+        this.hasPeek = false;
+        this.pendingHereDocs = [];
+        this.collectedExpansions = [];
+        if (src.charCodeAt(0) === CH_HASH && src.charCodeAt(1) === CH_BANG) {
+          const nl = src.indexOf("\n");
+          this.pos = nl === -1 ? src.length : nl + 1;
+        }
+      }
+      get errors() {
+        return this._errors ?? (this._errors = []);
+      }
+      getCollectedExpansions() {
+        return this.collectedExpansions;
+      }
+      getPos() {
+        return this.pos;
+      }
+      /** Set position and scan a word, building parts. Used by computeWordParts. */
+      buildWordParts(startPos) {
+        this._buildParts = true;
+        this.pos = startPos;
+        const ch = this.src.charCodeAt(startPos);
+        if ((ch === 60 || ch === 62) && startPos + 1 < this.src.length && this.src.charCodeAt(startPos + 1) === 40) {
+          this.pos = startPos + 2;
+          const inner = this.extractBalanced();
+          const text = this.src.slice(startPos, this.pos);
+          const part = {
+            type: "ProcessSubstitution",
+            text,
+            operator: ch === 60 ? "<" : ">",
+            script: void 0,
+            inner: inner ?? void 0
+          };
+          const exp = { inner: inner ?? void 0, _part: part };
+          this.collectedExpansions.push(exp);
+          if (this.pos < this.src.length) {
+            this.readWordText();
+            if (this._wordParts) {
+              this._wordParts.unshift(part);
+            } else {
+              this._wordParts = [part];
+            }
+          } else {
+            this._wordParts = [part];
+          }
+        } else {
+          this.readWordText();
+        }
+        return this._wordParts;
+      }
+      /** Scan a heredoc body for expansions, building parts. Spaces/newlines are literal. */
+      buildHereDocParts(bodyPos, bodyEnd) {
+        this._buildParts = true;
+        const src = this.src;
+        const parts = [];
+        let litBuf = "";
+        let litStart = bodyPos;
+        let i = bodyPos;
+        const flushLit = () => {
+          if (litBuf) {
+            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, i) });
+            litBuf = "";
+          }
+        };
+        while (i < bodyEnd) {
+          const ch = src.charCodeAt(i);
+          if (ch === 92) {
+            if (i + 1 < bodyEnd) {
+              const nc = src.charCodeAt(i + 1);
+              if (nc === 36 || nc === 96 || nc === 92) {
+                litBuf += String.fromCharCode(nc);
+                i += 2;
+                continue;
+              }
+            }
+            litBuf += "\\";
+            i++;
+            continue;
+          }
+          if (ch === 36) {
+            flushLit();
+            litStart = i;
+            this.pos = i;
+            this.readDollar();
+            if (this._resultPart) {
+              parts.push(this._resultPart);
+              litStart = this.pos;
+            } else {
+              litBuf += src.slice(i, this.pos);
+            }
+            i = this.pos;
+            continue;
+          }
+          if (ch === 96) {
+            flushLit();
+            litStart = i;
+            this.pos = i;
+            this.readBacktickExpansion();
+            if (this._resultPart) {
+              parts.push(this._resultPart);
+              litStart = this.pos;
+            } else {
+              litBuf += src.slice(i, this.pos);
+            }
+            i = this.pos;
+            continue;
+          }
+          litBuf += src[i];
+          i++;
+        }
+        flushLit();
+        return parts.length > 1 || parts.length === 1 && parts[0].type !== "Literal" ? parts : null;
+      }
+      registerHereDocTarget(target) {
+        for (const hd of this.pendingHereDocs) {
+          if (!hd.target) {
+            hd.target = target;
+            return;
+          }
+        }
+      }
+      // Read the right-hand operand of =~ in [[ ]]. Parentheses and pipe are not
+      // metacharacters in regex patterns, so we temporarily clear their charType
+      // entries so that readWord's fast/slow path treats them as plain chars.
+      readTestRegexWord() {
+        this.hasPeek = false;
+        const chars = [CH_LPAREN, CH_RPAREN, CH_PIPE, CH_LT, CH_GT];
+        const saved = chars.map((c) => charType[c]);
+        for (const c of chars)
+          charType[c] = 0;
+        try {
+          this.skipSpacesAndTabs();
+          this.readWord(this.current, LexContext.Normal, this.pos);
+          return this.current;
+        } finally {
+          for (let i = 0; i < chars.length; i++)
+            charType[chars[i]] = saved[i];
+        }
+      }
+      // Read C-style for expressions: called after first '(' consumed by parser.
+      // Expects pos at second '('. Returns [init, test, update] raw text.
+      readCStyleForExprs() {
+        this.hasPeek = false;
+        const src = this.src;
+        const len = src.length;
+        while (this.pos < len && (src.charCodeAt(this.pos) === CH_SPACE || src.charCodeAt(this.pos) === CH_TAB))
+          this.pos++;
+        if (this.pos < len && src.charCodeAt(this.pos) === CH_LPAREN)
+          this.pos++;
+        const starts = [this.pos, 0, 0];
+        const parts = ["", "", "", 0, 0, 0];
+        let partIdx = 0;
+        let depth = 1;
+        let partStart = this.pos;
+        while (this.pos < len && depth > 0) {
+          const c = src.charCodeAt(this.pos);
+          if (c === CH_LPAREN) {
+            depth++;
+            this.pos++;
+          } else if (c === CH_RPAREN) {
+            depth--;
+            if (depth === 0) {
+              const raw = src.slice(partStart, this.pos);
+              parts[partIdx] = raw.trim();
+              parts[3 + partIdx] = starts[partIdx] + raw.length - raw.trimStart().length;
+              this.pos++;
+              while (this.pos < len && (src.charCodeAt(this.pos) === CH_SPACE || src.charCodeAt(this.pos) === CH_TAB))
+                this.pos++;
+              if (this.pos < len && src.charCodeAt(this.pos) === CH_RPAREN)
+                this.pos++;
+              break;
+            }
+            this.pos++;
+          } else if (c === CH_SEMI && depth === 1) {
+            const raw = src.slice(partStart, this.pos);
+            parts[partIdx] = raw.trim();
+            parts[3 + partIdx] = starts[partIdx] + raw.length - raw.trimStart().length;
+            if (partIdx < 2)
+              partIdx++;
+            this.pos++;
+            partStart = this.pos;
+            starts[partIdx] = partStart;
+          } else if (c === CH_SQUOTE) {
+            this.pos++;
+            this.skipSQ();
+          } else if (c === CH_DQUOTE) {
+            this.pos++;
+            this.skipDQ();
+          } else {
+            this.pos++;
+          }
+        }
+        return parts;
+      }
+      peek(ctx = LexContext.Normal) {
+        if (!this.hasPeek) {
+          this.readNext(this.nextState, ctx);
+          this.hasPeek = true;
+        }
+        return this.nextState;
+      }
+      next(ctx = LexContext.Normal) {
+        if (this.hasPeek) {
+          this.hasPeek = false;
+          const temp = this.current;
+          this.current = this.nextState;
+          this.nextState = temp;
+          return this.current;
+        }
+        this.readNext(this.current, ctx);
+        return this.current;
+      }
+      unshift(tok) {
+        this.nextState.copyFrom(tok);
+        this.hasPeek = true;
+      }
+      readNext(out, ctx) {
+        const src = this.src;
+        const len = src.length;
+        let pos = this.pos;
+        while (pos < len) {
+          const ch2 = src.charCodeAt(pos);
+          if (ch2 === CH_SPACE || ch2 === CH_TAB) {
+            pos++;
+            continue;
+          }
+          if (ch2 === CH_BACKSLASH && pos + 1 < len && src.charCodeAt(pos + 1) === CH_NL) {
+            pos += 2;
+            continue;
+          }
+          if (ch2 === CH_NL && ctx === LexContext.TestMode) {
+            pos++;
+            continue;
+          }
+          break;
+        }
+        this.pos = pos;
+        if (pos >= len) {
+          setToken(out, Token.EOF, "", pos, pos);
+          return;
+        }
+        const tokenStart = pos;
+        const ch = src.charCodeAt(pos);
+        if (ch === CH_HASH) {
+          while (this.pos < len && src.charCodeAt(this.pos) !== CH_NL)
+            this.pos++;
+          this.readNext(out, ctx);
+          return;
+        }
+        if (ch === CH_NL) {
+          this.pos++;
+          this.consumePendingHereDocs();
+          setToken(out, Token.Newline, "\n", tokenStart, this.pos);
+          return;
+        }
+        if (ctx === LexContext.TestMode && (ch === CH_LT || ch === CH_GT)) {
+          this.pos++;
+          setToken(out, Token.Word, ch === CH_LT ? "<" : ">", tokenStart, this.pos);
+          return;
+        }
+        if (this.tryReadOperator(out, ch, ctx, tokenStart))
+          return;
+        this.readWord(out, ctx, tokenStart);
+      }
+      tryReadOperator(out, ch, ctx, tokenStart) {
+        const src = this.src;
+        const pos = this.pos;
+        const next = pos + 1 < src.length ? src.charCodeAt(pos + 1) : 0;
+        switch (ch) {
+          case CH_SEMI:
+            if (next === CH_SEMI) {
+              if (pos + 2 < src.length && src.charCodeAt(pos + 2) === CH_AMP) {
+                this.pos += 3;
+                setToken(out, Token.DoubleSemiAmp, ";;&", tokenStart, this.pos);
+                return true;
+              }
+              this.pos += 2;
+              setToken(out, Token.DoubleSemi, ";;", tokenStart, this.pos);
+              return true;
+            }
+            if (next === CH_AMP) {
+              this.pos += 2;
+              setToken(out, Token.SemiAmp, ";&", tokenStart, this.pos);
+              return true;
+            }
+            this.pos++;
+            setToken(out, Token.Semi, ";", tokenStart, this.pos);
+            return true;
+          case CH_PIPE:
+            if (next === CH_PIPE) {
+              this.pos += 2;
+              setToken(out, Token.Or, "||", tokenStart, this.pos);
+              return true;
+            }
+            if (next === CH_AMP) {
+              this.pos += 2;
+              setToken(out, Token.Pipe, "|&", tokenStart, this.pos);
+              return true;
+            }
+            this.pos++;
+            setToken(out, Token.Pipe, "|", tokenStart, this.pos);
+            return true;
+          case CH_AMP:
+            if (next === CH_AMP) {
+              this.pos += 2;
+              setToken(out, Token.And, "&&", tokenStart, this.pos);
+              return true;
+            }
+            if (next === CH_GT) {
+              this.pos += 2;
+              const append = this.pos < src.length && src.charCodeAt(this.pos) === CH_GT;
+              if (append)
+                this.pos++;
+              this.skipSpacesAndTabs();
+              this._redirectTargetPos = this.pos;
+              if (this.pos < src.length && src.charCodeAt(this.pos) !== CH_NL)
+                this.readWordText();
+              this.redirectToken(out, append ? "&>>" : "&>", tokenStart);
+              return true;
+            }
+            this.pos++;
+            setToken(out, Token.Amp, "&", tokenStart, this.pos);
+            return true;
+          case CH_LPAREN:
+            if (ctx === LexContext.CommandStart && next === CH_LPAREN) {
+              this.readArithmeticCommand(out, tokenStart);
+              return true;
+            }
+            this.pos++;
+            setToken(out, Token.LParen, "(", tokenStart, this.pos);
+            return true;
+          case CH_RPAREN:
+            this.pos++;
+            setToken(out, Token.RParen, ")", tokenStart, this.pos);
+            return true;
+          case CH_LT:
+          case CH_GT:
+            return this.readRedirection(out, tokenStart);
+          default:
+            return false;
+        }
+      }
+      readRedirection(out, tokenStart) {
+        const src = this.src;
+        const ch = src.charCodeAt(this.pos);
+        let op = "";
+        if (ch === CH_LT) {
+          this.pos++;
+          const next = this.pos < src.length ? src.charCodeAt(this.pos) : 0;
+          if (next === CH_LT) {
+            this.pos++;
+            const third = this.pos < src.length ? src.charCodeAt(this.pos) : 0;
+            if (third === CH_LT) {
+              this.pos++;
+              this.skipSpacesAndTabs();
+              this._redirectTargetPos = this.pos;
+              if (this.pos < src.length && src.charCodeAt(this.pos) !== CH_NL)
+                this.readWordText();
+              this.redirectToken(out, "<<<", tokenStart);
+              return true;
+            }
+            const dash = third === CH_DASH;
+            if (dash)
+              this.pos++;
+            this.skipSpacesAndTabs();
+            this.readHereDocDelimiter();
+            this.pendingHereDocs.push({ delimiter: this._hereDelim, strip: dash, quoted: this._hereQuoted });
+            setToken(out, Token.Redirect, dash ? "<<-" : "<<", tokenStart, this.pos);
+            out.content = this._hereDelim;
+            return true;
+          }
+          if (next === CH_LPAREN) {
+            this.readProcessSubstitution(out, "<", tokenStart);
+            return true;
+          }
+          if (next === CH_GT) {
+            op = "<>";
+            this.pos++;
+          } else if (next === CH_AMP) {
+            op = "<&";
+            this.pos++;
+          } else {
+            op = "<";
+          }
+        } else if (ch === CH_GT) {
+          this.pos++;
+          const next = this.pos < src.length ? src.charCodeAt(this.pos) : 0;
+          if (next === CH_LPAREN) {
+            this.readProcessSubstitution(out, ">", tokenStart);
+            return true;
+          }
+          if (next === CH_GT) {
+            op = ">>";
+            this.pos++;
+          } else if (next === CH_AMP) {
+            op = ">&";
+            this.pos++;
+          } else if (next === CH_PIPE) {
+            op = ">|";
+            this.pos++;
+          } else {
+            op = ">";
+          }
+        }
+        this.skipSpacesAndTabs();
+        if (this.pos < src.length) {
+          const nc = src.charCodeAt(this.pos);
+          if ((nc === CH_LT || nc === CH_GT) && this.pos + 1 < src.length && src.charCodeAt(this.pos + 1) === CH_LPAREN) {
+            const psStart = this.pos;
+            this.pos += 2;
+            this.extractBalanced();
+            const psText = src.slice(psStart, this.pos);
+            setToken(out, Token.Redirect, op, tokenStart, this.pos);
+            out.content = psText;
+            out.targetPos = psStart;
+            out.targetEnd = this.pos;
+            return true;
+          }
+          this._redirectTargetPos = this.pos;
+          if (nc !== CH_NL)
+            this.readWordText();
+        }
+        this.redirectToken(out, op, tokenStart);
+        return true;
+      }
+      redirectToken(out, operator, tokenStart) {
+        setToken(out, Token.Redirect, operator, tokenStart, this.pos);
+        out.content = this._wordText;
+        out.targetPos = this._redirectTargetPos;
+        out.targetEnd = this.pos;
+      }
+      readProcessSubstitution(out, operator, tokenStart) {
+        this.pos++;
+        this.extractBalanced();
+        const text = this.src.slice(tokenStart, this.pos);
+        setToken(out, Token.Word, text, tokenStart, this.pos);
+      }
+      readHereDocDelimiter() {
+        const src = this.src;
+        const len = src.length;
+        let delimiter = "";
+        if (this.pos < len && src.charCodeAt(this.pos) === CH_SQUOTE) {
+          this.pos++;
+          const start = this.pos;
+          while (this.pos < len && src.charCodeAt(this.pos) !== CH_SQUOTE)
+            this.pos++;
+          delimiter = src.slice(start, this.pos);
+          if (this.pos < len)
+            this.pos++;
+          this._hereDelim = delimiter;
+          this._hereQuoted = true;
+          return;
+        } else if (this.pos < len && src.charCodeAt(this.pos) === CH_DQUOTE) {
+          this.pos++;
+          while (this.pos < len && src.charCodeAt(this.pos) !== CH_DQUOTE) {
+            if (src.charCodeAt(this.pos) === CH_BACKSLASH)
+              this.pos++;
+            delimiter += src[this.pos];
+            this.pos++;
+          }
+          if (this.pos < len)
+            this.pos++;
+          this._hereDelim = delimiter;
+          this._hereQuoted = true;
+          return;
+        } else if (this.pos < len && src.charCodeAt(this.pos) === CH_BACKSLASH) {
+          while (this.pos < len) {
+            const c = src.charCodeAt(this.pos);
+            if (c < 128 && charType[c] & 1)
+              break;
+            if (c === CH_BACKSLASH)
+              this.pos++;
+            if (this.pos < len) {
+              delimiter += src[this.pos];
+              this.pos++;
+            }
+          }
+          this._hereDelim = delimiter;
+          this._hereQuoted = true;
+          return;
+        } else {
+          const start = this.pos;
+          while (this.pos < len) {
+            const c = src.charCodeAt(this.pos);
+            if (c < 128 && charType[c] & 1)
+              break;
+            this.pos++;
+          }
+          this._hereDelim = src.slice(start, this.pos);
+          this._hereQuoted = false;
+        }
+      }
+      consumePendingHereDocs() {
+        for (const hd of this.pendingHereDocs) {
+          const bodyPos = this.pos;
+          const body = this.readHereDocBody(hd.delimiter, hd.strip);
+          if (hd.target) {
+            hd.target.content = body;
+            if (hd.quoted) {
+              hd.target.heredocQuoted = true;
+            } else if (body) {
+              const parsed = this.parseHereDocBody(body, bodyPos);
+              if (parsed)
+                hd.target.body = parsed;
+            }
+          }
+        }
+        this.pendingHereDocs.length = 0;
+      }
+      readHereDocBody(delimiter, strip) {
+        const src = this.src;
+        const len = src.length;
+        const dLen = delimiter.length;
+        const bodyStart = this.pos;
+        while (this.pos < len) {
+          let lineStart = this.pos;
+          let lineEnd = src.indexOf("\n", this.pos);
+          if (lineEnd === -1)
+            lineEnd = len;
+          if (strip) {
+            while (lineStart < lineEnd && src.charCodeAt(lineStart) === CH_TAB)
+              lineStart++;
+          }
+          if (lineEnd - lineStart === dLen && src.startsWith(delimiter, lineStart)) {
+            const body = src.slice(bodyStart, this.pos);
+            this.pos = lineEnd < len ? lineEnd + 1 : lineEnd;
+            return body;
+          }
+          this.pos = lineEnd < len ? lineEnd + 1 : lineEnd;
+        }
+        return src.slice(bodyStart, this.pos);
+      }
+      // Scan an unquoted heredoc body for expansions ($var, ${...}, $(...), `...`).
+      // Returns a Word (without parts — use computeWordParts for those) if expansions exist.
+      parseHereDocBody(body, bodyPos) {
+        let hasExpansion = false;
+        for (let i = 0; i < body.length; i++) {
+          const c = body.charCodeAt(i);
+          if (c === CH_BACKTICK) {
+            hasExpansion = true;
+            break;
+          }
+          if (c === CH_DOLLAR) {
+            const next = i + 1 < body.length ? body.charCodeAt(i + 1) : 0;
+            if (next === CH_LBRACE || next === CH_LPAREN || next === CH_DOLLAR || next >= CH_a && next <= CH_z || next >= CH_A && next <= CH_Z || next === CH_UNDERSCORE || next === CH_BANG || next === CH_HASH || next === CH_AT || next === CH_STAR || next === CH_QUESTION || next === CH_DASH || next >= CH_0 && next <= CH_9) {
+              hasExpansion = true;
+              break;
+            }
+          }
+          if (c === CH_BACKSLASH)
+            i++;
+        }
+        if (!hasExpansion)
+          return null;
+        return new WordImpl(body, bodyPos, bodyPos + body.length);
+      }
+      _wordText = "";
+      _wordQuoted = false;
+      _wordHasExpansions = false;
+      _wordParts = null;
+      _redirectTargetPos = 0;
+      _resultText = "";
+      _resultHasExpansion = false;
+      _resultPart;
+      _dqText = "";
+      _dqHasExpansions = false;
+      _dqParts = null;
+      _hereDelim = "";
+      _hereQuoted = false;
+      readWord(out, ctx, tokenStart = 0) {
+        this.readWordText();
+        const text = this._wordText;
+        const hasExpansions = this._wordHasExpansions;
+        const quoted2 = this._wordQuoted;
+        const wordEnd = this.pos;
+        if (ctx === LexContext.CommandStart) {
+          if (!hasExpansions && !quoted2) {
+            const fc = text.charCodeAt(0);
+            if ((fc >= CH_a && fc <= CH_z && text.length <= 8 || fc === CH_BANG || fc === CH_LBRACE || fc === CH_RBRACE) && text in RESERVED_WORDS) {
+              setToken(out, RESERVED_WORDS[text], text, tokenStart, wordEnd);
+              return;
+            }
+            if (fc === CH_LBRACKET && text === "[[") {
+              setToken(out, Token.DblLBracket, text, tokenStart, wordEnd);
+              return;
+            }
+          }
+          if (isAssignmentWord(text)) {
+            setToken(out, Token.Assignment, text, tokenStart, wordEnd);
+            return;
+          }
+        }
+        if (!hasExpansions && !quoted2 && text === "]]") {
+          setToken(out, Token.DblRBracket, text, tokenStart, wordEnd);
+          return;
+        }
+        if (!hasExpansions && this.pos < this.src.length) {
+          const nc = this.src.charCodeAt(this.pos);
+          if (nc === CH_LT || nc === CH_GT) {
+            if (text.charCodeAt(0) >= CH_0 && text.charCodeAt(0) <= CH_9 && isAllDigits(text)) {
+              const fd = Number.parseInt(text, 10);
+              if (this.readRedirection(out, tokenStart)) {
+                out.fileDescriptor = fd;
+                return;
+              }
+            }
+            if (text.charCodeAt(0) === CH_LBRACE && text.charCodeAt(text.length - 1) === CH_RBRACE && text.length > 2) {
+              const varname = text.slice(1, -1);
+              if (this.readRedirection(out, tokenStart)) {
+                out.variableName = varname;
+                return;
+              }
+            }
+          }
+        }
+        setToken(out, Token.Word, text, tokenStart, wordEnd);
+      }
+      readWordText() {
+        const src = this.src;
+        const len = src.length;
+        let pos = this.pos;
+        const fastStart = pos;
+        while (pos < len) {
+          const c = src.charCodeAt(pos);
+          if (c < 128 && charType[c])
+            break;
+          pos++;
+        }
+        const exitCh = pos < len ? src.charCodeAt(pos) : 0;
+        if (pos >= len || charType[exitCh] & 1 && !(exitCh === CH_LPAREN && pos > fastStart && extglobPrefix[src.charCodeAt(pos - 1)])) {
+          this.pos = pos;
+          this._wordText = pos > fastStart ? src.slice(fastStart, pos) : "";
+          this._wordQuoted = false;
+          this._wordHasExpansions = false;
+          if (this._buildParts)
+            this._wordParts = null;
+          return;
+        }
+        let text = pos > fastStart ? src.slice(fastStart, pos) : "";
+        let quoted2 = false;
+        let hasExpansions = false;
+        const bp = this._buildParts;
+        let parts;
+        let litBuf = "";
+        let litStart = 0;
+        if (bp) {
+          parts = [];
+          litBuf = text;
+          litStart = fastStart;
+        }
+        while (pos < len) {
+          const ch = src.charCodeAt(pos);
+          if (ch >= 128 || !charType[ch]) {
+            const runStart = pos;
+            pos++;
+            while (pos < len) {
+              const c = src.charCodeAt(pos);
+              if (c < 128 && charType[c])
+                break;
+              pos++;
+            }
+            const chunk = src.slice(runStart, pos);
+            text += chunk;
+            if (bp)
+              litBuf += chunk;
+            continue;
+          }
+          if (charType[ch] & 1) {
+            if (ch === CH_LPAREN && text.length > 0 && extglobPrefix[text.charCodeAt(text.length - 1)]) {
+              const prefixChar = text.charCodeAt(text.length - 1);
+              pos++;
+              const innerStart = pos;
+              let depth = 1;
+              while (pos < len && depth > 0) {
+                const c = src.charCodeAt(pos);
+                if (c === CH_LPAREN)
+                  depth++;
+                else if (c === CH_RPAREN)
+                  depth--;
+                pos++;
+              }
+              const pattern = src.slice(innerStart, pos - 1);
+              const eg = "(" + src.slice(innerStart, pos);
+              text += eg;
+              if (bp && prefixChar !== CH_EQ) {
+                if (litBuf.length > 0) {
+                  const trimmed = litBuf.slice(0, -1);
+                  if (trimmed)
+                    parts.push({ type: "Literal", value: trimmed, text: src.slice(litStart, innerStart - 2) });
+                  litBuf = "";
+                }
+                const op = extglobOp[prefixChar];
+                const fullText = op + eg;
+                parts.push({ type: "ExtendedGlob", text: fullText, operator: op, pattern });
+                litStart = pos;
+              } else if (bp) {
+                litBuf += eg;
+              }
+              continue;
+            }
+            break;
+          }
+          if (ch === CH_BACKSLASH) {
+            pos++;
+            if (pos < len) {
+              if (src.charCodeAt(pos) === CH_NL) {
+                pos++;
+              } else {
+                quoted2 = true;
+                const escaped = src[pos++];
+                text += escaped;
+                if (bp)
+                  litBuf += escaped;
+              }
+            }
+            continue;
+          }
+          if (ch === CH_SQUOTE) {
+            const sqStart = pos;
+            quoted2 = true;
+            pos++;
+            const start = pos;
+            while (pos < len && src.charCodeAt(pos) !== CH_SQUOTE)
+              pos++;
+            const value = src.slice(start, pos);
+            text += value;
+            if (pos < len)
+              pos++;
+            else
+              this.errors.push({ message: "unterminated single quote", pos: start - 1 });
+            if (bp) {
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, sqStart) });
+                litBuf = "";
+              }
+              parts.push({ type: "SingleQuoted", value, text: src.slice(sqStart, pos) });
+              litStart = pos;
+            }
+            continue;
+          }
+          if (ch === CH_DQUOTE) {
+            const dqStart = pos;
+            quoted2 = true;
+            pos++;
+            this.pos = pos;
+            this.readDoubleQuoted();
+            pos = this.pos;
+            text += this._dqText;
+            if (this._dqHasExpansions)
+              hasExpansions = true;
+            if (bp) {
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dqStart) });
+                litBuf = "";
+              }
+              const dqText = src.slice(dqStart, pos);
+              parts.push({
+                type: "DoubleQuoted",
+                text: dqText,
+                parts: this._dqParts ?? [{ type: "Literal", value: this._dqText, text: src.slice(dqStart + 1, pos - 1) }]
+              });
+              litStart = pos;
+            }
+            continue;
+          }
+          if (ch === CH_DOLLAR) {
+            const dollarStart = pos;
+            this.pos = pos;
+            this.readDollar();
+            pos = this.pos;
+            text += this._resultText;
+            if (this._resultHasExpansion)
+              hasExpansions = true;
+            if (bp) {
+              if (this._resultPart) {
+                if (litBuf) {
+                  parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dollarStart) });
+                  litBuf = "";
+                }
+                parts.push(this._resultPart);
+                litStart = pos;
+              } else {
+                litBuf += this._resultText;
+              }
+            }
+            continue;
+          }
+          if (ch === CH_BACKTICK) {
+            const btStart = pos;
+            this.pos = pos;
+            this.readBacktickExpansion();
+            pos = this.pos;
+            text += this._resultText;
+            hasExpansions = true;
+            if (bp) {
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, btStart) });
+                litBuf = "";
+              }
+              parts.push(this._resultPart);
+              litStart = pos;
+            }
+            continue;
+          }
+          if (ch === CH_LBRACE) {
+            const braceEnd = scanBraceExpansion(src, pos, len);
+            if (braceEnd > 0) {
+              const braceText = src.slice(pos, braceEnd);
+              text += braceText;
+              if (bp) {
+                if (litBuf) {
+                  parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, pos) });
+                  litBuf = "";
+                }
+                parts.push({ type: "BraceExpansion", text: braceText });
+                litStart = braceEnd;
+              }
+              pos = braceEnd;
+              continue;
+            }
+            text += "{";
+            if (bp)
+              litBuf += "{";
+            pos++;
+            continue;
+          }
+          pos++;
+        }
+        if (bp && litBuf)
+          parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, pos) });
+        this.pos = pos;
+        this._wordText = text;
+        this._wordQuoted = quoted2;
+        this._wordHasExpansions = hasExpansions;
+        if (bp) {
+          this._wordParts = parts.length > 1 || parts.length === 1 && parts[0].type !== "Literal" ? parts : null;
+        }
+      }
+      readInnerWordText() {
+        const src = this.src;
+        const len = src.length;
+        let pos = this.pos;
+        let text = "";
+        const bp = this._buildParts;
+        let parts;
+        let litBuf = "";
+        let litStart = 0;
+        if (bp) {
+          parts = [];
+          litStart = pos;
+        }
+        while (pos < len) {
+          const ch = src.charCodeAt(pos);
+          if (ch === CH_BACKSLASH) {
+            pos++;
+            if (pos < len) {
+              if (src.charCodeAt(pos) === CH_NL) {
+                pos++;
+              } else {
+                const escaped = src[pos++];
+                text += escaped;
+                if (bp)
+                  litBuf += escaped;
+              }
+            }
+            continue;
+          }
+          if (ch === CH_SQUOTE) {
+            const sqStart = pos;
+            pos++;
+            const start = pos;
+            while (pos < len && src.charCodeAt(pos) !== CH_SQUOTE)
+              pos++;
+            const value = src.slice(start, pos);
+            text += value;
+            if (pos < len)
+              pos++;
+            if (bp) {
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, sqStart) });
+                litBuf = "";
+              }
+              parts.push({ type: "SingleQuoted", value, text: src.slice(sqStart, pos) });
+              litStart = pos;
+            }
+            continue;
+          }
+          if (ch === CH_DQUOTE) {
+            const dqStart = pos;
+            pos++;
+            this.pos = pos;
+            this.readDoubleQuoted();
+            pos = this.pos;
+            text += this._dqText;
+            if (bp) {
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dqStart) });
+                litBuf = "";
+              }
+              const dqText = src.slice(dqStart, pos);
+              parts.push({
+                type: "DoubleQuoted",
+                text: dqText,
+                parts: this._dqParts ?? [{ type: "Literal", value: this._dqText, text: src.slice(dqStart + 1, pos - 1) }]
+              });
+              litStart = pos;
+            }
+            continue;
+          }
+          if (ch === CH_DOLLAR) {
+            const dollarStart = pos;
+            this.pos = pos;
+            this.readDollar();
+            pos = this.pos;
+            text += this._resultText;
+            if (bp) {
+              if (this._resultPart) {
+                if (litBuf) {
+                  parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dollarStart) });
+                  litBuf = "";
+                }
+                parts.push(this._resultPart);
+                litStart = pos;
+              } else {
+                litBuf += this._resultText;
+              }
+            }
+            continue;
+          }
+          if (ch === CH_BACKTICK) {
+            const btStart = pos;
+            this.pos = pos;
+            this.readBacktickExpansion();
+            pos = this.pos;
+            text += this._resultText;
+            if (bp) {
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, btStart) });
+                litBuf = "";
+              }
+              parts.push(this._resultPart);
+              litStart = pos;
+            }
+            continue;
+          }
+          text += src[pos];
+          if (bp)
+            litBuf += src[pos];
+          pos++;
+        }
+        if (bp && litBuf)
+          parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, pos) });
+        this.pos = pos;
+        this._wordText = text;
+        this._wordQuoted = false;
+        this._wordHasExpansions = false;
+        if (bp) {
+          this._wordParts = parts.length > 1 || parts.length === 1 && parts[0].type !== "Literal" ? parts : null;
+        }
+      }
+      parseSubFieldWord(s) {
+        if (!s)
+          return new WordImpl("", 0, 0);
+        const savedSrc = this.src;
+        const savedPos = this.pos;
+        const savedText = this._wordText;
+        const savedParts = this._wordParts;
+        const savedQuoted = this._wordQuoted;
+        this.src = s;
+        this.pos = 0;
+        this.readInnerWordText();
+        const word = new WordImpl(this._wordText, 0, 0);
+        if (this._buildParts && this._wordParts) {
+          word.parts = this._wordParts;
+        }
+        this.src = savedSrc;
+        this.pos = savedPos;
+        this._wordText = savedText;
+        this._wordParts = savedParts;
+        this._wordQuoted = savedQuoted;
+        return word;
+      }
+      skipSQ() {
+        while (this.pos < this.src.length && this.src.charCodeAt(this.pos) !== CH_SQUOTE)
+          this.pos++;
+        if (this.pos < this.src.length)
+          this.pos++;
+      }
+      skipDQ() {
+        const src = this.src;
+        const len = src.length;
+        while (this.pos < len) {
+          const ch = src.charCodeAt(this.pos);
+          if (ch === CH_DQUOTE) {
+            this.pos++;
+            return;
+          }
+          if (ch === CH_BACKSLASH) {
+            this.pos += 2;
+            continue;
+          }
+          if (ch === CH_DOLLAR && this.pos + 1 < len) {
+            const next = src.charCodeAt(this.pos + 1);
+            if (next === CH_LPAREN) {
+              this.pos += 2;
+              this.extractBalanced();
+              continue;
+            }
+            if (next === CH_LBRACE) {
+              this.pos += 2;
+              let d = 1;
+              while (this.pos < len && d > 0) {
+                const c = src.charCodeAt(this.pos);
+                if (c === CH_RBRACE) {
+                  if (--d === 0) {
+                    this.pos++;
+                    break;
+                  }
+                } else if (c === CH_LBRACE && this.pos > 0 && src.charCodeAt(this.pos - 1) === CH_DOLLAR)
+                  d++;
+                else if (c === CH_BACKSLASH) {
+                  this.pos++;
+                } else if (c === CH_SQUOTE) {
+                  this.pos++;
+                  this.skipSQ();
+                  continue;
+                } else if (c === CH_DQUOTE) {
+                  this.pos++;
+                  this.skipDQ();
+                  continue;
+                }
+                this.pos++;
+              }
+              continue;
+            }
+          }
+          if (ch === CH_BACKTICK) {
+            this.pos++;
+            while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
+              if (src.charCodeAt(this.pos) === CH_BACKSLASH)
+                this.pos++;
+              this.pos++;
+            }
+            if (this.pos < len)
+              this.pos++;
+            continue;
+          }
+          this.pos++;
+        }
+      }
+      skipSpacesAndTabs() {
+        const src = this.src;
+        const len = src.length;
+        while (this.pos < len) {
+          const ch = src.charCodeAt(this.pos);
+          if (ch === CH_SPACE || ch === CH_TAB)
+            this.pos++;
+          else if (ch === CH_BACKSLASH && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_NL)
+            this.pos += 2;
+          else
+            break;
+        }
+      }
+      readDoubleQuoted() {
+        const src = this.src;
+        const len = src.length;
+        const contentStart = this.pos;
+        let hasExpansions = false;
+        const bp = this._buildParts;
+        if (!bp) {
+          let p = this.pos;
+          while (p < len) {
+            const c = src.charCodeAt(p);
+            if (c === CH_DQUOTE) {
+              this._dqText = src.slice(contentStart, p);
+              this.pos = p + 1;
+              this._dqHasExpansions = false;
+              this._dqParts = null;
+              return;
+            }
+            if (c === CH_DOLLAR || c === CH_BACKTICK || c === CH_BACKSLASH)
+              break;
+            p++;
+          }
+        }
+        let text = "";
+        let parts = null;
+        let litBuf = "";
+        let litStart = bp ? this.pos : 0;
+        while (this.pos < len && src.charCodeAt(this.pos) !== CH_DQUOTE) {
+          const runStart = this.pos;
+          while (this.pos < len) {
+            const c = src.charCodeAt(this.pos);
+            if (c === CH_DQUOTE || c === CH_BACKSLASH || c === CH_DOLLAR || c === CH_BACKTICK)
+              break;
+            this.pos++;
+          }
+          if (this.pos > runStart) {
+            const chunk = src.slice(runStart, this.pos);
+            text += chunk;
+            if (bp)
+              litBuf += chunk;
+          }
+          if (this.pos >= len || src.charCodeAt(this.pos) === CH_DQUOTE)
+            break;
+          const ch = src.charCodeAt(this.pos);
+          if (ch === CH_BACKSLASH) {
+            this.pos++;
+            if (this.pos < len) {
+              const next = src.charCodeAt(this.pos);
+              if (next === CH_NL) {
+                this.pos++;
+                continue;
+              }
+              if (next === CH_DOLLAR || next === CH_BACKTICK || next === CH_DQUOTE || next === CH_BACKSLASH) {
+                const c = src[this.pos];
+                text += c;
+                if (bp)
+                  litBuf += c;
+              } else {
+                const pair = "\\" + src[this.pos];
+                text += pair;
+                if (bp)
+                  litBuf += pair;
+              }
+              this.pos++;
+            }
+            continue;
+          }
+          if (ch === CH_DOLLAR) {
+            if (this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_DQUOTE) {
+              text += "$";
+              if (bp)
+                litBuf += "$";
+              this.pos++;
+              continue;
+            }
+            const expStart = this.pos;
+            this.readDollar();
+            text += this._resultText;
+            if (this._resultHasExpansion)
+              hasExpansions = true;
+            if (bp) {
+              const rp = this._resultPart;
+              if (rp && isDQChild(rp)) {
+                if (!parts)
+                  parts = [];
+                if (litBuf) {
+                  parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, expStart) });
+                  litBuf = "";
+                }
+                parts.push(rp);
+                litStart = this.pos;
+              } else {
+                litBuf += this._resultText;
+              }
+            }
+            continue;
+          }
+          if (ch === CH_BACKTICK) {
+            const btStart = this.pos;
+            this.readBacktickExpansion();
+            text += this._resultText;
+            hasExpansions = true;
+            if (bp && this._resultPart && isDQChild(this._resultPart)) {
+              if (!parts)
+                parts = [];
+              if (litBuf) {
+                parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, btStart) });
+                litBuf = "";
+              }
+              parts.push(this._resultPart);
+              litStart = this.pos;
+            }
+            continue;
+          }
+        }
+        if (bp && parts && litBuf)
+          parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, this.pos) });
+        if (this.pos < len)
+          this.pos++;
+        else
+          this.errors.push({ message: "unterminated double quote", pos: contentStart - 1 });
+        this._dqText = text;
+        this._dqHasExpansions = hasExpansions;
+        this._dqParts = parts;
+      }
+      readDollar() {
+        const dollarPos = this.pos;
+        this.pos++;
+        const src = this.src;
+        const len = src.length;
+        if (this.pos >= len) {
+          this._resultText = "$";
+          this._resultHasExpansion = false;
+          this._resultPart = void 0;
+          return;
+        }
+        const ch = src.charCodeAt(this.pos);
+        if (ch === CH_LPAREN) {
+          if (this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_LPAREN) {
+            this.readArithmeticExpansion();
+            return;
+          }
+          this.readCommandSubstitution();
+          return;
+        }
+        if (ch === CH_LBRACE) {
+          const after = this.pos + 1 < len ? src.charCodeAt(this.pos + 1) : 0;
+          if (after === CH_SPACE || after === CH_TAB || after === CH_NL) {
+            this.readBraceCommandSubstitution();
+            return;
+          }
+          if (after === CH_PIPE) {
+            this.readValueSubstitution();
+            return;
+          }
+          this.readParameterExpansion();
+          return;
+        }
+        if (ch === CH_SQUOTE) {
+          this.pos++;
+          const value = this.readAnsiCQuoted();
+          this._resultText = value;
+          this._resultHasExpansion = false;
+          this._resultPart = this._buildParts ? { type: "AnsiCQuoted", text: src.slice(dollarPos, this.pos), value } : void 0;
+          return;
+        }
+        if (ch === CH_DQUOTE) {
+          this.pos++;
+          this.readDoubleQuoted();
+          this._resultText = this._dqText;
+          this._resultHasExpansion = this._dqHasExpansions;
+          if (this._buildParts) {
+            const text = src.slice(dollarPos, this.pos);
+            this._resultPart = {
+              type: "LocaleString",
+              text,
+              parts: this._dqParts ?? [
+                { type: "Literal", value: this._dqText, text: src.slice(dollarPos + 2, this.pos - 1) }
+              ]
+            };
+          } else {
+            this._resultPart = void 0;
+          }
+          return;
+        }
+        if (ch === CH_AT || ch === CH_STAR || ch === CH_HASH || ch === CH_QUESTION || ch === CH_DASH || ch === CH_DOLLAR || ch === CH_BANG) {
+          this.pos++;
+          const text = src.slice(this.pos - 2, this.pos);
+          this._resultText = text;
+          this._resultHasExpansion = false;
+          this._resultPart = this._buildParts ? { type: "SimpleExpansion", text } : void 0;
+          return;
+        }
+        if (ch >= CH_0 && ch <= CH_9) {
+          this.pos++;
+          const text = src.slice(this.pos - 2, this.pos);
+          this._resultText = text;
+          this._resultHasExpansion = false;
+          this._resultPart = this._buildParts ? { type: "SimpleExpansion", text } : void 0;
+          return;
+        }
+        if (ch < 128 && isIdChar[ch] & 1) {
+          const dollarPos2 = this.pos - 1;
+          while (this.pos < len) {
+            const c = src.charCodeAt(this.pos);
+            if (c < 128 && isIdChar[c] & 2)
+              this.pos++;
+            else
+              break;
+          }
+          const text = src.slice(dollarPos2, this.pos);
+          this._resultText = text;
+          this._resultHasExpansion = false;
+          this._resultPart = this._buildParts ? { type: "SimpleExpansion", text } : void 0;
+          return;
+        }
+        this._resultText = "$";
+        this._resultHasExpansion = false;
+        this._resultPart = void 0;
+      }
+      scanArithmeticBody() {
+        this.pos += 2;
+        let depth = 1;
+        const src = this.src;
+        const len = src.length;
+        const start = this.pos;
+        while (this.pos < len && depth > 0) {
+          const c = src.charCodeAt(this.pos);
+          if (c === CH_LPAREN && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_LPAREN) {
+            depth++;
+            this.pos += 2;
+          } else if (c === CH_RPAREN && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_RPAREN) {
+            if (--depth === 0) {
+              this.pos += 2;
+              break;
+            }
+            this.pos += 2;
+          } else {
+            this.pos++;
+          }
+        }
+        return src.slice(start, this.pos - 2);
+      }
+      readArithmeticExpansion() {
+        const body = this.scanArithmeticBody();
+        const text = "$((" + body + "))";
+        this._resultText = text;
+        this._resultHasExpansion = false;
+        if (this._buildParts) {
+          const expr = parseArithmeticExpression(body) ?? void 0;
+          this._resultPart = { type: "ArithmeticExpansion", text, expression: expr };
+        } else {
+          this._resultPart = void 0;
+        }
+      }
+      readArithmeticCommand(out, tokenStart) {
+        const body = this.scanArithmeticBody();
+        setToken(out, Token.ArithCmd, body, tokenStart, this.pos);
+      }
+      readCommandSubstitution() {
+        const dollarPos = this.pos - 1;
+        this.pos++;
+        this.extractBalanced();
+        const text = this.src.slice(dollarPos, this.pos);
+        this._resultText = text;
+        this._resultHasExpansion = true;
+        if (this._buildParts) {
+          const inner = text.slice(2, -1);
+          this._resultPart = { type: "CommandExpansion", text, script: void 0, inner };
+          this.collectedExpansions.push({ inner, _part: this._resultPart });
+        } else {
+          this._resultPart = void 0;
+        }
+      }
+      readBraceCommandSubstitution() {
+        this.readBraceSubstitution("${ ", 1);
+      }
+      readValueSubstitution() {
+        this.readBraceSubstitution("${| ", 2);
+      }
+      readBraceSubstitution(prefix, skip) {
+        this.pos += skip;
+        const src = this.src;
+        const len = src.length;
+        let depth = 1;
+        const start = this.pos;
+        while (this.pos < len) {
+          const c = src.charCodeAt(this.pos);
+          if (c === CH_LBRACE)
+            depth++;
+          else if (c === CH_RBRACE) {
+            if (--depth === 0) {
+              this.pos++;
+              break;
+            }
+          } else if (c === CH_SQUOTE) {
+            this.pos++;
+            this.skipSQ();
+            continue;
+          } else if (c === CH_DQUOTE) {
+            this.pos++;
+            this.skipDQ();
+            continue;
+          } else if (c === CH_BACKSLASH)
+            this.pos++;
+          this.pos++;
+        }
+        const inner = src.slice(start, this.pos - 1).trim();
+        const text = prefix + inner + " }";
+        this._resultText = text;
+        this._resultHasExpansion = true;
+        if (this._buildParts) {
+          this._resultPart = { type: "CommandExpansion", text, script: void 0, inner };
+          this.collectedExpansions.push({ inner, _part: this._resultPart });
+        } else {
+          this._resultPart = void 0;
+        }
+      }
+      readBacktickExpansion() {
+        this.pos++;
+        const src = this.src;
+        const len = src.length;
+        let inner = "";
+        const start = this.pos;
+        let hasEscapes = false;
+        while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
+          if (src.charCodeAt(this.pos) === CH_BACKSLASH) {
+            hasEscapes = true;
+            break;
+          }
+          this.pos++;
+        }
+        if (!hasEscapes) {
+          inner = src.slice(start, this.pos);
+        } else {
+          inner = src.slice(start, this.pos);
+          while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
+            if (src.charCodeAt(this.pos) === CH_BACKSLASH) {
+              this.pos++;
+              if (this.pos < len) {
+                const c = src.charCodeAt(this.pos);
+                if (c === CH_DOLLAR || c === CH_BACKTICK || c === CH_BACKSLASH) {
+                  inner += src[this.pos];
+                } else {
+                  inner += "\\" + src[this.pos];
+                }
+                this.pos++;
+              }
+            } else {
+              const runStart = this.pos;
+              while (this.pos < len) {
+                const c = src.charCodeAt(this.pos);
+                if (c === CH_BACKTICK || c === CH_BACKSLASH)
+                  break;
+                this.pos++;
+              }
+              inner += src.slice(runStart, this.pos);
+            }
+          }
+        }
+        if (this.pos < len)
+          this.pos++;
+        else
+          this.errors.push({ message: "unterminated backtick", pos: start - 1 });
+        const text = src.slice(start - 1, this.pos);
+        this._resultText = inner;
+        this._resultHasExpansion = true;
+        if (this._buildParts) {
+          this._resultPart = { type: "CommandExpansion", text, script: void 0, inner };
+          this.collectedExpansions.push({ inner, _part: this._resultPart });
+        } else {
+          this._resultPart = void 0;
+        }
+      }
+      readParameterExpansion() {
+        const src = this.src;
+        const len = src.length;
+        const start = this.pos;
+        this.pos++;
+        let depth = 1;
+        while (this.pos < len && depth > 0) {
+          const ch = src.charCodeAt(this.pos);
+          if (ch === CH_LBRACE && this.pos > 0 && src.charCodeAt(this.pos - 1) === CH_DOLLAR)
+            depth++;
+          else if (ch === CH_RBRACE) {
+            if (--depth === 0) {
+              this.pos++;
+              break;
+            }
+          } else if (ch === CH_BACKSLASH) {
+            this.pos++;
+          } else if (ch === CH_SQUOTE) {
+            this.pos++;
+            this.skipSQ();
+            continue;
+          } else if (ch === CH_DQUOTE) {
+            this.pos++;
+            this.skipDQ();
+            continue;
+          }
+          this.pos++;
+        }
+        const text = src.slice(start - 1, this.pos);
+        this._resultText = text;
+        this._resultHasExpansion = false;
+        if (this._buildParts) {
+          const inner = src.slice(start + 1, this.pos - 1);
+          this._resultPart = this.parseParamInner(text, inner);
+        } else {
+          this._resultPart = void 0;
+        }
+      }
+      parseParamInner(text, inner) {
+        const result = {
+          type: "ParameterExpansion",
+          text,
+          parameter: "",
+          index: void 0,
+          indirect: void 0,
+          length: void 0,
+          operator: void 0,
+          operand: void 0,
+          slice: void 0,
+          replace: void 0
+        };
+        const ilen = inner.length;
+        if (ilen === 0)
+          return result;
+        let i = 0;
+        if (inner.charCodeAt(0) === CH_BANG) {
+          result.indirect = true;
+          i = 1;
+        }
+        if (!result.indirect && inner.charCodeAt(0) === CH_HASH) {
+          if (ilen === 1) {
+            result.parameter = "#";
+            return result;
+          }
+          if (inner.charCodeAt(1) === CH_HASH) {
+            result.parameter = "#";
+            i = 1;
+          } else {
+            const tryI = this.scanParamName(inner, 1);
+            if (tryI > 1) {
+              let endI = tryI;
+              if (endI < ilen && inner.charCodeAt(endI) === CH_LBRACKET) {
+                const closeB = this.findCloseBracket(inner, endI + 1);
+                if (closeB !== -1)
+                  endI = closeB + 1;
+              }
+              if (endI >= ilen) {
+                result.length = true;
+                result.parameter = inner.slice(1, tryI);
+                if (tryI < ilen && inner.charCodeAt(tryI) === CH_LBRACKET) {
+                  const closeB = this.findCloseBracket(inner, tryI + 1);
+                  if (closeB !== -1)
+                    result.index = inner.slice(tryI + 1, closeB);
+                }
+                return result;
+              }
+            }
+            result.parameter = "#";
+            i = 1;
+          }
+        }
+        if (!result.parameter) {
+          const nameStart = i;
+          i = this.scanParamName(inner, i);
+          result.parameter = inner.slice(nameStart, i);
+        }
+        if (i < ilen && inner.charCodeAt(i) === CH_LBRACKET) {
+          const closeB = this.findCloseBracket(inner, i + 1);
+          if (closeB !== -1) {
+            result.index = inner.slice(i + 1, closeB);
+            i = closeB + 1;
+          }
+        }
+        if (i >= ilen)
+          return result;
+        const opChar = inner.charCodeAt(i);
+        if (opChar === CH_COLON) {
+          if (i + 1 < ilen) {
+            const nc = inner.charCodeAt(i + 1);
+            if (nc === CH_DASH || nc === CH_EQ || nc === CH_PLUS || nc === CH_QUESTION) {
+              result.operator = inner.slice(i, i + 2);
+              result.operand = this.parseSubFieldWord(inner.slice(i + 2));
+              return result;
+            }
+          }
+          i++;
+          const sliceRest = inner.slice(i);
+          const colonIdx = findUnnested(sliceRest, CH_COLON);
+          if (colonIdx === -1) {
+            result.slice = { offset: this.parseSubFieldWord(sliceRest), length: void 0 };
+          } else {
+            result.slice = {
+              offset: this.parseSubFieldWord(sliceRest.slice(0, colonIdx)),
+              length: this.parseSubFieldWord(sliceRest.slice(colonIdx + 1))
+            };
+          }
+          return result;
+        }
+        if (opChar === CH_DASH || opChar === CH_EQ || opChar === CH_PLUS || opChar === CH_QUESTION) {
+          result.operator = inner[i];
+          result.operand = this.parseSubFieldWord(inner.slice(i + 1));
+          return result;
+        }
+        if (opChar === CH_HASH) {
+          if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_HASH) {
+            result.operator = "##";
+            result.operand = this.parseSubFieldWord(inner.slice(i + 2));
+          } else {
+            result.operator = "#";
+            result.operand = this.parseSubFieldWord(inner.slice(i + 1));
+          }
+          return result;
+        }
+        if (opChar === CH_PERCENT) {
+          if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_PERCENT) {
+            result.operator = "%%";
+            result.operand = this.parseSubFieldWord(inner.slice(i + 2));
+          } else {
+            result.operator = "%";
+            result.operand = this.parseSubFieldWord(inner.slice(i + 1));
+          }
+          return result;
+        }
+        if (opChar === CH_SLASH) {
+          i++;
+          let replOp = "/";
+          if (i < ilen) {
+            const nc = inner.charCodeAt(i);
+            if (nc === CH_SLASH) {
+              replOp = "//";
+              i++;
+            } else if (nc === CH_HASH) {
+              replOp = "/#";
+              i++;
+            } else if (nc === CH_PERCENT) {
+              replOp = "/%";
+              i++;
+            }
+          }
+          result.operator = replOp;
+          const rest = inner.slice(i);
+          const sepIdx = findUnnested(rest, CH_SLASH);
+          if (sepIdx === -1) {
+            result.replace = {
+              pattern: this.parseSubFieldWord(rest),
+              replacement: new WordImpl("", 0, 0)
+            };
+          } else {
+            result.replace = {
+              pattern: this.parseSubFieldWord(rest.slice(0, sepIdx)),
+              replacement: this.parseSubFieldWord(rest.slice(sepIdx + 1))
+            };
+          }
+          return result;
+        }
+        if (opChar === CH_CARET) {
+          if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_CARET) {
+            result.operator = "^^";
+            const rest = inner.slice(i + 2);
+            if (rest)
+              result.operand = this.parseSubFieldWord(rest);
+          } else {
+            result.operator = "^";
+            const rest = inner.slice(i + 1);
+            if (rest)
+              result.operand = this.parseSubFieldWord(rest);
+          }
+          return result;
+        }
+        if (opChar === CH_COMMA) {
+          if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_COMMA) {
+            result.operator = ",,";
+            const rest = inner.slice(i + 2);
+            if (rest)
+              result.operand = this.parseSubFieldWord(rest);
+          } else {
+            result.operator = ",";
+            const rest = inner.slice(i + 1);
+            if (rest)
+              result.operand = this.parseSubFieldWord(rest);
+          }
+          return result;
+        }
+        if (opChar === CH_AT) {
+          result.operator = "@";
+          result.operand = this.parseSubFieldWord(inner.slice(i + 1));
+          return result;
+        }
+        result.operator = inner.slice(i);
+        return result;
+      }
+      scanParamName(s, start) {
+        let i = start;
+        if (i >= s.length)
+          return i;
+        const c = s.charCodeAt(i);
+        if (c === CH_AT || c === CH_STAR || c === CH_HASH || c === CH_QUESTION || c === CH_DASH || c === CH_DOLLAR || c === CH_BANG) {
+          return i + 1;
+        }
+        if (c >= CH_0 && c <= CH_9) {
+          while (i < s.length && s.charCodeAt(i) >= CH_0 && s.charCodeAt(i) <= CH_9)
+            i++;
+          return i;
+        }
+        if (c >= CH_a && c <= CH_z || c >= CH_A && c <= CH_Z || c === CH_UNDERSCORE) {
+          i++;
+          while (i < s.length) {
+            const ch = s.charCodeAt(i);
+            if (ch >= CH_a && ch <= CH_z || ch >= CH_A && ch <= CH_Z || ch >= CH_0 && ch <= CH_9 || ch === CH_UNDERSCORE)
+              i++;
+            else
+              break;
+          }
+        }
+        return i;
+      }
+      findCloseBracket(s, start) {
+        let depth = 1;
+        for (let i = start; i < s.length; i++) {
+          const c = s.charCodeAt(i);
+          if (c === CH_LBRACKET)
+            depth++;
+          else if (c === CH_RBRACKET) {
+            if (--depth === 0)
+              return i;
+          }
+        }
+        return -1;
+      }
+      readAnsiCQuoted() {
+        const src = this.src;
+        const len = src.length;
+        let text = "";
+        while (this.pos < len && src.charCodeAt(this.pos) !== CH_SQUOTE) {
+          if (src.charCodeAt(this.pos) === CH_BACKSLASH && this.pos + 1 < len) {
+            this.pos++;
+            const ch = src[this.pos];
+            switch (ch) {
+              case "n":
+                text += "\n";
+                break;
+              case "t":
+                text += "	";
+                break;
+              case "r":
+                text += "\r";
+                break;
+              case "\\":
+                text += "\\";
+                break;
+              case "'":
+                text += "'";
+                break;
+              case '"':
+                text += '"';
+                break;
+              case "a":
+                text += "\x07";
+                break;
+              case "b":
+                text += "\b";
+                break;
+              case "e":
+              case "E":
+                text += "\x1B";
+                break;
+              case "f":
+                text += "\f";
+                break;
+              case "v":
+                text += "\v";
+                break;
+              default:
+                text += "\\" + ch;
+                break;
+            }
+            this.pos++;
+          } else {
+            const runStart = this.pos;
+            while (this.pos < len) {
+              const c = src.charCodeAt(this.pos);
+              if (c === CH_SQUOTE || c === CH_BACKSLASH)
+                break;
+              this.pos++;
+            }
+            text += src.slice(runStart, this.pos);
+          }
+        }
+        if (this.pos < len)
+          this.pos++;
+        return text;
+      }
+      // Extract balanced parens for $(...) — respects nested quotes and case..esac
+      extractBalanced() {
+        const src = this.src;
+        const len = src.length;
+        let depth = 1;
+        const start = this.pos;
+        while (this.pos < len && depth > 0) {
+          const c = src.charCodeAt(this.pos);
+          if (c === CH_RPAREN) {
+            depth--;
+            if (depth === 0) {
+              const result = src.slice(start, this.pos);
+              this.pos++;
+              return result;
+            }
+            this.pos++;
+          } else if (c === CH_LPAREN || c === CH_BACKSLASH || c === CH_SQUOTE || c === CH_DQUOTE || c === CH_BACKTICK) {
+            break;
+          } else if (c === 99 && // Ensure word start boundary (not inside e.g. "lowercase")
+          (this.pos === start || src.charCodeAt(this.pos - 1) < 128 && charType[src.charCodeAt(this.pos - 1)] !== 0) && this.pos + 3 < len && src.charCodeAt(this.pos + 1) === 97 && src.charCodeAt(this.pos + 2) === 115 && src.charCodeAt(this.pos + 3) === 101 && (this.pos + 4 >= len || src.charCodeAt(this.pos + 4) < 128 && charType[src.charCodeAt(this.pos + 4)] & 1)) {
+            break;
+          } else {
+            this.pos++;
+          }
+        }
+        if (depth === 0)
+          return src.slice(start, this.pos);
+        let caseDepth = 0;
+        while (this.pos < len && depth > 0) {
+          const ch = src.charCodeAt(this.pos);
+          if (ch === CH_LPAREN) {
+            depth++;
+            this.pos++;
+          } else if (ch === CH_RPAREN) {
+            if (caseDepth > 0) {
+              this.pos++;
+            } else {
+              depth--;
+              if (depth === 0) {
+                const result = src.slice(start, this.pos);
+                this.pos++;
+                return result;
+              }
+              this.pos++;
+            }
+          } else if (ch === CH_BACKSLASH) {
+            this.pos++;
+            if (this.pos < len)
+              this.pos++;
+          } else if (ch === CH_SQUOTE) {
+            this.pos++;
+            this.skipSQ();
+          } else if (ch === CH_DQUOTE) {
+            this.pos++;
+            this.skipDQ();
+          } else if (ch === CH_BACKTICK) {
+            this.pos++;
+            while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
+              if (src.charCodeAt(this.pos) === CH_BACKSLASH)
+                this.pos++;
+              if (this.pos < len)
+                this.pos++;
+            }
+            if (this.pos < len)
+              this.pos++;
+          } else {
+            const wStart = this.pos;
+            while (this.pos < len) {
+              const wc = src.charCodeAt(this.pos);
+              if (wc < 128 && charType[wc])
+                break;
+              this.pos++;
+            }
+            if (this.pos > wStart) {
+              const wLen = this.pos - wStart;
+              if (wLen === 4) {
+                const c0 = src.charCodeAt(wStart);
+                if (c0 === 99 && src.charCodeAt(wStart + 1) === 97 && src.charCodeAt(wStart + 2) === 115 && src.charCodeAt(wStart + 3) === 101) {
+                  caseDepth++;
+                } else if (c0 === 101 && src.charCodeAt(wStart + 1) === 115 && src.charCodeAt(wStart + 2) === 97 && src.charCodeAt(wStart + 3) === 99 && caseDepth > 0) {
+                  caseDepth--;
+                }
+              }
+            } else {
+              this.pos++;
+            }
+          }
+        }
+        return src.slice(start, this.pos);
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/parts.js
+function computeWordParts(source, word) {
+  const lexer = new Lexer(source);
+  let parts;
+  if (word.text.includes("\n") && word.pos > 0) {
+    parts = lexer.buildHereDocParts(word.pos, word.end);
+  } else {
+    parts = lexer.buildWordParts(word.pos);
+  }
+  if (!parts)
+    return void 0;
+  for (const exp of lexer.getCollectedExpansions()) {
+    resolveExpansion(exp);
+  }
+  return parts;
+}
+function resolveExpansion(e) {
+  if (e.inner !== void 0 && e._part) {
+    e._part.script = parse(e.inner);
+    e._part.inner = void 0;
+    e._part = void 0;
+    e.inner = void 0;
+  }
+}
+var init_parts = __esm({
+  "node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/parts.js"() {
+    "use strict";
+    init_lexer();
+    init_parser();
+  }
+});
+
+// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/parser.js
+function offsetArith(node, base) {
+  node.pos += base;
+  node.end += base;
+  switch (node.type) {
+    case "ArithmeticBinary":
+      offsetArith(node.left, base);
+      offsetArith(node.right, base);
+      break;
+    case "ArithmeticUnary":
+      offsetArith(node.operand, base);
+      break;
+    case "ArithmeticTernary":
+      offsetArith(node.test, base);
+      offsetArith(node.consequent, base);
+      offsetArith(node.alternate, base);
+      break;
+    case "ArithmeticGroup":
+      offsetArith(node.expression, base);
+      break;
+  }
+}
+function parse(source) {
+  const parser = new Parser(source);
+  return parser.parse(source.length);
+}
+var ArithmeticCommandImpl, ArithmeticForImpl, CASE_TERMINATORS, REDIRECT_OPS, listTerminators, commandStarts, UNARY_TEST_OPS, BINARY_TEST_OPS, EMPTY_PREFIX, EMPTY_SUFFIX, EMPTY_REDIRECTS, Parser;
+var init_parser = __esm({
+  "node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/parser.js"() {
+    "use strict";
+    init_lexer();
+    init_arithmetic();
+    init_parts();
+    init_word();
+    WordImpl._resolve = computeWordParts;
+    ArithmeticCommandImpl = class {
+      type = "ArithmeticCommand";
+      pos;
+      end;
+      body;
+      #expression = null;
+      constructor(pos, end, body) {
+        this.pos = pos;
+        this.end = end;
+        this.body = body;
+      }
+      get expression() {
+        if (this.#expression === null) {
+          this.#expression = parseArithmeticExpression(this.body, this.pos + 2) ?? void 0;
+        }
+        return this.#expression;
+      }
+      set expression(v) {
+        this.#expression = v ?? void 0;
+      }
+    };
+    ArithmeticForImpl = class {
+      type = "ArithmeticFor";
+      pos;
+      end;
+      body;
+      #initStr;
+      #testStr;
+      #updateStr;
+      #initPos;
+      #testPos;
+      #updatePos;
+      #initialize = null;
+      #test = null;
+      #update = null;
+      constructor(pos, end, body, initStr, testStr, updateStr, initPos, testPos, updatePos) {
+        this.pos = pos;
+        this.end = end;
+        this.body = body;
+        this.#initStr = initStr;
+        this.#testStr = testStr;
+        this.#updateStr = updateStr;
+        this.#initPos = initPos;
+        this.#testPos = testPos;
+        this.#updatePos = updatePos;
+      }
+      get initialize() {
+        if (this.#initialize === null) {
+          if (this.#initStr) {
+            const expr = parseArithmeticExpression(this.#initStr);
+            if (expr)
+              offsetArith(expr, this.#initPos);
+            this.#initialize = expr ?? void 0;
+          } else {
+            this.#initialize = void 0;
+          }
+        }
+        return this.#initialize;
+      }
+      set initialize(v) {
+        this.#initialize = v ?? void 0;
+      }
+      get test() {
+        if (this.#test === null) {
+          if (this.#testStr) {
+            const expr = parseArithmeticExpression(this.#testStr);
+            if (expr)
+              offsetArith(expr, this.#testPos);
+            this.#test = expr ?? void 0;
+          } else {
+            this.#test = void 0;
+          }
+        }
+        return this.#test;
+      }
+      set test(v) {
+        this.#test = v ?? void 0;
+      }
+      get update() {
+        if (this.#update === null) {
+          if (this.#updateStr) {
+            const expr = parseArithmeticExpression(this.#updateStr);
+            if (expr)
+              offsetArith(expr, this.#updatePos);
+            this.#update = expr ?? void 0;
+          } else {
+            this.#update = void 0;
+          }
+        }
+        return this.#update;
+      }
+      set update(v) {
+        this.#update = v ?? void 0;
+      }
+    };
+    CASE_TERMINATORS = {
+      [Token.DoubleSemi]: ";;",
+      [Token.SemiAmp]: ";&",
+      [Token.DoubleSemiAmp]: ";;&"
+    };
+    REDIRECT_OPS = {
+      ">": ">",
+      ">>": ">>",
+      "<": "<",
+      "<<": "<<",
+      "<<-": "<<-",
+      "<<<": "<<<",
+      "<>": "<>",
+      "<&": "<&",
+      ">&": ">&",
+      ">|": ">|",
+      "&>": "&>",
+      "&>>": "&>>"
+    };
+    listTerminators = new Uint8Array(37);
+    listTerminators[Token.EOF] = 1;
+    listTerminators[Token.RParen] = 1;
+    listTerminators[Token.RBrace] = 1;
+    listTerminators[Token.Then] = 1;
+    listTerminators[Token.Else] = 1;
+    listTerminators[Token.Elif] = 1;
+    listTerminators[Token.Fi] = 1;
+    listTerminators[Token.Do] = 1;
+    listTerminators[Token.Done] = 1;
+    listTerminators[Token.Esac] = 1;
+    listTerminators[Token.DoubleSemi] = 1;
+    listTerminators[Token.SemiAmp] = 1;
+    listTerminators[Token.DoubleSemiAmp] = 1;
+    commandStarts = new Uint8Array(37);
+    commandStarts[Token.Word] = 1;
+    commandStarts[Token.Assignment] = 1;
+    commandStarts[Token.Bang] = 1;
+    commandStarts[Token.LParen] = 1;
+    commandStarts[Token.LBrace] = 1;
+    commandStarts[Token.DblLBracket] = 1;
+    commandStarts[Token.If] = 1;
+    commandStarts[Token.For] = 1;
+    commandStarts[Token.While] = 1;
+    commandStarts[Token.Until] = 1;
+    commandStarts[Token.Case] = 1;
+    commandStarts[Token.Function] = 1;
+    commandStarts[Token.Select] = 1;
+    commandStarts[Token.ArithCmd] = 1;
+    commandStarts[Token.Coproc] = 1;
+    commandStarts[Token.Redirect] = 1;
+    UNARY_TEST_OPS = {
+      "-a": 1,
+      "-b": 1,
+      "-c": 1,
+      "-d": 1,
+      "-e": 1,
+      "-f": 1,
+      "-g": 1,
+      "-h": 1,
+      "-k": 1,
+      "-p": 1,
+      "-r": 1,
+      "-s": 1,
+      "-t": 1,
+      "-u": 1,
+      "-v": 1,
+      "-w": 1,
+      "-x": 1,
+      "-z": 1,
+      "-n": 1,
+      "-N": 1,
+      "-S": 1,
+      "-L": 1,
+      "-G": 1,
+      "-O": 1,
+      "-R": 1
+    };
+    BINARY_TEST_OPS = {
+      "==": 1,
+      "!=": 1,
+      "=~": 1,
+      "=": 1,
+      "-eq": 1,
+      "-ne": 1,
+      "-lt": 1,
+      "-le": 1,
+      "-gt": 1,
+      "-ge": 1,
+      "-nt": 1,
+      "-ot": 1,
+      "-ef": 1,
+      "<": 1,
+      ">": 1
+    };
+    EMPTY_PREFIX = [];
+    EMPTY_SUFFIX = [];
+    EMPTY_REDIRECTS = [];
+    Parser = class {
+      tok;
+      source;
+      errors = [];
+      _redirects = [];
+      constructor(source) {
+        this.tok = new Lexer(source);
+        this.source = source;
+      }
+      parse(sourceLen) {
+        let shebang;
+        if (this.source.charCodeAt(0) === 35 && this.source.charCodeAt(1) === 33) {
+          const nl = this.source.indexOf("\n");
+          shebang = nl === -1 ? this.source : this.source.slice(0, nl);
+        }
+        const commands = this.list();
+        const lexerErrors = this.tok._errors;
+        if (lexerErrors !== null) {
+          for (let i = 0; i < lexerErrors.length; i++)
+            this.errors.push(lexerErrors[i]);
+        }
+        const result = {
+          type: "Script",
+          pos: 0,
+          end: sourceLen,
+          shebang,
+          commands,
+          errors: this.errors.length > 0 ? this.errors : void 0
+        };
+        return result;
+      }
+      error(message, pos) {
+        this.errors.push({ message, pos });
+      }
+      skipSemi() {
+        if (this.tok.peek(LexContext.Normal).token === Token.Semi)
+          this.tok.next(LexContext.Normal);
+      }
+      accept(token, ctx = LexContext.Normal) {
+        if (this.tok.peek(ctx).token === token)
+          return this.tok.next(ctx);
+        return null;
+      }
+      acceptEnd(token, ctx = LexContext.Normal) {
+        if (this.tok.peek(ctx).token === token)
+          return this.tok.next(ctx).end;
+        return -1;
+      }
+      skipNewlines(ctx = LexContext.Normal) {
+        while (this.tok.peek(ctx).token === Token.Newline)
+          this.tok.next(ctx);
+      }
+      makeStatement(command, redirects) {
+        const end = redirects.length > 0 ? redirects[redirects.length - 1].end : command.end;
+        return {
+          type: "Statement",
+          pos: command.pos,
+          end,
+          command,
+          background: void 0,
+          redirects
+        };
+      }
+      // list := and_or ((';' | '&' | NEWLINE) and_or)* [';' | '&' | NEWLINE]
+      list() {
+        const commands = [];
+        this.skipNewlines(LexContext.CommandStart);
+        let t = this.tok.peek(LexContext.CommandStart).token;
+        if (listTerminators[t] || !commandStarts[t])
+          return commands;
+        const first = this.andOr();
+        if (first) {
+          const redirects = this._redirects;
+          this._redirects = [];
+          commands.push(this.makeStatement(first, redirects));
+        }
+        for (; ; ) {
+          t = this.tok.peek(LexContext.Normal).token;
+          if (t !== Token.Semi && t !== Token.Newline && t !== Token.Amp)
+            break;
+          const isBackground = t === Token.Amp;
+          const sepEnd = this.tok.next(LexContext.Normal).end;
+          if (isBackground) {
+            const stmt = commands[commands.length - 1];
+            stmt.background = true;
+            stmt.end = sepEnd;
+          }
+          this.skipNewlines(LexContext.CommandStart);
+          t = this.tok.peek(LexContext.CommandStart).token;
+          if (listTerminators[t] || !commandStarts[t])
+            break;
+          const node = this.andOr();
+          if (node) {
+            const redirects = this._redirects;
+            this._redirects = [];
+            commands.push(this.makeStatement(node, redirects));
+          }
+        }
+        return commands;
+      }
+      // and_or := pipeline (('&&' | '||') newlines pipeline)*
+      andOr() {
+        const first = this.pipeline();
+        if (!first)
+          return null;
+        let t = this.tok.peek(LexContext.Normal).token;
+        if (t !== Token.And && t !== Token.Or)
+          return first;
+        let wrappedFirst = first;
+        if (this._redirects.length > 0) {
+          wrappedFirst = this.makeStatement(first, this._redirects);
+          this._redirects = [];
+        }
+        const commands = [wrappedFirst];
+        const operators = [];
+        do {
+          operators.push(this.tok.next(LexContext.Normal).token === Token.And ? "&&" : "||");
+          this.skipNewlines(LexContext.CommandStart);
+          const next = this.pipeline();
+          if (!next)
+            break;
+          commands.push(next);
+          t = this.tok.peek(LexContext.Normal).token;
+        } while (t === Token.And || t === Token.Or);
+        return {
+          type: "AndOr",
+          pos: first.pos,
+          end: commands[commands.length - 1].end,
+          commands,
+          operators
+        };
+      }
+      wrapCompoundRedirects(node) {
+        const redirects = this._redirects;
+        this._redirects = [];
+        if (redirects.length === 0)
+          return node;
+        return this.makeStatement(node, redirects);
+      }
+      // pipeline := ['time' ['-p']] ['!'] command ('|' newlines command)*
+      pipeline() {
+        let time = false;
+        let pipelinePos = 0;
+        if (this.tok.peek(LexContext.CommandStart).token === Token.Word && this.tok.peek(LexContext.CommandStart).value === "time") {
+          time = true;
+          pipelinePos = this.tok.next(LexContext.CommandStart).pos;
+          if (this.tok.peek(LexContext.CommandStart).token === Token.Word && this.tok.peek(LexContext.CommandStart).value === "-p")
+            this.tok.next(LexContext.CommandStart);
+        }
+        const negated = this.tok.peek(LexContext.CommandStart).token === Token.Bang;
+        if (negated) {
+          if (!time)
+            pipelinePos = this.tok.peek(LexContext.CommandStart).pos;
+          this.tok.next(LexContext.CommandStart);
+        }
+        const first = this.command();
+        if (!first) {
+          if (time || negated) {
+            const pipeline2 = {
+              type: "Pipeline",
+              pos: pipelinePos,
+              end: pipelinePos,
+              commands: [],
+              negated: negated ? true : void 0,
+              operators: [],
+              time: time ? true : void 0
+            };
+            return pipeline2;
+          }
+          return null;
+        }
+        if (!time && !negated)
+          pipelinePos = first.pos;
+        const commands = [first];
+        const operators = [];
+        let firstRedirects = this._redirects;
+        this._redirects = [];
+        while (this.tok.peek(LexContext.Normal).token === Token.Pipe) {
+          if (commands.length === 1 && firstRedirects.length > 0) {
+            commands[0] = this.makeStatement(first, firstRedirects);
+            firstRedirects = [];
+          }
+          const pipeVal = this.tok.next(LexContext.Normal).value;
+          operators.push(pipeVal === "|&" ? "|&" : "|");
+          this.skipNewlines(LexContext.CommandStart);
+          const cmd = this.command();
+          if (cmd)
+            commands.push(this.wrapCompoundRedirects(cmd));
+        }
+        if (commands.length === 1 && !negated && !time) {
+          this._redirects = firstRedirects;
+          return commands[0];
+        }
+        if (firstRedirects.length > 0) {
+          commands[0] = this.makeStatement(first, firstRedirects);
+        }
+        const pipeline = {
+          type: "Pipeline",
+          pos: pipelinePos,
+          end: commands[commands.length - 1].end,
+          commands,
+          negated: negated ? true : void 0,
+          operators,
+          time: time ? true : void 0
+        };
+        return pipeline;
+      }
+      // command := compound_command | function_def | simple_command
+      command() {
+        switch (this.tok.peek(LexContext.CommandStart).token) {
+          case Token.LParen:
+            return this.subshell();
+          case Token.LBrace:
+            return this.braceGroup();
+          case Token.If:
+            return this.ifClause();
+          case Token.For:
+            return this.forClause();
+          case Token.While:
+            return this.whileClause();
+          case Token.Until:
+            return this.untilClause();
+          case Token.Case:
+            return this.caseClause();
+          case Token.Function:
+            return this.functionDef();
+          case Token.Select:
+            return this.selectClause();
+          case Token.DblLBracket:
+            return this.testCommand();
+          case Token.ArithCmd:
+            return this.arithCommand();
+          case Token.Coproc:
+            return this.coprocCommand();
+          case Token.Word:
+          case Token.Assignment:
+          case Token.Redirect:
+            return this.simpleCommandOrFunction();
+          default:
+            return null;
+        }
+      }
+      collectTrailingRedirects() {
+        let redirects = [];
+        while (this.tok.peek(LexContext.Normal).token === Token.Redirect) {
+          redirects = this.collectRedirect(redirects, LexContext.Normal);
+        }
+        return redirects;
+      }
+      // arith_command := (( expr ))
+      arithCommand() {
+        const tok = this.tok.next(LexContext.CommandStart);
+        this._redirects = this.collectTrailingRedirects();
+        return new ArithmeticCommandImpl(tok.pos, tok.end, tok.value);
+      }
+      // coproc := COPROC [name] command [redirections]
+      coprocCommand() {
+        const startTok = this.tok.next(LexContext.CommandStart);
+        const pos = startTok.pos;
+        const startEnd = startTok.end;
+        const t = this.tok.peek(LexContext.CommandStart);
+        if (t.token !== Token.Word && t.token !== Token.Assignment && t.token !== Token.Redirect) {
+          const body2 = this.pipeline() ?? {
+            type: "Command",
+            pos,
+            end: startEnd,
+            name: void 0,
+            prefix: EMPTY_PREFIX,
+            suffix: EMPTY_SUFFIX,
+            redirects: EMPTY_REDIRECTS
+          };
+          const bodyRedirects2 = this._redirects;
+          this._redirects = [];
+          const redirects2 = this.collectTrailingRedirects();
+          const allRedirects2 = [...bodyRedirects2, ...redirects2];
+          const end2 = allRedirects2.length > 0 ? allRedirects2[allRedirects2.length - 1].end : body2.end;
+          return { type: "Coproc", pos, end: end2, name: void 0, body: body2, redirects: allRedirects2 };
+        }
+        const tentativeWord = this.toWord(this.tok.next(LexContext.CommandStart));
+        const body = this.pipeline();
+        if (body === null) {
+          const cmd = {
+            type: "Command",
+            pos: tentativeWord.pos,
+            end: tentativeWord.end,
+            name: tentativeWord,
+            prefix: EMPTY_PREFIX,
+            suffix: EMPTY_SUFFIX,
+            redirects: EMPTY_REDIRECTS
+          };
+          const redirects2 = this.collectTrailingRedirects();
+          const end2 = redirects2.length > 0 ? redirects2[redirects2.length - 1].end : cmd.end;
+          return { type: "Coproc", pos, end: end2, name: void 0, body: cmd, redirects: redirects2 };
+        }
+        if (body.type === "Command") {
+          const cmd = body;
+          if (cmd.name) {
+            cmd.suffix = [cmd.name, ...cmd.suffix];
+          }
+          cmd.name = tentativeWord;
+          cmd.pos = tentativeWord.pos;
+          const redirects2 = this.collectTrailingRedirects();
+          const end2 = redirects2.length > 0 ? redirects2[redirects2.length - 1].end : cmd.end;
+          return { type: "Coproc", pos, end: end2, name: void 0, body: cmd, redirects: redirects2 };
+        }
+        const bodyRedirects = this._redirects;
+        this._redirects = [];
+        const redirects = this.collectTrailingRedirects();
+        const allRedirects = [...bodyRedirects, ...redirects];
+        const end = allRedirects.length > 0 ? allRedirects[allRedirects.length - 1].end : body.end;
+        return { type: "Coproc", pos, end, name: tentativeWord, body, redirects: allRedirects };
+      }
+      // subshell := '(' list ')'
+      subshell() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const commands = this.list();
+        const closeEnd = this.acceptEnd(Token.RParen, LexContext.Normal);
+        if (closeEnd < 0)
+          this.error("expected ')' to close subshell", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "Subshell", pos, end, body: this.makeCompoundList(commands) };
+      }
+      // brace_group := '{' list '}'
+      braceGroup() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const commands = this.list();
+        const closeEnd = this.acceptEnd(Token.RBrace, LexContext.Normal);
+        if (closeEnd < 0)
+          this.error("expected '}' to close brace group", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "BraceGroup", pos, end, body: this.makeCompoundList(commands) };
+      }
+      // if_clause := IF list THEN list (ELIF list THEN list)* [ELSE list] FI
+      ifClause() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const clause = this.makeCompoundList(this.list());
+        this.skipSemi();
+        if (!this.accept(Token.Then, LexContext.CommandStart))
+          this.error("expected 'then'", this.tok.getPos());
+        const then_ = this.makeCompoundList(this.list());
+        this.skipSemi();
+        let else_;
+        let end;
+        if (this.tok.peek(LexContext.CommandStart).token === Token.Elif) {
+          else_ = this.ifClause();
+          end = else_.end;
+        } else if (this.accept(Token.Else, LexContext.CommandStart)) {
+          else_ = this.makeCompoundList(this.list());
+          this.skipSemi();
+          const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
+          if (closeEnd < 0)
+            this.error("expected 'fi' to close 'if'", this.tok.getPos());
+          end = closeEnd >= 0 ? closeEnd : pos;
+        } else {
+          const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
+          if (closeEnd < 0)
+            this.error("expected 'fi' to close 'if'", this.tok.getPos());
+          end = closeEnd >= 0 ? closeEnd : pos;
+        }
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "If", pos, end, clause, then: then_, else: else_ };
+      }
+      // for_clause := FOR word [IN word* (';'|NL)] DO list DONE
+      //            | FOR '((' expr '))' [';'|NL] DO list DONE
+      forClause() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        if (this.tok.peek(LexContext.Normal).token === Token.LParen) {
+          return this.cStyleFor(pos);
+        }
+        const name = this.readWord(LexContext.Normal);
+        const wordlist = [];
+        this.skipNewlines(LexContext.CommandStart);
+        if (this.tok.peek(LexContext.CommandStart).token === Token.In) {
+          this.tok.next(LexContext.CommandStart);
+          while (this.tok.peek(LexContext.Normal).token === Token.Word) {
+            wordlist.push(this.readWord(LexContext.Normal));
+          }
+        }
+        this.skipSemi();
+        this.skipNewlines(LexContext.CommandStart);
+        if (!this.accept(Token.Do, LexContext.CommandStart))
+          this.error("expected 'do'", this.tok.getPos());
+        const body = this.list();
+        this.skipSemi();
+        const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+        if (closeEnd < 0)
+          this.error("expected 'done' to close 'for'", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "For", pos, end, name, wordlist, body: this.makeCompoundList(body) };
+      }
+      // C-style for: (( expr; expr; expr )) [;|NL] do list done | { list }
+      cStyleFor(pos) {
+        const [initStr, testStr, updateStr, initPos, testPos, updatePos] = this.tok.readCStyleForExprs();
+        if (this.tok.peek(LexContext.CommandStart).token === Token.Semi)
+          this.tok.next(LexContext.CommandStart);
+        this.skipNewlines(LexContext.CommandStart);
+        if (this.tok.peek(LexContext.CommandStart).token === Token.LBrace) {
+          const bg = this.braceGroup();
+          return new ArithmeticForImpl(pos, bg.end, bg.body, initStr, testStr, updateStr, initPos, testPos, updatePos);
+        }
+        if (!this.accept(Token.Do, LexContext.CommandStart))
+          this.error("expected 'do'", this.tok.getPos());
+        const body = this.list();
+        const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+        if (closeEnd < 0)
+          this.error("expected 'done' to close 'for'", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return new ArithmeticForImpl(pos, end, this.makeCompoundList(body), initStr, testStr, updateStr, initPos, testPos, updatePos);
+      }
+      whileClause() {
+        return this.whileOrUntil("while");
+      }
+      untilClause() {
+        return this.whileOrUntil("until");
+      }
+      whileOrUntil(kind) {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const clause = this.makeCompoundList(this.list());
+        this.skipSemi();
+        if (!this.accept(Token.Do, LexContext.CommandStart))
+          this.error("expected 'do'", this.tok.getPos());
+        const body = this.list();
+        this.skipSemi();
+        const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+        if (closeEnd < 0)
+          this.error(`expected 'done' to close '${kind}'`, this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "While", pos, end, kind, clause, body: this.makeCompoundList(body) };
+      }
+      // case_clause := CASE word IN (pattern) list (;; | ;& | ;;&) ... ESAC
+      caseClause() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const word = this.readWord(LexContext.Normal);
+        this.skipNewlines(LexContext.CommandStart);
+        if (!this.accept(Token.In, LexContext.CommandStart))
+          this.error("expected 'in' after 'case' word", this.tok.getPos());
+        this.skipNewlines(LexContext.CommandStart);
+        const items = [];
+        let t = this.tok.peek(LexContext.CommandStart).token;
+        while (t !== Token.Esac && t !== Token.EOF) {
+          const itemPos = this.tok.peek(LexContext.Normal).pos;
+          this.accept(Token.LParen, LexContext.Normal);
+          const pattern = [];
+          t = this.tok.peek(LexContext.Normal).token;
+          while (t !== Token.RParen && t !== Token.EOF) {
+            if (t !== Token.Pipe)
+              pattern.push(this.toWord(this.tok.next(LexContext.Normal)));
+            else
+              this.tok.next(LexContext.Normal);
+            t = this.tok.peek(LexContext.Normal).token;
+          }
+          const rparenEnd = this.acceptEnd(Token.RParen, LexContext.Normal);
+          const cmds = this.list();
+          let itemEnd = rparenEnd >= 0 ? rparenEnd : itemPos;
+          if (cmds.length > 0)
+            itemEnd = cmds[cmds.length - 1].end;
+          const item = {
+            type: "CaseItem",
+            pos: itemPos,
+            end: itemEnd,
+            pattern,
+            body: this.makeCompoundList(cmds),
+            terminator: void 0
+          };
+          t = this.tok.peek(LexContext.CommandStart).token;
+          if (t === Token.DoubleSemi || t === Token.SemiAmp || t === Token.DoubleSemiAmp) {
+            const termTok = this.tok.next(LexContext.CommandStart);
+            item.terminator = CASE_TERMINATORS[termTok.token];
+            item.end = termTok.end;
+          }
+          items.push(item);
+          this.skipNewlines(LexContext.CommandStart);
+          t = this.tok.peek(LexContext.CommandStart).token;
+        }
+        const closeEnd = this.acceptEnd(Token.Esac, LexContext.CommandStart);
+        if (closeEnd < 0)
+          this.error("expected 'esac' to close 'case'", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "Case", pos, end, word, items };
+      }
+      // select_clause := SELECT word [IN word* (';'|NL)] DO list DONE
+      selectClause() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const name = this.readWord(LexContext.Normal);
+        const wordlist = [];
+        this.skipNewlines(LexContext.CommandStart);
+        if (this.tok.peek(LexContext.CommandStart).token === Token.In) {
+          this.tok.next(LexContext.CommandStart);
+          while (this.tok.peek(LexContext.Normal).token === Token.Word) {
+            wordlist.push(this.readWord(LexContext.Normal));
+          }
+        }
+        this.skipSemi();
+        this.skipNewlines(LexContext.CommandStart);
+        if (!this.accept(Token.Do, LexContext.CommandStart))
+          this.error("expected 'do'", this.tok.getPos());
+        const body = this.list();
+        this.skipSemi();
+        const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+        if (closeEnd < 0)
+          this.error("expected 'done' to close 'select'", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "Select", pos, end, name, wordlist, body: this.makeCompoundList(body) };
+      }
+      // test_command := [[ test_expr ]]
+      testCommand() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const expr = this.parseTestOr();
+        const closeEnd = this.acceptEnd(Token.DblRBracket, LexContext.TestMode);
+        if (closeEnd < 0 && this.tok.peek(LexContext.Normal).token === Token.EOF)
+          this.error("expected ']]' to close '[['", this.tok.getPos());
+        const end = closeEnd >= 0 ? closeEnd : pos;
+        this._redirects = this.collectTrailingRedirects();
+        return { type: "TestCommand", pos, end, expression: expr };
+      }
+      // test_or := test_and ('||' test_and)*
+      parseTestOr() {
+        let left = this.parseTestAnd();
+        while (this.tok.peek(LexContext.TestMode).token === Token.Or) {
+          this.tok.next(LexContext.TestMode);
+          const right = this.parseTestAnd();
+          left = {
+            type: "TestLogical",
+            pos: left.pos,
+            end: right.end,
+            operator: "||",
+            left,
+            right
+          };
+        }
+        return left;
+      }
+      // test_and := test_not ('&&' test_not)*
+      parseTestAnd() {
+        let left = this.parseTestNot();
+        while (this.tok.peek(LexContext.TestMode).token === Token.And) {
+          this.tok.next(LexContext.TestMode);
+          const right = this.parseTestNot();
+          left = {
+            type: "TestLogical",
+            pos: left.pos,
+            end: right.end,
+            operator: "&&",
+            left,
+            right
+          };
+        }
+        return left;
+      }
+      // test_not := '!' test_not | test_primary
+      parseTestNot() {
+        if (this.tok.peek(LexContext.TestMode).token === Token.Word && this.tok.peek(LexContext.TestMode).value === "!") {
+          const notPos = this.tok.next(LexContext.TestMode).pos;
+          const operand = this.parseTestNot();
+          return { type: "TestNot", pos: notPos, end: operand.end, operand };
+        }
+        return this.parseTestPrimary();
+      }
+      // test_primary := '(' test_or ')' | unary_op word | word binary_op word | word
+      parseTestPrimary() {
+        if (this.tok.peek(LexContext.TestMode).token === Token.LParen) {
+          const openPos = this.tok.next(LexContext.TestMode).pos;
+          const expr = this.parseTestOr();
+          const closeEnd = this.acceptEnd(Token.RParen, LexContext.TestMode);
+          if (closeEnd < 0)
+            this.error("expected ')' to close test group", this.tok.getPos());
+          const end = closeEnd >= 0 ? closeEnd : openPos;
+          return { type: "TestGroup", pos: openPos, end, expression: expr };
+        }
+        const first = this.tok.next(LexContext.TestMode);
+        const val = first.value;
+        const firstPos = first.pos;
+        const firstEnd = first.end;
+        if (UNARY_TEST_OPS[val] === 1) {
+          const nt2 = this.tok.peek(LexContext.TestMode).token;
+          if (nt2 === Token.Word) {
+            const operand = this.readWord(LexContext.TestMode);
+            return {
+              type: "TestUnary",
+              pos: firstPos,
+              end: operand.end,
+              operator: val,
+              operand
+            };
+          }
+        }
+        const nt = this.tok.peek(LexContext.TestMode);
+        if (nt.token === Token.Word && BINARY_TEST_OPS[nt.value] === 1) {
+          const op = this.tok.next(LexContext.TestMode).value;
+          let right;
+          if (op === "=~") {
+            right = this.toWord(this.tok.readTestRegexWord());
+          } else {
+            right = this.readWord(LexContext.TestMode);
+          }
+          const left = this.toWordFromPosEnd(first, firstPos, firstEnd);
+          return {
+            type: "TestBinary",
+            pos: firstPos,
+            end: right.end,
+            operator: op,
+            left,
+            right
+          };
+        }
+        const w = this.toWordFromPosEnd(first, firstPos, firstEnd);
+        return { type: "TestUnary", pos: firstPos, end: w.end, operator: "-n", operand: w };
+      }
+      // function_def with 'function' keyword
+      functionDef() {
+        const pos = this.tok.next(LexContext.CommandStart).pos;
+        const name = this.readWord(LexContext.Normal);
+        if (this.tok.peek(LexContext.CommandStart).token === Token.LParen) {
+          this.tok.next(LexContext.CommandStart);
+          if (!this.accept(Token.RParen, LexContext.CommandStart))
+            this.error("expected ')' after '('", this.tok.getPos());
+        }
+        this.skipNewlines(LexContext.CommandStart);
+        const body = this.commandAsBody();
+        const redirects = this._redirects;
+        this._redirects = [];
+        const end = redirects.length > 0 ? redirects[redirects.length - 1].end : body.end;
+        return { type: "Function", pos, end, name, body, redirects };
+      }
+      // simple_command or function_def (word '(' ')' body)
+      simpleCommandOrFunction() {
+        const prefix = [];
+        let redirects = [];
+        let cmdPos = this.tok.peek(LexContext.CommandStart).pos;
+        let lastEnd = cmdPos;
+        while (this.tok.peek(LexContext.CommandStart).token === Token.Assignment) {
+          const t = this.tok.next(LexContext.CommandStart);
+          lastEnd = t.end;
+          prefix.push(this.parseAssignment(t));
+        }
+        while (this.tok.peek(LexContext.CommandStart).token === Token.Redirect) {
+          redirects = this.collectRedirect(redirects, LexContext.CommandStart);
+          lastEnd = redirects[redirects.length - 1].end;
+        }
+        if (this.tok.peek(LexContext.Normal).token !== Token.Word) {
+          if (prefix.length > 0) {
+            return {
+              type: "Command",
+              pos: cmdPos,
+              end: lastEnd,
+              name: void 0,
+              prefix,
+              suffix: EMPTY_SUFFIX,
+              redirects
+            };
+          }
+          return {
+            type: "Command",
+            pos: cmdPos,
+            end: lastEnd,
+            name: void 0,
+            prefix: EMPTY_PREFIX,
+            suffix: EMPTY_SUFFIX,
+            redirects: EMPTY_REDIRECTS
+          };
+        }
+        const name = this.readWord(LexContext.Normal);
+        lastEnd = name.end;
+        if (this.tok.peek(LexContext.Normal).token === Token.LParen) {
+          this.tok.next(LexContext.Normal);
+          if (this.tok.peek(LexContext.Normal).token === Token.RParen) {
+            this.tok.next(LexContext.Normal);
+            this.skipNewlines(LexContext.CommandStart);
+            const body = this.commandAsBody();
+            const bodyRedirects = this._redirects;
+            this._redirects = [];
+            const end = bodyRedirects.length > 0 ? bodyRedirects[bodyRedirects.length - 1].end : body.end;
+            return { type: "Function", pos: name.pos, end, name, body, redirects: bodyRedirects };
+          }
+        }
+        const suffix = [];
+        for (; ; ) {
+          const st = this.tok.peek(LexContext.Normal).token;
+          if (st === Token.Word || st === Token.Assignment) {
+            const w = this.readWord(LexContext.Normal);
+            suffix.push(w);
+            lastEnd = w.end;
+          } else if (st === Token.Redirect) {
+            redirects = this.collectRedirect(redirects, LexContext.Normal);
+            lastEnd = redirects[redirects.length - 1].end;
+          } else {
+            break;
+          }
+        }
+        return { type: "Command", pos: cmdPos, end: lastEnd, name, prefix, suffix, redirects };
+      }
+      collectRedirect(redirects, ctx) {
+        const t = this.tok.next(ctx);
+        const tPos = t.pos;
+        const tEnd = t.end;
+        const r = {
+          pos: tPos,
+          end: tEnd,
+          operator: REDIRECT_OPS[t.value] ?? ">",
+          target: void 0,
+          fileDescriptor: t.fileDescriptor,
+          variableName: t.variableName,
+          content: t.content,
+          heredocQuoted: void 0,
+          body: void 0
+        };
+        if (t.content != null) {
+          r.target = new WordImpl(t.content, t.targetPos, t.targetEnd, this.source);
+        }
+        if (t.value === "<<" || t.value === "<<-")
+          this.tok.registerHereDocTarget(r);
+        redirects.push(r);
+        return redirects;
+      }
+      commandAsBody() {
+        const t = this.tok.peek(LexContext.CommandStart).token;
+        if (t === Token.LBrace)
+          return this.braceGroup();
+        if (t === Token.LParen)
+          return this.subshell();
+        const cmd = this.command();
+        const p = this.tok.getPos();
+        return cmd ?? { type: "CompoundList", pos: p, end: p, commands: [] };
+      }
+      readWord(ctx) {
+        return this.toWord(this.tok.next(ctx));
+      }
+      toWord(tok) {
+        return new WordImpl(this.source.slice(tok.pos, tok.end), tok.pos, tok.end, this.source);
+      }
+      toWordFromPosEnd(tok, pos, end) {
+        return new WordImpl(this.source.slice(pos, end), pos, end, this.source);
+      }
+      parseAssignment(tok) {
+        const text = this.source.slice(tok.pos, tok.end);
+        const tokPos = tok.pos;
+        const tokEnd = tok.end;
+        const result = {
+          type: "Assignment",
+          pos: tokPos,
+          end: tokEnd,
+          text,
+          name: void 0,
+          value: void 0,
+          append: void 0,
+          index: void 0,
+          array: void 0
+        };
+        const eqIdx = text.indexOf("=");
+        if (eqIdx <= 0)
+          return result;
+        let nameEnd = eqIdx;
+        let append = false;
+        let index;
+        if (text.charCodeAt(eqIdx - 1) === 43) {
+          append = true;
+          nameEnd = eqIdx - 1;
+        }
+        const bracketIdx = text.indexOf("[");
+        if (bracketIdx > 0 && bracketIdx < nameEnd) {
+          const rbracketIdx = text.indexOf("]", bracketIdx);
+          if (rbracketIdx > bracketIdx && rbracketIdx + 1 === nameEnd) {
+            index = text.slice(bracketIdx + 1, rbracketIdx);
+            nameEnd = bracketIdx;
+          }
+        }
+        const name = text.slice(0, nameEnd);
+        result.name = name;
+        if (append)
+          result.append = true;
+        if (index !== void 0)
+          result.index = index;
+        const valStart = eqIdx + 1;
+        const valText = text.slice(valStart);
+        if (valText.charCodeAt(0) === 40 && valText.charCodeAt(valText.length - 1) === 41) {
+          const inner = valText.slice(1, -1);
+          const arrayOffset = tokPos + valStart + 1;
+          const elements = this.parseArrayElements(inner, arrayOffset);
+          result.array = elements;
+        } else {
+          result.value = new WordImpl(valText, tokPos + valStart, tokEnd, this.source);
+        }
+        return result;
+      }
+      parseArrayElements(inner, offset = 0) {
+        const subTok = new Lexer(inner);
+        const elements = [];
+        while (subTok.peek(LexContext.Normal).token !== Token.EOF) {
+          if (subTok.peek(LexContext.Normal).token === Token.Newline) {
+            subTok.next(LexContext.Normal);
+            continue;
+          }
+          const t = subTok.next(LexContext.Normal);
+          if (t.token === Token.Word || t.token === Token.Assignment) {
+            const pos = t.pos + offset;
+            const end = t.end + offset;
+            elements.push(new WordImpl(this.source.slice(pos, end), pos, end, this.source));
+          }
+        }
+        return elements;
+      }
+      makeCompoundList(commands) {
+        const p = this.tok.getPos();
+        const pos = commands.length > 0 ? commands[0].pos : p;
+        const end = commands.length > 0 ? commands[commands.length - 1].end : p;
+        return { type: "CompoundList", pos, end, commands };
+      }
+    };
+  }
+});
+
+// src/shells.ts
+var SHELL_INTERPRETERS;
+var init_shells = __esm({
+  "src/shells.ts"() {
+    "use strict";
+    SHELL_INTERPRETERS = /* @__PURE__ */ new Set([
+      "sh",
+      "bash",
+      "zsh",
+      "dash",
+      "ksh",
+      "mksh",
+      "ash"
+    ]);
+  }
+});
+
+// src/parser.ts
+function resolveVarRef(text, chainAssignments) {
+  const m = text.match(VAR_REF_REGEX);
+  if (!m) return null;
+  const assignment = chainAssignments.get(m[1]);
+  if (!assignment || assignment.isDynamic || assignment.value === null) return null;
+  return assignment.value;
+}
+function isCatHeredocInterpolation(part) {
+  if (!part.script) return false;
+  const { commands } = part.script;
+  if (commands.length !== 1) return false;
+  const node = commands[0].command;
+  if (node.type !== "Command") return false;
+  if (node.name?.value !== "cat") return false;
+  if (node.suffix.length > 0) return false;
+  const heredoc = node.redirects.find(
+    (r) => r.operator === "<<" || r.operator === "<<-"
+  );
+  if (!heredoc) return false;
+  return heredoc.content != null && heredoc.content.includes("\n");
+}
+function bareRedirectTargets(slice) {
+  const targets = [];
+  for (const m of slice.matchAll(BARE_REDIRECT_RE)) {
+    const raw = m[1].replace(/^["']|["']$/g, "");
+    if (raw && !/^(\d+|-)$/.test(raw)) targets.push(raw);
+  }
+  return targets;
+}
+function writeRedirectTargets(redirects) {
+  const targets = [];
+  for (const r of redirects) {
+    if (!WRITE_REDIRECT_OPERATORS.has(r.operator) || !r.target) continue;
+    const value = r.target.value;
+    if (r.operator === ">&" && /^(\d+|-)$/.test(value)) continue;
+    targets.push(value);
+  }
+  return targets;
+}
+function extractHeredoc(cmd) {
+  const heredocs = cmd.redirects.filter(
+    (r) => r.operator === "<<" || r.operator === "<<-"
+  );
+  if (heredocs.length !== 1) return void 0;
+  const h = heredocs[0];
+  if (h.content == null || h.content.length === 0) return void 0;
+  return { content: h.content, quotedDelimiter: h.heredocQuoted === true };
+}
+function preprocessPathParentheses(input) {
+  const result = [];
+  let i = 0;
+  while (i < input.length) {
+    const ch = input[i];
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      let j = i + 1;
+      while (j < input.length && input[j] !== quote) {
+        if (input[j] === "\\" && quote === '"') j++;
+        j++;
+      }
+      result.push(input.slice(i, j + 1));
+      i = j + 1;
+      continue;
+    }
+    if ((ch === "$" || ch === "<" || ch === ">") && i + 1 < input.length && input[i + 1] === "(") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < input.length && depth > 0) {
+        if (input[j] === "(") depth++;
+        else if (input[j] === ")") depth--;
+        if (depth > 0) j++;
+      }
+      result.push(input.slice(i, j + 1));
+      i = j + 1;
+      continue;
+    }
+    if (ch !== " " && ch !== "	" && ch !== "\n") {
+      let j = i;
+      while (j < input.length && !" 	\n".includes(input[j]) && input[j] !== '"' && input[j] !== "'" && !(input[j] === "$" && j + 1 < input.length && input[j + 1] === "(")) {
+        j++;
+      }
+      const token = input.slice(i, j);
+      if (token.includes("/") && /[()]/.test(token) && !/^[<>|;&]/.test(token)) {
+        result.push('"' + token + '"');
+      } else {
+        result.push(token);
+      }
+      i = j;
+      continue;
+    }
+    result.push(ch);
+    i++;
+  }
+  return result.join("");
+}
+function extractExpansionCommand(text) {
+  if (text.startsWith("$(") && text.endsWith(")")) return text.slice(2, -1);
+  if (text.startsWith("`") && text.endsWith("`")) return text.slice(1, -1);
+  return text;
+}
+function scanWordPart(part, result) {
+  switch (part.type) {
+    case "CommandExpansion":
+      if (isCatHeredocInterpolation(part)) break;
+      result.hasSubshell = true;
+      result.subshellCommands.push(extractExpansionCommand(part.text));
+      break;
+    case "ProcessSubstitution":
+      result.hasSubshell = true;
+      result.subshellCommands.push(
+        part.inner ?? part.text.replace(/^[<>]\(/, "").replace(/\)$/, "")
+      );
+      break;
+    case "DoubleQuoted":
+    case "LocaleString":
+      for (const child of part.parts) scanWordPart(child, result);
+      break;
+    case "ParameterExpansion":
+      if (part.operand) collectExpansionsFromWord(part.operand, result);
+      if (part.slice?.offset) collectExpansionsFromWord(part.slice.offset, result);
+      if (part.slice?.length) collectExpansionsFromWord(part.slice.length, result);
+      if (part.replace?.pattern) collectExpansionsFromWord(part.replace.pattern, result);
+      if (part.replace?.replacement) collectExpansionsFromWord(part.replace.replacement, result);
+      break;
+    case "ArithmeticExpansion":
+      break;
+  }
+}
+function collectExpansionsFromWord(word, result) {
+  if (!word.parts) return;
+  for (const part of word.parts) scanWordPart(part, result);
+}
+function scanTestExpression(expr, result) {
+  switch (expr.type) {
+    case "TestUnary":
+      collectExpansionsFromWord(expr.operand, result);
+      break;
+    case "TestBinary":
+      collectExpansionsFromWord(expr.left, result);
+      collectExpansionsFromWord(expr.right, result);
+      break;
+    case "TestLogical":
+      scanTestExpression(expr.left, result);
+      scanTestExpression(expr.right, result);
+      break;
+    case "TestNot":
+      scanTestExpression(expr.operand, result);
+      break;
+    case "TestGroup":
+      scanTestExpression(expr.expression, result);
+      break;
+  }
+}
+function extractAssignments(cmd) {
+  const assignments = [];
+  for (const p of cmd.prefix) {
+    if (!p.name) continue;
+    const isDynamic = p.value?.parts?.some((part) => part.type === "CommandExpansion") ?? false;
+    const value = isDynamic ? null : p.value?.value ?? "";
+    assignments.push({ name: p.name, value, isDynamic });
+  }
+  return assignments;
+}
+function convertCommand(cmd, chainAssignments) {
+  if (!cmd.name) return null;
+  let originalCommand = cmd.name.value;
+  let resolvedFrom;
+  const varMatch = originalCommand.match(VAR_REF_REGEX);
+  if (varMatch) {
+    const resolved = resolveVarRef(originalCommand, chainAssignments);
+    if (resolved !== null) {
+      resolvedFrom = originalCommand;
+      originalCommand = resolved;
+    } else if (chainAssignments.has(varMatch[1])) {
+      resolvedFrom = originalCommand;
+    }
+  }
+  const command = originalCommand.includes("/") ? (0, import_path.basename)(originalCommand) : originalCommand;
+  const envPrefixes = cmd.prefix.map((p) => p.text);
+  const args = cmd.suffix.map((s) => s.value);
+  const rawParts = [...envPrefixes, cmd.name.value, ...args];
+  const raw = rawParts.join(" ");
+  const result = { command, originalCommand, args, envPrefixes, raw };
+  if (originalCommand.includes("/")) result.originalPath = originalCommand;
+  if (resolvedFrom) result.resolvedFrom = resolvedFrom;
+  const heredoc = extractHeredoc(cmd);
+  if (heredoc) result.heredoc = heredoc;
+  const writes = writeRedirectTargets(cmd.redirects);
+  if (writes.length > 0) result.writeRedirects = writes;
+  return result;
+}
+function updateEffectiveCwd(cdCmd, result) {
+  const target = cdCmd.args[0];
+  if (!target || target === "-") {
+    result.effectiveCwd = void 0;
+    return;
+  }
+  let resolved = target;
+  const varMatch = target.match(VAR_REF_REGEX);
+  if (varMatch) {
+    const assignment = result.chainAssignments.get(varMatch[1]);
+    if (assignment && !assignment.isDynamic && assignment.value !== null) {
+      resolved = assignment.value;
+    } else {
+      result.effectiveCwd = void 0;
+      return;
+    }
+  }
+  if (resolved.startsWith("/")) {
+    result.effectiveCwd = resolved;
+  } else if (result.effectiveCwd) {
+    result.effectiveCwd = (0, import_path.resolve)(result.effectiveCwd, resolved);
+  } else {
+    result.effectiveCwd = void 0;
+  }
+}
+function walkCompoundList(list, result) {
+  for (const stmt of list.commands) {
+    walkNode(stmt, result);
+  }
+}
+function walkIfNode(ifNode, result) {
+  walkCompoundList(ifNode.clause, result);
+  walkCompoundList(ifNode.then, result);
+  if (ifNode.else) {
+    if (ifNode.else.type === "If") {
+      walkIfNode(ifNode.else, result);
+    } else {
+      walkCompoundList(ifNode.else, result);
+    }
+  }
+}
+function walkNode(node, result) {
+  switch (node.type) {
+    case "Statement": {
+      const stmt = node;
+      for (const r of stmt.redirects) {
+        if (r.target) collectExpansionsFromWord(r.target, result);
+        if (r.body) collectExpansionsFromWord(r.body, result);
+      }
+      const before = result.commands.length;
+      walkNode(stmt.command, result);
+      const writes = writeRedirectTargets(stmt.redirects);
+      if (writes.length > 0) {
+        if (result.commands.length === before) {
+          result.commands.push({
+            command: "",
+            originalCommand: "",
+            args: [],
+            envPrefixes: [],
+            raw: writes.join(" "),
+            writeRedirects: writes
+          });
+        } else {
+          for (let i = before; i < result.commands.length; i++) {
+            const cmd = result.commands[i];
+            cmd.writeRedirects = [...cmd.writeRedirects ?? [], ...writes];
+          }
+        }
+      }
+      break;
+    }
+    case "Command": {
+      const cmd = node;
+      if (cmd.name) collectExpansionsFromWord(cmd.name, result);
+      for (const s of cmd.suffix) collectExpansionsFromWord(s, result);
+      for (const r of cmd.redirects) {
+        if (r.target) collectExpansionsFromWord(r.target, result);
+        if (r.body) collectExpansionsFromWord(r.body, result);
+      }
+      for (const p of cmd.prefix) {
+        if (p.value) collectExpansionsFromWord(p.value, result);
+        if (p.array) for (const w of p.array) collectExpansionsFromWord(w, result);
+      }
+      const parsed = convertCommand(cmd, result.chainAssignments);
+      if (!parsed) {
+        for (const a of extractAssignments(cmd)) {
+          result.chainAssignments.set(a.name, {
+            value: a.value,
+            isDynamic: a.isDynamic
+          });
+        }
+        const bareWrites = writeRedirectTargets(cmd.redirects);
+        if (bareWrites.length > 0) {
+          result.commands.push({
+            command: "",
+            originalCommand: "",
+            args: [],
+            envPrefixes: [],
+            raw: bareWrites.join(" "),
+            writeRedirects: bareWrites
+          });
+        }
+        break;
+      }
+      if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 2 && parsed.args[0] === "-c") {
+        const innerResult = parseCommand(parsed.args[1]);
+        if (innerResult.parseError) {
+          result.commands.push(parsed);
+        } else if (innerResult.commands.length === 0 && parsed.envPrefixes.length > 0) {
+          result.commands.push(parsed);
+        } else {
+          if (parsed.envPrefixes.length > 0) {
+            result.commands.push(
+              ...innerResult.commands.map((cmd2) => ({
+                ...cmd2,
+                envPrefixes: [...parsed.envPrefixes, ...cmd2.envPrefixes]
+              }))
+            );
+          } else {
+            result.commands.push(...innerResult.commands);
+          }
+          if (innerResult.hasSubshell) result.hasSubshell = true;
+          result.subshellCommands.push(...innerResult.subshellCommands);
+          if (innerResult.incomplete) result.incomplete = true;
+          if (innerResult.incompleteNodeTypes) {
+            result.incompleteNodeTypes ??= [];
+            for (const t of innerResult.incompleteNodeTypes) {
+              if (!result.incompleteNodeTypes.includes(t)) {
+                result.incompleteNodeTypes.push(t);
+              }
+            }
+          }
+        }
+      } else if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 1) {
+        const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
+        if (scriptIdx !== -1) {
+          let scriptPath = parsed.args[scriptIdx];
+          if (scriptPath.startsWith("~/")) {
+            scriptPath = (0, import_os.homedir)() + scriptPath.slice(1);
+          }
+          const scriptCommand = scriptPath.includes("/") ? (0, import_path.basename)(scriptPath) : scriptPath;
+          const scriptArgs = parsed.args.slice(scriptIdx + 1);
+          const scriptCmd = {
+            command: scriptCommand,
+            originalCommand: scriptPath,
+            args: scriptArgs,
+            envPrefixes: parsed.envPrefixes,
+            raw: parsed.raw
+          };
+          if (scriptPath.includes("/")) scriptCmd.originalPath = scriptPath;
+          if (parsed.writeRedirects) scriptCmd.writeRedirects = parsed.writeRedirects;
+          result.commands.push(scriptCmd);
+        } else {
+          result.commands.push(parsed);
+        }
+      } else {
+        result.commands.push(parsed);
+      }
+      break;
+    }
+    case "Pipeline": {
+      const pipeline = node;
+      for (const cmd of pipeline.commands) walkNode(cmd, result);
+      break;
+    }
+    case "AndOr": {
+      const andOr = node;
+      const savedCwd = result.effectiveCwd;
+      result.effectiveCwd = void 0;
+      for (const cmd of andOr.commands) {
+        const before = result.commands.length;
+        walkNode(cmd, result);
+        for (let i = before; i < result.commands.length; i++) {
+          if (result.effectiveCwd && !result.commands[i].effectiveCwd) {
+            result.commands[i].effectiveCwd = result.effectiveCwd;
+          }
+        }
+        for (let i = before; i < result.commands.length; i++) {
+          const pc = result.commands[i];
+          if (pc.command === "cd") {
+            updateEffectiveCwd(pc, result);
+          }
+        }
+      }
+      result.effectiveCwd = savedCwd;
+      break;
+    }
+    case "While": {
+      const loop = node;
+      walkCompoundList(loop.clause, result);
+      walkCompoundList(loop.body, result);
+      break;
+    }
+    case "If": {
+      walkIfNode(node, result);
+      break;
+    }
+    case "For": {
+      const f = node;
+      for (const w of f.wordlist) collectExpansionsFromWord(w, result);
+      walkCompoundList(f.body, result);
+      break;
+    }
+    case "Case": {
+      const c = node;
+      collectExpansionsFromWord(c.word, result);
+      for (const item of c.items) {
+        for (const p of item.pattern) collectExpansionsFromWord(p, result);
+        walkCompoundList(item.body, result);
+      }
+      break;
+    }
+    case "Function": {
+      walkNode(node.body, result);
+      break;
+    }
+    case "Subshell": {
+      walkCompoundList(node.body, result);
+      break;
+    }
+    case "BraceGroup": {
+      walkCompoundList(node.body, result);
+      break;
+    }
+    case "CompoundList": {
+      walkCompoundList(node, result);
+      break;
+    }
+    case "Select": {
+      const s = node;
+      for (const w of s.wordlist) collectExpansionsFromWord(w, result);
+      walkCompoundList(s.body, result);
+      break;
+    }
+    case "Coproc": {
+      result.hasSubshell = true;
+      walkNode(node.body, result);
+      break;
+    }
+    case "ArithmeticFor": {
+      walkCompoundList(node.body, result);
+      break;
+    }
+    case "TestCommand": {
+      const e = node.expression;
+      if (e) scanTestExpression(e, result);
+      break;
+    }
+    case "ArithmeticCommand": {
+      const body = node.body;
+      if (/\$\((?!\()|`/.test(body)) {
+        result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes("ArithmeticCommand")) {
+          result.incompleteNodeTypes.push("ArithmeticCommand");
+        }
+      }
+      break;
+    }
+    default: {
+      const nodeType = node.type;
+      if (!NO_COMMAND_NODE_TYPES.has(nodeType)) {
+        result.incomplete = true;
+        result.incompleteNodeTypes ??= [];
+        if (!result.incompleteNodeTypes.includes(nodeType)) {
+          result.incompleteNodeTypes.push(nodeType);
+        }
+      }
+      break;
+    }
+  }
+}
+function dropHeredocsIfMultiple(input, commands) {
+  let skeleton = input;
+  for (const cmd of commands) {
+    if (cmd.heredoc) skeleton = skeleton.replaceAll(cmd.heredoc.content, "");
+  }
+  if ((skeleton.match(/<<(?!<)/g) ?? []).length > 1) {
+    for (const cmd of commands) delete cmd.heredoc;
+  }
+}
+function parseCommand(input) {
+  if (!input || !input.trim()) {
+    return {
+      commands: [],
+      hasSubshell: false,
+      subshellCommands: [],
+      parseError: false,
+      chainAssignments: /* @__PURE__ */ new Map()
+    };
+  }
+  const preprocessed = preprocessPathParentheses(input);
+  const ast = parse(preprocessed);
+  if (ast.errors?.length) {
+    return {
+      commands: [],
+      hasSubshell: false,
+      subshellCommands: [],
+      parseError: true,
+      chainAssignments: /* @__PURE__ */ new Map()
+    };
+  }
+  const result = {
+    commands: [],
+    hasSubshell: false,
+    subshellCommands: [],
+    chainAssignments: /* @__PURE__ */ new Map()
+  };
+  for (const stmt of ast.commands) {
+    const before = result.commands.length;
+    walkNode(stmt, result);
+    if (result.commands.length === before && typeof stmt.pos === "number" && typeof stmt.end === "number") {
+      const bareWrites = bareRedirectTargets(preprocessed.slice(stmt.pos, stmt.end));
+      if (bareWrites.length > 0) {
+        result.commands.push({
+          command: "",
+          originalCommand: "",
+          args: [],
+          envPrefixes: [],
+          raw: bareWrites.join(" "),
+          writeRedirects: bareWrites
+        });
+      }
+    }
+  }
+  dropHeredocsIfMultiple(input, result.commands);
+  return {
+    commands: result.commands,
+    hasSubshell: result.hasSubshell,
+    subshellCommands: result.subshellCommands,
+    parseError: false,
+    chainAssignments: result.chainAssignments,
+    incomplete: result.incomplete === true,
+    incompleteNodeTypes: result.incompleteNodeTypes
+  };
+}
+var import_path, import_os, NO_COMMAND_NODE_TYPES, VAR_REF_REGEX, WRITE_REDIRECT_OPERATORS, BARE_REDIRECT_RE;
+var init_parser2 = __esm({
+  "src/parser.ts"() {
+    "use strict";
+    init_parser();
+    import_path = require("path");
+    import_os = require("os");
+    init_shells();
+    NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set([]);
+    VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
+    WRITE_REDIRECT_OPERATORS = /* @__PURE__ */ new Set([">", ">>", ">|", "&>", "&>>", "<>", ">&"]);
+    BARE_REDIRECT_RE = /(?:\d+|&)?(?:>>|>\||&>>|&>|<>|>&|>)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/g;
+  }
+});
 
 // node_modules/.pnpm/yaml@2.8.2/node_modules/yaml/dist/nodes/identity.js
 var require_identity = __commonJS({
@@ -7315,4182 +11615,12 @@ var require_dist = __commonJS({
   }
 });
 
-// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/chars.js
-var CH_TAB = 9;
-var CH_NL = 10;
-var CH_SPACE = 32;
-var CH_BANG = 33;
-var CH_DQUOTE = 34;
-var CH_HASH = 35;
-var CH_DOLLAR = 36;
-var CH_PERCENT = 37;
-var CH_AMP = 38;
-var CH_SQUOTE = 39;
-var CH_LPAREN = 40;
-var CH_RPAREN = 41;
-var CH_STAR = 42;
-var CH_PLUS = 43;
-var CH_COMMA = 44;
-var CH_DASH = 45;
-var CH_SLASH = 47;
-var CH_0 = 48;
-var CH_9 = 57;
-var CH_COLON = 58;
-var CH_SEMI = 59;
-var CH_LT = 60;
-var CH_EQ = 61;
-var CH_GT = 62;
-var CH_QUESTION = 63;
-var CH_AT = 64;
-var CH_A = 65;
-var CH_Z = 90;
-var CH_LBRACKET = 91;
-var CH_BACKSLASH = 92;
-var CH_RBRACKET = 93;
-var CH_CARET = 94;
-var CH_UNDERSCORE = 95;
-var CH_BACKTICK = 96;
-var CH_a = 97;
-var CH_z = 122;
-var CH_LBRACE = 123;
-var CH_PIPE = 124;
-var CH_RBRACE = 125;
-var CH_TILDE = 126;
-
-// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/arithmetic.js
-function opPrec(op) {
-  switch (op) {
-    case ",":
-      return 1;
-    case "=":
-    case "+=":
-    case "-=":
-    case "*=":
-    case "/=":
-    case "%=":
-    case "<<=":
-    case ">>=":
-    case "&=":
-    case "|=":
-    case "^=":
-      return 2;
-    case "||":
-      return 4;
-    case "&&":
-      return 5;
-    case "|":
-      return 6;
-    case "^":
-      return 7;
-    case "&":
-      return 8;
-    case "==":
-    case "!=":
-      return 9;
-    case "<":
-    case "<=":
-    case ">":
-    case ">=":
-      return 10;
-    case "<<":
-    case ">>":
-      return 11;
-    case "+":
-    case "-":
-      return 12;
-    case "*":
-    case "/":
-    case "%":
-      return 13;
-    case "**":
-      return 14;
-    default:
-      return -1;
-  }
-}
-function opRightAssoc(op) {
-  switch (op) {
-    case "=":
-    case "+=":
-    case "-=":
-    case "*=":
-    case "/=":
-    case "%=":
-    case "<<=":
-    case ">>=":
-    case "&=":
-    case "|=":
-    case "^=":
-    case "**":
-      return true;
-    default:
-      return false;
-  }
-}
-function parseArithmeticExpression(src, offset = 0) {
-  let pos = 0;
-  const len = src.length;
-  function skipWS() {
-    while (pos < len) {
-      const c = src.charCodeAt(pos);
-      if (c === CH_SPACE || c === CH_TAB || c === CH_NL)
-        pos++;
-      else
-        break;
-    }
-  }
-  function tryReadBinOp() {
-    if (pos >= len)
-      return null;
-    const c = src.charCodeAt(pos);
-    const nc = pos + 1 < len ? src.charCodeAt(pos + 1) : 0;
-    const nnc = pos + 2 < len ? src.charCodeAt(pos + 2) : 0;
-    switch (c) {
-      case CH_COMMA:
-        pos++;
-        return ",";
-      case CH_EQ:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "==";
-        }
-        pos++;
-        return "=";
-      case CH_BANG:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "!=";
-        }
-        return null;
-      // unary
-      case CH_LT:
-        if (nc === CH_LT) {
-          if (nnc === CH_EQ) {
-            pos += 3;
-            return "<<=";
-          }
-          pos += 2;
-          return "<<";
-        }
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "<=";
-        }
-        pos++;
-        return "<";
-      case CH_GT:
-        if (nc === CH_GT) {
-          if (nnc === CH_EQ) {
-            pos += 3;
-            return ">>=";
-          }
-          pos += 2;
-          return ">>";
-        }
-        if (nc === CH_EQ) {
-          pos += 2;
-          return ">=";
-        }
-        pos++;
-        return ">";
-      case CH_PLUS:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "+=";
-        }
-        if (nc === CH_PLUS)
-          return null;
-        pos++;
-        return "+";
-      case CH_DASH:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "-=";
-        }
-        if (nc === CH_DASH)
-          return null;
-        pos++;
-        return "-";
-      case CH_STAR:
-        if (nc === CH_STAR) {
-          pos += 2;
-          return "**";
-        }
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "*=";
-        }
-        pos++;
-        return "*";
-      case CH_SLASH:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "/=";
-        }
-        pos++;
-        return "/";
-      case CH_PERCENT:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "%=";
-        }
-        pos++;
-        return "%";
-      case CH_PIPE:
-        if (nc === CH_PIPE) {
-          pos += 2;
-          return "||";
-        }
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "|=";
-        }
-        pos++;
-        return "|";
-      case CH_AMP:
-        if (nc === CH_AMP) {
-          pos += 2;
-          return "&&";
-        }
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "&=";
-        }
-        pos++;
-        return "&";
-      case CH_CARET:
-        if (nc === CH_EQ) {
-          pos += 2;
-          return "^=";
-        }
-        pos++;
-        return "^";
-      case CH_QUESTION:
-        pos++;
-        return "?";
-      default:
-        return null;
-    }
-  }
-  function parseBinExpr(minPrec) {
-    let left = parseUnaryExpr();
-    while (true) {
-      skipWS();
-      if (pos >= len)
-        break;
-      const saved = pos;
-      const op = tryReadBinOp();
-      if (!op)
-        break;
-      if (op === "?") {
-        if (3 < minPrec) {
-          pos = saved;
-          break;
-        }
-        const consequent = parseBinExpr(1);
-        skipWS();
-        if (pos < len && src.charCodeAt(pos) === CH_COLON)
-          pos++;
-        const alternate = parseBinExpr(3);
-        left = { type: "ArithmeticTernary", pos: left.pos, end: alternate.end, test: left, consequent, alternate };
-        continue;
-      }
-      const prec = opPrec(op);
-      if (prec < minPrec) {
-        pos = saved;
-        break;
-      }
-      const nextPrec = opRightAssoc(op) ? prec : prec + 1;
-      const right = parseBinExpr(nextPrec);
-      left = { type: "ArithmeticBinary", pos: left.pos, end: right.end, operator: op, left, right };
-    }
-    return left;
-  }
-  function parseUnaryExpr() {
-    skipWS();
-    if (pos >= len)
-      return { type: "ArithmeticWord", pos: pos + offset, end: pos + offset, value: "" };
-    const start = pos;
-    const c = src.charCodeAt(pos);
-    const nc = pos + 1 < len ? src.charCodeAt(pos + 1) : 0;
-    if (c === CH_PLUS && nc === CH_PLUS) {
-      pos += 2;
-      const operand = parseUnaryExpr();
-      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "++", operand, prefix: true };
-    }
-    if (c === CH_DASH && nc === CH_DASH) {
-      pos += 2;
-      const operand = parseUnaryExpr();
-      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "--", operand, prefix: true };
-    }
-    if (c === CH_BANG) {
-      pos++;
-      const operand = parseUnaryExpr();
-      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "!", operand, prefix: true };
-    }
-    if (c === CH_TILDE) {
-      pos++;
-      const operand = parseUnaryExpr();
-      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "~", operand, prefix: true };
-    }
-    if (c === CH_PLUS && nc !== CH_PLUS && nc !== CH_EQ) {
-      pos++;
-      const operand = parseUnaryExpr();
-      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "+", operand, prefix: true };
-    }
-    if (c === CH_DASH && nc !== CH_DASH && nc !== CH_EQ) {
-      pos++;
-      const operand = parseUnaryExpr();
-      return { type: "ArithmeticUnary", pos: start + offset, end: operand.end, operator: "-", operand, prefix: true };
-    }
-    return parsePostfixExpr();
-  }
-  function parsePostfixExpr() {
-    const operand = parseAtom();
-    skipWS();
-    if (pos + 1 < len) {
-      const c = src.charCodeAt(pos);
-      const nc = src.charCodeAt(pos + 1);
-      if (c === CH_PLUS && nc === CH_PLUS) {
-        pos += 2;
-        return { type: "ArithmeticUnary", pos: operand.pos, end: pos + offset, operator: "++", operand, prefix: false };
-      }
-      if (c === CH_DASH && nc === CH_DASH) {
-        pos += 2;
-        return { type: "ArithmeticUnary", pos: operand.pos, end: pos + offset, operator: "--", operand, prefix: false };
-      }
-    }
-    return operand;
-  }
-  function parseAtom() {
-    skipWS();
-    if (pos >= len)
-      return { type: "ArithmeticWord", pos: pos + offset, end: pos + offset, value: "" };
-    const c = src.charCodeAt(pos);
-    if (c === CH_LPAREN) {
-      const start = pos;
-      pos++;
-      const expr = parseBinExpr(0);
-      skipWS();
-      if (pos < len && src.charCodeAt(pos) === CH_RPAREN)
-        pos++;
-      return { type: "ArithmeticGroup", pos: start + offset, end: pos + offset, expression: expr };
-    }
-    if (c === CH_DOLLAR) {
-      return readDollarAtom();
-    }
-    return readWordAtom();
-  }
-  function readDollarAtom() {
-    const start = pos;
-    pos++;
-    if (pos >= len)
-      return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: "$" };
-    const c = src.charCodeAt(pos);
-    if (c === CH_LPAREN) {
-      if (pos + 1 < len && src.charCodeAt(pos + 1) === CH_LPAREN) {
-        pos += 2;
-        let depth = 1;
-        while (pos < len && depth > 0) {
-          if (src.charCodeAt(pos) === CH_LPAREN && pos + 1 < len && src.charCodeAt(pos + 1) === CH_LPAREN) {
-            depth++;
-            pos += 2;
-          } else if (src.charCodeAt(pos) === CH_RPAREN && pos + 1 < len && src.charCodeAt(pos + 1) === CH_RPAREN) {
-            depth--;
-            if (depth > 0)
-              pos += 2;
-            else
-              pos += 2;
-          } else
-            pos++;
-        }
-      } else {
-        pos++;
-        let depth = 1;
-        while (pos < len && depth > 0) {
-          const ch = src.charCodeAt(pos);
-          if (ch === CH_LPAREN)
-            depth++;
-          else if (ch === CH_RPAREN)
-            depth--;
-          pos++;
-        }
-      }
-    } else if (c === CH_LBRACE) {
-      pos++;
-      let depth = 1;
-      while (pos < len && depth > 0) {
-        const ch = src.charCodeAt(pos);
-        if (ch === CH_LBRACE)
-          depth++;
-        else if (ch === CH_RBRACE)
-          depth--;
-        pos++;
-      }
-    } else {
-      while (pos < len) {
-        const ch = src.charCodeAt(pos);
-        if (ch >= CH_a && ch <= CH_z || ch >= CH_A && ch <= CH_Z || ch >= CH_0 && ch <= CH_9 || ch === CH_UNDERSCORE)
-          pos++;
-        else
-          break;
-      }
-    }
-    return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: src.slice(start, pos) };
-  }
-  function readWordAtom() {
-    const start = pos;
-    while (pos < len) {
-      const c = src.charCodeAt(pos);
-      if (c >= CH_0 && c <= CH_9 || c >= CH_A && c <= CH_Z || c >= CH_a && c <= CH_z || c === CH_UNDERSCORE || c === 35) {
-        pos++;
-      } else
-        break;
-    }
-    if (pos > start && pos < len && src.charCodeAt(pos) === CH_LBRACKET) {
-      pos++;
-      let depth = 1;
-      while (pos < len && depth > 0) {
-        const c = src.charCodeAt(pos);
-        if (c === CH_LBRACKET)
-          depth++;
-        else if (c === CH_RBRACKET)
-          depth--;
-        pos++;
-      }
-    }
-    if (pos === start) {
-      pos++;
-      return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: src.slice(start, pos) };
-    }
-    return { type: "ArithmeticWord", pos: start + offset, end: pos + offset, value: src.slice(start, pos) };
-  }
-  skipWS();
-  if (pos >= len)
-    return null;
-  const result = parseBinExpr(0);
-  skipWS();
-  return result;
-}
-
-// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/word.js
-function dequoteValue(parts) {
-  let s = "";
-  for (const c of parts)
-    s += c.type === "Literal" ? c.value : c.text;
-  return s;
-}
-var WordImpl = class _WordImpl {
-  static _resolve;
-  text;
-  pos;
-  end;
-  #source;
-  #parts;
-  #value = null;
-  constructor(text, pos, end, source) {
-    this.text = text;
-    this.pos = pos;
-    this.end = end;
-    this.#source = source ?? "";
-    this.#parts = source !== void 0 ? null : void 0;
-  }
-  get value() {
-    if (this.#value === null) {
-      const parts = this.parts;
-      if (!parts) {
-        this.#value = this.text;
-      } else {
-        let s = "";
-        for (const p of parts) {
-          switch (p.type) {
-            case "Literal":
-            case "SingleQuoted":
-            case "AnsiCQuoted":
-              s += p.value;
-              break;
-            case "DoubleQuoted":
-            case "LocaleString":
-              s += dequoteValue(p.parts);
-              break;
-            default:
-              s += p.text;
-              break;
-          }
-        }
-        this.#value = s;
-      }
-    }
-    return this.#value;
-  }
-  get parts() {
-    if (this.#parts === null) {
-      this.#parts = _WordImpl._resolve(this.#source, this) ?? void 0;
-    }
-    return this.#parts;
-  }
-  set parts(v) {
-    this.#parts = v ?? void 0;
-  }
-  toJSON() {
-    return { text: this.text, pos: this.pos, end: this.end, parts: this.parts, value: this.value };
-  }
-};
-
-// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/lexer.js
-var Token = {
-  Word: 0,
-  Assignment: 1,
-  Semi: 2,
-  Newline: 3,
-  Pipe: 4,
-  And: 5,
-  Or: 6,
-  Amp: 7,
-  LParen: 8,
-  RParen: 9,
-  LBrace: 10,
-  RBrace: 11,
-  Bang: 12,
-  If: 13,
-  Then: 14,
-  Else: 15,
-  Elif: 16,
-  Fi: 17,
-  Do: 18,
-  Done: 19,
-  For: 20,
-  While: 21,
-  Until: 22,
-  In: 23,
-  Case: 24,
-  Esac: 25,
-  Function: 26,
-  DoubleSemi: 27,
-  SemiAmp: 28,
-  DoubleSemiAmp: 29,
-  Select: 30,
-  DblLBracket: 31,
-  DblRBracket: 32,
-  EOF: 33,
-  ArithCmd: 34,
-  Coproc: 35,
-  Redirect: 36
-};
-var TokenValue = class {
-  token = Token.EOF;
-  value = "";
-  pos = 0;
-  end = 0;
-  fileDescriptor = void 0;
-  variableName = void 0;
-  content = void 0;
-  targetPos = 0;
-  targetEnd = 0;
-  reset() {
-    this.token = Token.EOF;
-    this.value = "";
-    this.pos = 0;
-    this.end = 0;
-    this.fileDescriptor = void 0;
-    this.variableName = void 0;
-    this.content = void 0;
-    this.targetPos = 0;
-    this.targetEnd = 0;
-  }
-  copyFrom(other) {
-    this.token = other.token;
-    this.value = other.value;
-    this.pos = other.pos;
-    this.end = other.end;
-    this.fileDescriptor = other.fileDescriptor;
-    this.variableName = other.variableName;
-    this.content = other.content;
-    this.targetPos = other.targetPos;
-    this.targetEnd = other.targetEnd;
-  }
-};
-var RESERVED_WORDS = {
-  if: Token.If,
-  then: Token.Then,
-  else: Token.Else,
-  elif: Token.Elif,
-  fi: Token.Fi,
-  do: Token.Do,
-  done: Token.Done,
-  for: Token.For,
-  while: Token.While,
-  until: Token.Until,
-  in: Token.In,
-  case: Token.Case,
-  esac: Token.Esac,
-  function: Token.Function,
-  select: Token.Select,
-  coproc: Token.Coproc,
-  "!": Token.Bang,
-  "{": Token.LBrace,
-  "}": Token.RBrace
-};
-var charType = new Uint8Array(128);
-charType[CH_PIPE] = 1;
-charType[CH_AMP] = 1;
-charType[CH_SEMI] = 1;
-charType[CH_LPAREN] = 1;
-charType[CH_RPAREN] = 1;
-charType[CH_LT] = 1;
-charType[CH_GT] = 1;
-charType[CH_SPACE] = 1;
-charType[CH_TAB] = 1;
-charType[CH_NL] = 1;
-charType[CH_BACKSLASH] = 2;
-charType[CH_SQUOTE] = 2;
-charType[CH_DQUOTE] = 2;
-charType[CH_DOLLAR] = 2;
-charType[CH_BACKTICK] = 2;
-charType[CH_LBRACE] = 2;
-function findUnnested(s, target) {
-  let depth = 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if (c === CH_BACKSLASH) {
-      i++;
-      continue;
-    }
-    if (c === CH_LBRACE) {
-      depth++;
-      continue;
-    }
-    if (c === CH_RBRACE) {
-      if (depth > 0)
-        depth--;
-      continue;
-    }
-    if (c === CH_SQUOTE) {
-      i++;
-      while (i < s.length && s.charCodeAt(i) !== CH_SQUOTE)
-        i++;
-      continue;
-    }
-    if (c === CH_DQUOTE) {
-      i++;
-      while (i < s.length && s.charCodeAt(i) !== CH_DQUOTE) {
-        if (s.charCodeAt(i) === CH_BACKSLASH)
-          i++;
-        i++;
-      }
-      continue;
-    }
-    if (c === target && depth === 0)
-      return i;
-  }
-  return -1;
-}
-var isIdChar = new Uint8Array(128);
-for (let i = CH_a; i <= CH_z; i++)
-  isIdChar[i] = 3;
-for (let i = CH_A; i <= CH_Z; i++)
-  isIdChar[i] = 3;
-for (let i = CH_0; i <= CH_9; i++)
-  isIdChar[i] = 2;
-isIdChar[CH_UNDERSCORE] = 3;
-var extglobPrefix = new Uint8Array(128);
-extglobPrefix[CH_QUESTION] = 1;
-extglobPrefix[CH_AT] = 1;
-extglobPrefix[CH_STAR] = 1;
-extglobPrefix[CH_PLUS] = 1;
-extglobPrefix[CH_BANG] = 1;
-extglobPrefix[CH_EQ] = 1;
-var extglobOp = {
-  [CH_QUESTION]: "?",
-  [CH_AT]: "@",
-  [CH_STAR]: "*",
-  [CH_PLUS]: "+",
-  [CH_BANG]: "!"
-};
-function isDQChild(p) {
-  const t = p.type;
-  return t === "Literal" || t === "SimpleExpansion" || t === "ParameterExpansion" || t === "CommandExpansion" || t === "ArithmeticExpansion";
-}
-function isAllDigits(text) {
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    if (c < CH_0 || c > CH_9)
-      return false;
-  }
-  return text.length > 0;
-}
-function isAssignmentWord(text) {
-  const eqIdx = text.indexOf("=");
-  if (eqIdx <= 0)
-    return false;
-  let c = text.charCodeAt(0);
-  if (c >= 128 || !(isIdChar[c] & 1))
-    return false;
-  let i = 1;
-  for (; i < eqIdx; i++) {
-    c = text.charCodeAt(i);
-    if (c >= 128 || !(isIdChar[c] & 2))
-      break;
-  }
-  if (i === eqIdx)
-    return true;
-  if (c === CH_PLUS && i + 1 === eqIdx)
-    return true;
-  if (c === CH_LBRACKET) {
-    const rbIdx = text.indexOf("]", i + 1);
-    if (rbIdx > i && (rbIdx + 1 === eqIdx || text.charCodeAt(rbIdx + 1) === CH_PLUS && rbIdx + 2 === eqIdx))
-      return true;
-  }
-  return false;
-}
-function setToken(out, token, value, pos = 0, end = 0) {
-  out.token = token;
-  out.value = value;
-  out.pos = pos;
-  out.end = end;
-  out.fileDescriptor = void 0;
-  out.variableName = void 0;
-  out.content = void 0;
-}
-var LexContext = {
-  Normal: 0,
-  CommandStart: 1,
-  TestMode: 2
-};
-function scanBraceExpansion(src, pos, len) {
-  const nextCh = pos + 1 < len ? src.charCodeAt(pos + 1) : 0;
-  if (nextCh <= CH_SPACE || nextCh === CH_RBRACE)
-    return -1;
-  let depth = 1;
-  let hasSep = false;
-  let scanPos = pos + 1;
-  while (scanPos < len && depth > 0) {
-    const bc = src.charCodeAt(scanPos);
-    if (bc === CH_LBRACE)
-      depth++;
-    else if (bc === CH_RBRACE) {
-      if (--depth === 0)
-        break;
-    } else if (bc <= CH_SPACE || bc === CH_SEMI || bc === CH_PIPE || bc === CH_AMP)
-      return -1;
-    else if (depth === 1 && (bc === 44 || bc === 46 && scanPos + 1 < len && src.charCodeAt(scanPos + 1) === 46))
-      hasSep = true;
-    if (bc === CH_BACKSLASH)
-      scanPos++;
-    scanPos++;
-  }
-  if (depth === 0 && hasSep)
-    return scanPos + 1;
-  return -1;
-}
-var Lexer = class {
-  src;
-  pos;
-  current;
-  nextState;
-  hasPeek;
-  pendingHereDocs;
-  collectedExpansions;
-  _errors = null;
-  _buildParts = false;
-  constructor(src) {
-    this.src = src;
-    this.pos = 0;
-    this.current = new TokenValue();
-    this.nextState = new TokenValue();
-    this.hasPeek = false;
-    this.pendingHereDocs = [];
-    this.collectedExpansions = [];
-    if (src.charCodeAt(0) === CH_HASH && src.charCodeAt(1) === CH_BANG) {
-      const nl = src.indexOf("\n");
-      this.pos = nl === -1 ? src.length : nl + 1;
-    }
-  }
-  get errors() {
-    return this._errors ?? (this._errors = []);
-  }
-  getCollectedExpansions() {
-    return this.collectedExpansions;
-  }
-  getPos() {
-    return this.pos;
-  }
-  /** Set position and scan a word, building parts. Used by computeWordParts. */
-  buildWordParts(startPos) {
-    this._buildParts = true;
-    this.pos = startPos;
-    const ch = this.src.charCodeAt(startPos);
-    if ((ch === 60 || ch === 62) && startPos + 1 < this.src.length && this.src.charCodeAt(startPos + 1) === 40) {
-      this.pos = startPos + 2;
-      const inner = this.extractBalanced();
-      const text = this.src.slice(startPos, this.pos);
-      const part = {
-        type: "ProcessSubstitution",
-        text,
-        operator: ch === 60 ? "<" : ">",
-        script: void 0,
-        inner: inner ?? void 0
-      };
-      const exp = { inner: inner ?? void 0, _part: part };
-      this.collectedExpansions.push(exp);
-      if (this.pos < this.src.length) {
-        this.readWordText();
-        if (this._wordParts) {
-          this._wordParts.unshift(part);
-        } else {
-          this._wordParts = [part];
-        }
-      } else {
-        this._wordParts = [part];
-      }
-    } else {
-      this.readWordText();
-    }
-    return this._wordParts;
-  }
-  /** Scan a heredoc body for expansions, building parts. Spaces/newlines are literal. */
-  buildHereDocParts(bodyPos, bodyEnd) {
-    this._buildParts = true;
-    const src = this.src;
-    const parts = [];
-    let litBuf = "";
-    let litStart = bodyPos;
-    let i = bodyPos;
-    const flushLit = () => {
-      if (litBuf) {
-        parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, i) });
-        litBuf = "";
-      }
-    };
-    while (i < bodyEnd) {
-      const ch = src.charCodeAt(i);
-      if (ch === 92) {
-        if (i + 1 < bodyEnd) {
-          const nc = src.charCodeAt(i + 1);
-          if (nc === 36 || nc === 96 || nc === 92) {
-            litBuf += String.fromCharCode(nc);
-            i += 2;
-            continue;
-          }
-        }
-        litBuf += "\\";
-        i++;
-        continue;
-      }
-      if (ch === 36) {
-        flushLit();
-        litStart = i;
-        this.pos = i;
-        this.readDollar();
-        if (this._resultPart) {
-          parts.push(this._resultPart);
-          litStart = this.pos;
-        } else {
-          litBuf += src.slice(i, this.pos);
-        }
-        i = this.pos;
-        continue;
-      }
-      if (ch === 96) {
-        flushLit();
-        litStart = i;
-        this.pos = i;
-        this.readBacktickExpansion();
-        if (this._resultPart) {
-          parts.push(this._resultPart);
-          litStart = this.pos;
-        } else {
-          litBuf += src.slice(i, this.pos);
-        }
-        i = this.pos;
-        continue;
-      }
-      litBuf += src[i];
-      i++;
-    }
-    flushLit();
-    return parts.length > 1 || parts.length === 1 && parts[0].type !== "Literal" ? parts : null;
-  }
-  registerHereDocTarget(target) {
-    for (const hd of this.pendingHereDocs) {
-      if (!hd.target) {
-        hd.target = target;
-        return;
-      }
-    }
-  }
-  // Read the right-hand operand of =~ in [[ ]]. Parentheses and pipe are not
-  // metacharacters in regex patterns, so we temporarily clear their charType
-  // entries so that readWord's fast/slow path treats them as plain chars.
-  readTestRegexWord() {
-    this.hasPeek = false;
-    const chars = [CH_LPAREN, CH_RPAREN, CH_PIPE, CH_LT, CH_GT];
-    const saved = chars.map((c) => charType[c]);
-    for (const c of chars)
-      charType[c] = 0;
-    try {
-      this.skipSpacesAndTabs();
-      this.readWord(this.current, LexContext.Normal, this.pos);
-      return this.current;
-    } finally {
-      for (let i = 0; i < chars.length; i++)
-        charType[chars[i]] = saved[i];
-    }
-  }
-  // Read C-style for expressions: called after first '(' consumed by parser.
-  // Expects pos at second '('. Returns [init, test, update] raw text.
-  readCStyleForExprs() {
-    this.hasPeek = false;
-    const src = this.src;
-    const len = src.length;
-    while (this.pos < len && (src.charCodeAt(this.pos) === CH_SPACE || src.charCodeAt(this.pos) === CH_TAB))
-      this.pos++;
-    if (this.pos < len && src.charCodeAt(this.pos) === CH_LPAREN)
-      this.pos++;
-    const starts = [this.pos, 0, 0];
-    const parts = ["", "", "", 0, 0, 0];
-    let partIdx = 0;
-    let depth = 1;
-    let partStart = this.pos;
-    while (this.pos < len && depth > 0) {
-      const c = src.charCodeAt(this.pos);
-      if (c === CH_LPAREN) {
-        depth++;
-        this.pos++;
-      } else if (c === CH_RPAREN) {
-        depth--;
-        if (depth === 0) {
-          const raw = src.slice(partStart, this.pos);
-          parts[partIdx] = raw.trim();
-          parts[3 + partIdx] = starts[partIdx] + raw.length - raw.trimStart().length;
-          this.pos++;
-          while (this.pos < len && (src.charCodeAt(this.pos) === CH_SPACE || src.charCodeAt(this.pos) === CH_TAB))
-            this.pos++;
-          if (this.pos < len && src.charCodeAt(this.pos) === CH_RPAREN)
-            this.pos++;
-          break;
-        }
-        this.pos++;
-      } else if (c === CH_SEMI && depth === 1) {
-        const raw = src.slice(partStart, this.pos);
-        parts[partIdx] = raw.trim();
-        parts[3 + partIdx] = starts[partIdx] + raw.length - raw.trimStart().length;
-        if (partIdx < 2)
-          partIdx++;
-        this.pos++;
-        partStart = this.pos;
-        starts[partIdx] = partStart;
-      } else if (c === CH_SQUOTE) {
-        this.pos++;
-        this.skipSQ();
-      } else if (c === CH_DQUOTE) {
-        this.pos++;
-        this.skipDQ();
-      } else {
-        this.pos++;
-      }
-    }
-    return parts;
-  }
-  peek(ctx = LexContext.Normal) {
-    if (!this.hasPeek) {
-      this.readNext(this.nextState, ctx);
-      this.hasPeek = true;
-    }
-    return this.nextState;
-  }
-  next(ctx = LexContext.Normal) {
-    if (this.hasPeek) {
-      this.hasPeek = false;
-      const temp = this.current;
-      this.current = this.nextState;
-      this.nextState = temp;
-      return this.current;
-    }
-    this.readNext(this.current, ctx);
-    return this.current;
-  }
-  unshift(tok) {
-    this.nextState.copyFrom(tok);
-    this.hasPeek = true;
-  }
-  readNext(out, ctx) {
-    const src = this.src;
-    const len = src.length;
-    let pos = this.pos;
-    while (pos < len) {
-      const ch2 = src.charCodeAt(pos);
-      if (ch2 === CH_SPACE || ch2 === CH_TAB) {
-        pos++;
-        continue;
-      }
-      if (ch2 === CH_BACKSLASH && pos + 1 < len && src.charCodeAt(pos + 1) === CH_NL) {
-        pos += 2;
-        continue;
-      }
-      if (ch2 === CH_NL && ctx === LexContext.TestMode) {
-        pos++;
-        continue;
-      }
-      break;
-    }
-    this.pos = pos;
-    if (pos >= len) {
-      setToken(out, Token.EOF, "", pos, pos);
-      return;
-    }
-    const tokenStart = pos;
-    const ch = src.charCodeAt(pos);
-    if (ch === CH_HASH) {
-      while (this.pos < len && src.charCodeAt(this.pos) !== CH_NL)
-        this.pos++;
-      this.readNext(out, ctx);
-      return;
-    }
-    if (ch === CH_NL) {
-      this.pos++;
-      this.consumePendingHereDocs();
-      setToken(out, Token.Newline, "\n", tokenStart, this.pos);
-      return;
-    }
-    if (ctx === LexContext.TestMode && (ch === CH_LT || ch === CH_GT)) {
-      this.pos++;
-      setToken(out, Token.Word, ch === CH_LT ? "<" : ">", tokenStart, this.pos);
-      return;
-    }
-    if (this.tryReadOperator(out, ch, ctx, tokenStart))
-      return;
-    this.readWord(out, ctx, tokenStart);
-  }
-  tryReadOperator(out, ch, ctx, tokenStart) {
-    const src = this.src;
-    const pos = this.pos;
-    const next = pos + 1 < src.length ? src.charCodeAt(pos + 1) : 0;
-    switch (ch) {
-      case CH_SEMI:
-        if (next === CH_SEMI) {
-          if (pos + 2 < src.length && src.charCodeAt(pos + 2) === CH_AMP) {
-            this.pos += 3;
-            setToken(out, Token.DoubleSemiAmp, ";;&", tokenStart, this.pos);
-            return true;
-          }
-          this.pos += 2;
-          setToken(out, Token.DoubleSemi, ";;", tokenStart, this.pos);
-          return true;
-        }
-        if (next === CH_AMP) {
-          this.pos += 2;
-          setToken(out, Token.SemiAmp, ";&", tokenStart, this.pos);
-          return true;
-        }
-        this.pos++;
-        setToken(out, Token.Semi, ";", tokenStart, this.pos);
-        return true;
-      case CH_PIPE:
-        if (next === CH_PIPE) {
-          this.pos += 2;
-          setToken(out, Token.Or, "||", tokenStart, this.pos);
-          return true;
-        }
-        if (next === CH_AMP) {
-          this.pos += 2;
-          setToken(out, Token.Pipe, "|&", tokenStart, this.pos);
-          return true;
-        }
-        this.pos++;
-        setToken(out, Token.Pipe, "|", tokenStart, this.pos);
-        return true;
-      case CH_AMP:
-        if (next === CH_AMP) {
-          this.pos += 2;
-          setToken(out, Token.And, "&&", tokenStart, this.pos);
-          return true;
-        }
-        if (next === CH_GT) {
-          this.pos += 2;
-          const append = this.pos < src.length && src.charCodeAt(this.pos) === CH_GT;
-          if (append)
-            this.pos++;
-          this.skipSpacesAndTabs();
-          this._redirectTargetPos = this.pos;
-          if (this.pos < src.length && src.charCodeAt(this.pos) !== CH_NL)
-            this.readWordText();
-          this.redirectToken(out, append ? "&>>" : "&>", tokenStart);
-          return true;
-        }
-        this.pos++;
-        setToken(out, Token.Amp, "&", tokenStart, this.pos);
-        return true;
-      case CH_LPAREN:
-        if (ctx === LexContext.CommandStart && next === CH_LPAREN) {
-          this.readArithmeticCommand(out, tokenStart);
-          return true;
-        }
-        this.pos++;
-        setToken(out, Token.LParen, "(", tokenStart, this.pos);
-        return true;
-      case CH_RPAREN:
-        this.pos++;
-        setToken(out, Token.RParen, ")", tokenStart, this.pos);
-        return true;
-      case CH_LT:
-      case CH_GT:
-        return this.readRedirection(out, tokenStart);
-      default:
-        return false;
-    }
-  }
-  readRedirection(out, tokenStart) {
-    const src = this.src;
-    const ch = src.charCodeAt(this.pos);
-    let op = "";
-    if (ch === CH_LT) {
-      this.pos++;
-      const next = this.pos < src.length ? src.charCodeAt(this.pos) : 0;
-      if (next === CH_LT) {
-        this.pos++;
-        const third = this.pos < src.length ? src.charCodeAt(this.pos) : 0;
-        if (third === CH_LT) {
-          this.pos++;
-          this.skipSpacesAndTabs();
-          this._redirectTargetPos = this.pos;
-          if (this.pos < src.length && src.charCodeAt(this.pos) !== CH_NL)
-            this.readWordText();
-          this.redirectToken(out, "<<<", tokenStart);
-          return true;
-        }
-        const dash = third === CH_DASH;
-        if (dash)
-          this.pos++;
-        this.skipSpacesAndTabs();
-        this.readHereDocDelimiter();
-        this.pendingHereDocs.push({ delimiter: this._hereDelim, strip: dash, quoted: this._hereQuoted });
-        setToken(out, Token.Redirect, dash ? "<<-" : "<<", tokenStart, this.pos);
-        out.content = this._hereDelim;
-        return true;
-      }
-      if (next === CH_LPAREN) {
-        this.readProcessSubstitution(out, "<", tokenStart);
-        return true;
-      }
-      if (next === CH_GT) {
-        op = "<>";
-        this.pos++;
-      } else if (next === CH_AMP) {
-        op = "<&";
-        this.pos++;
-      } else {
-        op = "<";
-      }
-    } else if (ch === CH_GT) {
-      this.pos++;
-      const next = this.pos < src.length ? src.charCodeAt(this.pos) : 0;
-      if (next === CH_LPAREN) {
-        this.readProcessSubstitution(out, ">", tokenStart);
-        return true;
-      }
-      if (next === CH_GT) {
-        op = ">>";
-        this.pos++;
-      } else if (next === CH_AMP) {
-        op = ">&";
-        this.pos++;
-      } else if (next === CH_PIPE) {
-        op = ">|";
-        this.pos++;
-      } else {
-        op = ">";
-      }
-    }
-    this.skipSpacesAndTabs();
-    if (this.pos < src.length) {
-      const nc = src.charCodeAt(this.pos);
-      if ((nc === CH_LT || nc === CH_GT) && this.pos + 1 < src.length && src.charCodeAt(this.pos + 1) === CH_LPAREN) {
-        const psStart = this.pos;
-        this.pos += 2;
-        this.extractBalanced();
-        const psText = src.slice(psStart, this.pos);
-        setToken(out, Token.Redirect, op, tokenStart, this.pos);
-        out.content = psText;
-        out.targetPos = psStart;
-        out.targetEnd = this.pos;
-        return true;
-      }
-      this._redirectTargetPos = this.pos;
-      if (nc !== CH_NL)
-        this.readWordText();
-    }
-    this.redirectToken(out, op, tokenStart);
-    return true;
-  }
-  redirectToken(out, operator, tokenStart) {
-    setToken(out, Token.Redirect, operator, tokenStart, this.pos);
-    out.content = this._wordText;
-    out.targetPos = this._redirectTargetPos;
-    out.targetEnd = this.pos;
-  }
-  readProcessSubstitution(out, operator, tokenStart) {
-    this.pos++;
-    this.extractBalanced();
-    const text = this.src.slice(tokenStart, this.pos);
-    setToken(out, Token.Word, text, tokenStart, this.pos);
-  }
-  readHereDocDelimiter() {
-    const src = this.src;
-    const len = src.length;
-    let delimiter = "";
-    if (this.pos < len && src.charCodeAt(this.pos) === CH_SQUOTE) {
-      this.pos++;
-      const start = this.pos;
-      while (this.pos < len && src.charCodeAt(this.pos) !== CH_SQUOTE)
-        this.pos++;
-      delimiter = src.slice(start, this.pos);
-      if (this.pos < len)
-        this.pos++;
-      this._hereDelim = delimiter;
-      this._hereQuoted = true;
-      return;
-    } else if (this.pos < len && src.charCodeAt(this.pos) === CH_DQUOTE) {
-      this.pos++;
-      while (this.pos < len && src.charCodeAt(this.pos) !== CH_DQUOTE) {
-        if (src.charCodeAt(this.pos) === CH_BACKSLASH)
-          this.pos++;
-        delimiter += src[this.pos];
-        this.pos++;
-      }
-      if (this.pos < len)
-        this.pos++;
-      this._hereDelim = delimiter;
-      this._hereQuoted = true;
-      return;
-    } else if (this.pos < len && src.charCodeAt(this.pos) === CH_BACKSLASH) {
-      while (this.pos < len) {
-        const c = src.charCodeAt(this.pos);
-        if (c < 128 && charType[c] & 1)
-          break;
-        if (c === CH_BACKSLASH)
-          this.pos++;
-        if (this.pos < len) {
-          delimiter += src[this.pos];
-          this.pos++;
-        }
-      }
-      this._hereDelim = delimiter;
-      this._hereQuoted = true;
-      return;
-    } else {
-      const start = this.pos;
-      while (this.pos < len) {
-        const c = src.charCodeAt(this.pos);
-        if (c < 128 && charType[c] & 1)
-          break;
-        this.pos++;
-      }
-      this._hereDelim = src.slice(start, this.pos);
-      this._hereQuoted = false;
-    }
-  }
-  consumePendingHereDocs() {
-    for (const hd of this.pendingHereDocs) {
-      const bodyPos = this.pos;
-      const body = this.readHereDocBody(hd.delimiter, hd.strip);
-      if (hd.target) {
-        hd.target.content = body;
-        if (hd.quoted) {
-          hd.target.heredocQuoted = true;
-        } else if (body) {
-          const parsed = this.parseHereDocBody(body, bodyPos);
-          if (parsed)
-            hd.target.body = parsed;
-        }
-      }
-    }
-    this.pendingHereDocs.length = 0;
-  }
-  readHereDocBody(delimiter, strip) {
-    const src = this.src;
-    const len = src.length;
-    const dLen = delimiter.length;
-    const bodyStart = this.pos;
-    while (this.pos < len) {
-      let lineStart = this.pos;
-      let lineEnd = src.indexOf("\n", this.pos);
-      if (lineEnd === -1)
-        lineEnd = len;
-      if (strip) {
-        while (lineStart < lineEnd && src.charCodeAt(lineStart) === CH_TAB)
-          lineStart++;
-      }
-      if (lineEnd - lineStart === dLen && src.startsWith(delimiter, lineStart)) {
-        const body = src.slice(bodyStart, this.pos);
-        this.pos = lineEnd < len ? lineEnd + 1 : lineEnd;
-        return body;
-      }
-      this.pos = lineEnd < len ? lineEnd + 1 : lineEnd;
-    }
-    return src.slice(bodyStart, this.pos);
-  }
-  // Scan an unquoted heredoc body for expansions ($var, ${...}, $(...), `...`).
-  // Returns a Word (without parts — use computeWordParts for those) if expansions exist.
-  parseHereDocBody(body, bodyPos) {
-    let hasExpansion = false;
-    for (let i = 0; i < body.length; i++) {
-      const c = body.charCodeAt(i);
-      if (c === CH_BACKTICK) {
-        hasExpansion = true;
-        break;
-      }
-      if (c === CH_DOLLAR) {
-        const next = i + 1 < body.length ? body.charCodeAt(i + 1) : 0;
-        if (next === CH_LBRACE || next === CH_LPAREN || next === CH_DOLLAR || next >= CH_a && next <= CH_z || next >= CH_A && next <= CH_Z || next === CH_UNDERSCORE || next === CH_BANG || next === CH_HASH || next === CH_AT || next === CH_STAR || next === CH_QUESTION || next === CH_DASH || next >= CH_0 && next <= CH_9) {
-          hasExpansion = true;
-          break;
-        }
-      }
-      if (c === CH_BACKSLASH)
-        i++;
-    }
-    if (!hasExpansion)
-      return null;
-    return new WordImpl(body, bodyPos, bodyPos + body.length);
-  }
-  _wordText = "";
-  _wordQuoted = false;
-  _wordHasExpansions = false;
-  _wordParts = null;
-  _redirectTargetPos = 0;
-  _resultText = "";
-  _resultHasExpansion = false;
-  _resultPart;
-  _dqText = "";
-  _dqHasExpansions = false;
-  _dqParts = null;
-  _hereDelim = "";
-  _hereQuoted = false;
-  readWord(out, ctx, tokenStart = 0) {
-    this.readWordText();
-    const text = this._wordText;
-    const hasExpansions = this._wordHasExpansions;
-    const quoted = this._wordQuoted;
-    const wordEnd = this.pos;
-    if (ctx === LexContext.CommandStart) {
-      if (!hasExpansions && !quoted) {
-        const fc = text.charCodeAt(0);
-        if ((fc >= CH_a && fc <= CH_z && text.length <= 8 || fc === CH_BANG || fc === CH_LBRACE || fc === CH_RBRACE) && text in RESERVED_WORDS) {
-          setToken(out, RESERVED_WORDS[text], text, tokenStart, wordEnd);
-          return;
-        }
-        if (fc === CH_LBRACKET && text === "[[") {
-          setToken(out, Token.DblLBracket, text, tokenStart, wordEnd);
-          return;
-        }
-      }
-      if (isAssignmentWord(text)) {
-        setToken(out, Token.Assignment, text, tokenStart, wordEnd);
-        return;
-      }
-    }
-    if (!hasExpansions && !quoted && text === "]]") {
-      setToken(out, Token.DblRBracket, text, tokenStart, wordEnd);
-      return;
-    }
-    if (!hasExpansions && this.pos < this.src.length) {
-      const nc = this.src.charCodeAt(this.pos);
-      if (nc === CH_LT || nc === CH_GT) {
-        if (text.charCodeAt(0) >= CH_0 && text.charCodeAt(0) <= CH_9 && isAllDigits(text)) {
-          const fd = Number.parseInt(text, 10);
-          if (this.readRedirection(out, tokenStart)) {
-            out.fileDescriptor = fd;
-            return;
-          }
-        }
-        if (text.charCodeAt(0) === CH_LBRACE && text.charCodeAt(text.length - 1) === CH_RBRACE && text.length > 2) {
-          const varname = text.slice(1, -1);
-          if (this.readRedirection(out, tokenStart)) {
-            out.variableName = varname;
-            return;
-          }
-        }
-      }
-    }
-    setToken(out, Token.Word, text, tokenStart, wordEnd);
-  }
-  readWordText() {
-    const src = this.src;
-    const len = src.length;
-    let pos = this.pos;
-    const fastStart = pos;
-    while (pos < len) {
-      const c = src.charCodeAt(pos);
-      if (c < 128 && charType[c])
-        break;
-      pos++;
-    }
-    const exitCh = pos < len ? src.charCodeAt(pos) : 0;
-    if (pos >= len || charType[exitCh] & 1 && !(exitCh === CH_LPAREN && pos > fastStart && extglobPrefix[src.charCodeAt(pos - 1)])) {
-      this.pos = pos;
-      this._wordText = pos > fastStart ? src.slice(fastStart, pos) : "";
-      this._wordQuoted = false;
-      this._wordHasExpansions = false;
-      if (this._buildParts)
-        this._wordParts = null;
-      return;
-    }
-    let text = pos > fastStart ? src.slice(fastStart, pos) : "";
-    let quoted = false;
-    let hasExpansions = false;
-    const bp = this._buildParts;
-    let parts;
-    let litBuf = "";
-    let litStart = 0;
-    if (bp) {
-      parts = [];
-      litBuf = text;
-      litStart = fastStart;
-    }
-    while (pos < len) {
-      const ch = src.charCodeAt(pos);
-      if (ch >= 128 || !charType[ch]) {
-        const runStart = pos;
-        pos++;
-        while (pos < len) {
-          const c = src.charCodeAt(pos);
-          if (c < 128 && charType[c])
-            break;
-          pos++;
-        }
-        const chunk = src.slice(runStart, pos);
-        text += chunk;
-        if (bp)
-          litBuf += chunk;
-        continue;
-      }
-      if (charType[ch] & 1) {
-        if (ch === CH_LPAREN && text.length > 0 && extglobPrefix[text.charCodeAt(text.length - 1)]) {
-          const prefixChar = text.charCodeAt(text.length - 1);
-          pos++;
-          const innerStart = pos;
-          let depth = 1;
-          while (pos < len && depth > 0) {
-            const c = src.charCodeAt(pos);
-            if (c === CH_LPAREN)
-              depth++;
-            else if (c === CH_RPAREN)
-              depth--;
-            pos++;
-          }
-          const pattern = src.slice(innerStart, pos - 1);
-          const eg = "(" + src.slice(innerStart, pos);
-          text += eg;
-          if (bp && prefixChar !== CH_EQ) {
-            if (litBuf.length > 0) {
-              const trimmed = litBuf.slice(0, -1);
-              if (trimmed)
-                parts.push({ type: "Literal", value: trimmed, text: src.slice(litStart, innerStart - 2) });
-              litBuf = "";
-            }
-            const op = extglobOp[prefixChar];
-            const fullText = op + eg;
-            parts.push({ type: "ExtendedGlob", text: fullText, operator: op, pattern });
-            litStart = pos;
-          } else if (bp) {
-            litBuf += eg;
-          }
-          continue;
-        }
-        break;
-      }
-      if (ch === CH_BACKSLASH) {
-        pos++;
-        if (pos < len) {
-          if (src.charCodeAt(pos) === CH_NL) {
-            pos++;
-          } else {
-            quoted = true;
-            const escaped = src[pos++];
-            text += escaped;
-            if (bp)
-              litBuf += escaped;
-          }
-        }
-        continue;
-      }
-      if (ch === CH_SQUOTE) {
-        const sqStart = pos;
-        quoted = true;
-        pos++;
-        const start = pos;
-        while (pos < len && src.charCodeAt(pos) !== CH_SQUOTE)
-          pos++;
-        const value = src.slice(start, pos);
-        text += value;
-        if (pos < len)
-          pos++;
-        else
-          this.errors.push({ message: "unterminated single quote", pos: start - 1 });
-        if (bp) {
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, sqStart) });
-            litBuf = "";
-          }
-          parts.push({ type: "SingleQuoted", value, text: src.slice(sqStart, pos) });
-          litStart = pos;
-        }
-        continue;
-      }
-      if (ch === CH_DQUOTE) {
-        const dqStart = pos;
-        quoted = true;
-        pos++;
-        this.pos = pos;
-        this.readDoubleQuoted();
-        pos = this.pos;
-        text += this._dqText;
-        if (this._dqHasExpansions)
-          hasExpansions = true;
-        if (bp) {
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dqStart) });
-            litBuf = "";
-          }
-          const dqText = src.slice(dqStart, pos);
-          parts.push({
-            type: "DoubleQuoted",
-            text: dqText,
-            parts: this._dqParts ?? [{ type: "Literal", value: this._dqText, text: src.slice(dqStart + 1, pos - 1) }]
-          });
-          litStart = pos;
-        }
-        continue;
-      }
-      if (ch === CH_DOLLAR) {
-        const dollarStart = pos;
-        this.pos = pos;
-        this.readDollar();
-        pos = this.pos;
-        text += this._resultText;
-        if (this._resultHasExpansion)
-          hasExpansions = true;
-        if (bp) {
-          if (this._resultPart) {
-            if (litBuf) {
-              parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dollarStart) });
-              litBuf = "";
-            }
-            parts.push(this._resultPart);
-            litStart = pos;
-          } else {
-            litBuf += this._resultText;
-          }
-        }
-        continue;
-      }
-      if (ch === CH_BACKTICK) {
-        const btStart = pos;
-        this.pos = pos;
-        this.readBacktickExpansion();
-        pos = this.pos;
-        text += this._resultText;
-        hasExpansions = true;
-        if (bp) {
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, btStart) });
-            litBuf = "";
-          }
-          parts.push(this._resultPart);
-          litStart = pos;
-        }
-        continue;
-      }
-      if (ch === CH_LBRACE) {
-        const braceEnd = scanBraceExpansion(src, pos, len);
-        if (braceEnd > 0) {
-          const braceText = src.slice(pos, braceEnd);
-          text += braceText;
-          if (bp) {
-            if (litBuf) {
-              parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, pos) });
-              litBuf = "";
-            }
-            parts.push({ type: "BraceExpansion", text: braceText });
-            litStart = braceEnd;
-          }
-          pos = braceEnd;
-          continue;
-        }
-        text += "{";
-        if (bp)
-          litBuf += "{";
-        pos++;
-        continue;
-      }
-      pos++;
-    }
-    if (bp && litBuf)
-      parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, pos) });
-    this.pos = pos;
-    this._wordText = text;
-    this._wordQuoted = quoted;
-    this._wordHasExpansions = hasExpansions;
-    if (bp) {
-      this._wordParts = parts.length > 1 || parts.length === 1 && parts[0].type !== "Literal" ? parts : null;
-    }
-  }
-  readInnerWordText() {
-    const src = this.src;
-    const len = src.length;
-    let pos = this.pos;
-    let text = "";
-    const bp = this._buildParts;
-    let parts;
-    let litBuf = "";
-    let litStart = 0;
-    if (bp) {
-      parts = [];
-      litStart = pos;
-    }
-    while (pos < len) {
-      const ch = src.charCodeAt(pos);
-      if (ch === CH_BACKSLASH) {
-        pos++;
-        if (pos < len) {
-          if (src.charCodeAt(pos) === CH_NL) {
-            pos++;
-          } else {
-            const escaped = src[pos++];
-            text += escaped;
-            if (bp)
-              litBuf += escaped;
-          }
-        }
-        continue;
-      }
-      if (ch === CH_SQUOTE) {
-        const sqStart = pos;
-        pos++;
-        const start = pos;
-        while (pos < len && src.charCodeAt(pos) !== CH_SQUOTE)
-          pos++;
-        const value = src.slice(start, pos);
-        text += value;
-        if (pos < len)
-          pos++;
-        if (bp) {
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, sqStart) });
-            litBuf = "";
-          }
-          parts.push({ type: "SingleQuoted", value, text: src.slice(sqStart, pos) });
-          litStart = pos;
-        }
-        continue;
-      }
-      if (ch === CH_DQUOTE) {
-        const dqStart = pos;
-        pos++;
-        this.pos = pos;
-        this.readDoubleQuoted();
-        pos = this.pos;
-        text += this._dqText;
-        if (bp) {
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dqStart) });
-            litBuf = "";
-          }
-          const dqText = src.slice(dqStart, pos);
-          parts.push({
-            type: "DoubleQuoted",
-            text: dqText,
-            parts: this._dqParts ?? [{ type: "Literal", value: this._dqText, text: src.slice(dqStart + 1, pos - 1) }]
-          });
-          litStart = pos;
-        }
-        continue;
-      }
-      if (ch === CH_DOLLAR) {
-        const dollarStart = pos;
-        this.pos = pos;
-        this.readDollar();
-        pos = this.pos;
-        text += this._resultText;
-        if (bp) {
-          if (this._resultPart) {
-            if (litBuf) {
-              parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, dollarStart) });
-              litBuf = "";
-            }
-            parts.push(this._resultPart);
-            litStart = pos;
-          } else {
-            litBuf += this._resultText;
-          }
-        }
-        continue;
-      }
-      if (ch === CH_BACKTICK) {
-        const btStart = pos;
-        this.pos = pos;
-        this.readBacktickExpansion();
-        pos = this.pos;
-        text += this._resultText;
-        if (bp) {
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, btStart) });
-            litBuf = "";
-          }
-          parts.push(this._resultPart);
-          litStart = pos;
-        }
-        continue;
-      }
-      text += src[pos];
-      if (bp)
-        litBuf += src[pos];
-      pos++;
-    }
-    if (bp && litBuf)
-      parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, pos) });
-    this.pos = pos;
-    this._wordText = text;
-    this._wordQuoted = false;
-    this._wordHasExpansions = false;
-    if (bp) {
-      this._wordParts = parts.length > 1 || parts.length === 1 && parts[0].type !== "Literal" ? parts : null;
-    }
-  }
-  parseSubFieldWord(s) {
-    if (!s)
-      return new WordImpl("", 0, 0);
-    const savedSrc = this.src;
-    const savedPos = this.pos;
-    const savedText = this._wordText;
-    const savedParts = this._wordParts;
-    const savedQuoted = this._wordQuoted;
-    this.src = s;
-    this.pos = 0;
-    this.readInnerWordText();
-    const word = new WordImpl(this._wordText, 0, 0);
-    if (this._buildParts && this._wordParts) {
-      word.parts = this._wordParts;
-    }
-    this.src = savedSrc;
-    this.pos = savedPos;
-    this._wordText = savedText;
-    this._wordParts = savedParts;
-    this._wordQuoted = savedQuoted;
-    return word;
-  }
-  skipSQ() {
-    while (this.pos < this.src.length && this.src.charCodeAt(this.pos) !== CH_SQUOTE)
-      this.pos++;
-    if (this.pos < this.src.length)
-      this.pos++;
-  }
-  skipDQ() {
-    const src = this.src;
-    const len = src.length;
-    while (this.pos < len) {
-      const ch = src.charCodeAt(this.pos);
-      if (ch === CH_DQUOTE) {
-        this.pos++;
-        return;
-      }
-      if (ch === CH_BACKSLASH) {
-        this.pos += 2;
-        continue;
-      }
-      if (ch === CH_DOLLAR && this.pos + 1 < len) {
-        const next = src.charCodeAt(this.pos + 1);
-        if (next === CH_LPAREN) {
-          this.pos += 2;
-          this.extractBalanced();
-          continue;
-        }
-        if (next === CH_LBRACE) {
-          this.pos += 2;
-          let d = 1;
-          while (this.pos < len && d > 0) {
-            const c = src.charCodeAt(this.pos);
-            if (c === CH_RBRACE) {
-              if (--d === 0) {
-                this.pos++;
-                break;
-              }
-            } else if (c === CH_LBRACE && this.pos > 0 && src.charCodeAt(this.pos - 1) === CH_DOLLAR)
-              d++;
-            else if (c === CH_BACKSLASH) {
-              this.pos++;
-            } else if (c === CH_SQUOTE) {
-              this.pos++;
-              this.skipSQ();
-              continue;
-            } else if (c === CH_DQUOTE) {
-              this.pos++;
-              this.skipDQ();
-              continue;
-            }
-            this.pos++;
-          }
-          continue;
-        }
-      }
-      if (ch === CH_BACKTICK) {
-        this.pos++;
-        while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
-          if (src.charCodeAt(this.pos) === CH_BACKSLASH)
-            this.pos++;
-          this.pos++;
-        }
-        if (this.pos < len)
-          this.pos++;
-        continue;
-      }
-      this.pos++;
-    }
-  }
-  skipSpacesAndTabs() {
-    const src = this.src;
-    const len = src.length;
-    while (this.pos < len) {
-      const ch = src.charCodeAt(this.pos);
-      if (ch === CH_SPACE || ch === CH_TAB)
-        this.pos++;
-      else if (ch === CH_BACKSLASH && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_NL)
-        this.pos += 2;
-      else
-        break;
-    }
-  }
-  readDoubleQuoted() {
-    const src = this.src;
-    const len = src.length;
-    const contentStart = this.pos;
-    let hasExpansions = false;
-    const bp = this._buildParts;
-    if (!bp) {
-      let p = this.pos;
-      while (p < len) {
-        const c = src.charCodeAt(p);
-        if (c === CH_DQUOTE) {
-          this._dqText = src.slice(contentStart, p);
-          this.pos = p + 1;
-          this._dqHasExpansions = false;
-          this._dqParts = null;
-          return;
-        }
-        if (c === CH_DOLLAR || c === CH_BACKTICK || c === CH_BACKSLASH)
-          break;
-        p++;
-      }
-    }
-    let text = "";
-    let parts = null;
-    let litBuf = "";
-    let litStart = bp ? this.pos : 0;
-    while (this.pos < len && src.charCodeAt(this.pos) !== CH_DQUOTE) {
-      const runStart = this.pos;
-      while (this.pos < len) {
-        const c = src.charCodeAt(this.pos);
-        if (c === CH_DQUOTE || c === CH_BACKSLASH || c === CH_DOLLAR || c === CH_BACKTICK)
-          break;
-        this.pos++;
-      }
-      if (this.pos > runStart) {
-        const chunk = src.slice(runStart, this.pos);
-        text += chunk;
-        if (bp)
-          litBuf += chunk;
-      }
-      if (this.pos >= len || src.charCodeAt(this.pos) === CH_DQUOTE)
-        break;
-      const ch = src.charCodeAt(this.pos);
-      if (ch === CH_BACKSLASH) {
-        this.pos++;
-        if (this.pos < len) {
-          const next = src.charCodeAt(this.pos);
-          if (next === CH_NL) {
-            this.pos++;
-            continue;
-          }
-          if (next === CH_DOLLAR || next === CH_BACKTICK || next === CH_DQUOTE || next === CH_BACKSLASH) {
-            const c = src[this.pos];
-            text += c;
-            if (bp)
-              litBuf += c;
-          } else {
-            const pair = "\\" + src[this.pos];
-            text += pair;
-            if (bp)
-              litBuf += pair;
-          }
-          this.pos++;
-        }
-        continue;
-      }
-      if (ch === CH_DOLLAR) {
-        if (this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_DQUOTE) {
-          text += "$";
-          if (bp)
-            litBuf += "$";
-          this.pos++;
-          continue;
-        }
-        const expStart = this.pos;
-        this.readDollar();
-        text += this._resultText;
-        if (this._resultHasExpansion)
-          hasExpansions = true;
-        if (bp) {
-          const rp = this._resultPart;
-          if (rp && isDQChild(rp)) {
-            if (!parts)
-              parts = [];
-            if (litBuf) {
-              parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, expStart) });
-              litBuf = "";
-            }
-            parts.push(rp);
-            litStart = this.pos;
-          } else {
-            litBuf += this._resultText;
-          }
-        }
-        continue;
-      }
-      if (ch === CH_BACKTICK) {
-        const btStart = this.pos;
-        this.readBacktickExpansion();
-        text += this._resultText;
-        hasExpansions = true;
-        if (bp && this._resultPart && isDQChild(this._resultPart)) {
-          if (!parts)
-            parts = [];
-          if (litBuf) {
-            parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, btStart) });
-            litBuf = "";
-          }
-          parts.push(this._resultPart);
-          litStart = this.pos;
-        }
-        continue;
-      }
-    }
-    if (bp && parts && litBuf)
-      parts.push({ type: "Literal", value: litBuf, text: src.slice(litStart, this.pos) });
-    if (this.pos < len)
-      this.pos++;
-    else
-      this.errors.push({ message: "unterminated double quote", pos: contentStart - 1 });
-    this._dqText = text;
-    this._dqHasExpansions = hasExpansions;
-    this._dqParts = parts;
-  }
-  readDollar() {
-    const dollarPos = this.pos;
-    this.pos++;
-    const src = this.src;
-    const len = src.length;
-    if (this.pos >= len) {
-      this._resultText = "$";
-      this._resultHasExpansion = false;
-      this._resultPart = void 0;
-      return;
-    }
-    const ch = src.charCodeAt(this.pos);
-    if (ch === CH_LPAREN) {
-      if (this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_LPAREN) {
-        this.readArithmeticExpansion();
-        return;
-      }
-      this.readCommandSubstitution();
-      return;
-    }
-    if (ch === CH_LBRACE) {
-      const after = this.pos + 1 < len ? src.charCodeAt(this.pos + 1) : 0;
-      if (after === CH_SPACE || after === CH_TAB || after === CH_NL) {
-        this.readBraceCommandSubstitution();
-        return;
-      }
-      if (after === CH_PIPE) {
-        this.readValueSubstitution();
-        return;
-      }
-      this.readParameterExpansion();
-      return;
-    }
-    if (ch === CH_SQUOTE) {
-      this.pos++;
-      const value = this.readAnsiCQuoted();
-      this._resultText = value;
-      this._resultHasExpansion = false;
-      this._resultPart = this._buildParts ? { type: "AnsiCQuoted", text: src.slice(dollarPos, this.pos), value } : void 0;
-      return;
-    }
-    if (ch === CH_DQUOTE) {
-      this.pos++;
-      this.readDoubleQuoted();
-      this._resultText = this._dqText;
-      this._resultHasExpansion = this._dqHasExpansions;
-      if (this._buildParts) {
-        const text = src.slice(dollarPos, this.pos);
-        this._resultPart = {
-          type: "LocaleString",
-          text,
-          parts: this._dqParts ?? [
-            { type: "Literal", value: this._dqText, text: src.slice(dollarPos + 2, this.pos - 1) }
-          ]
-        };
-      } else {
-        this._resultPart = void 0;
-      }
-      return;
-    }
-    if (ch === CH_AT || ch === CH_STAR || ch === CH_HASH || ch === CH_QUESTION || ch === CH_DASH || ch === CH_DOLLAR || ch === CH_BANG) {
-      this.pos++;
-      const text = src.slice(this.pos - 2, this.pos);
-      this._resultText = text;
-      this._resultHasExpansion = false;
-      this._resultPart = this._buildParts ? { type: "SimpleExpansion", text } : void 0;
-      return;
-    }
-    if (ch >= CH_0 && ch <= CH_9) {
-      this.pos++;
-      const text = src.slice(this.pos - 2, this.pos);
-      this._resultText = text;
-      this._resultHasExpansion = false;
-      this._resultPart = this._buildParts ? { type: "SimpleExpansion", text } : void 0;
-      return;
-    }
-    if (ch < 128 && isIdChar[ch] & 1) {
-      const dollarPos2 = this.pos - 1;
-      while (this.pos < len) {
-        const c = src.charCodeAt(this.pos);
-        if (c < 128 && isIdChar[c] & 2)
-          this.pos++;
-        else
-          break;
-      }
-      const text = src.slice(dollarPos2, this.pos);
-      this._resultText = text;
-      this._resultHasExpansion = false;
-      this._resultPart = this._buildParts ? { type: "SimpleExpansion", text } : void 0;
-      return;
-    }
-    this._resultText = "$";
-    this._resultHasExpansion = false;
-    this._resultPart = void 0;
-  }
-  scanArithmeticBody() {
-    this.pos += 2;
-    let depth = 1;
-    const src = this.src;
-    const len = src.length;
-    const start = this.pos;
-    while (this.pos < len && depth > 0) {
-      const c = src.charCodeAt(this.pos);
-      if (c === CH_LPAREN && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_LPAREN) {
-        depth++;
-        this.pos += 2;
-      } else if (c === CH_RPAREN && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_RPAREN) {
-        if (--depth === 0) {
-          this.pos += 2;
-          break;
-        }
-        this.pos += 2;
-      } else {
-        this.pos++;
-      }
-    }
-    return src.slice(start, this.pos - 2);
-  }
-  readArithmeticExpansion() {
-    const body = this.scanArithmeticBody();
-    const text = "$((" + body + "))";
-    this._resultText = text;
-    this._resultHasExpansion = false;
-    if (this._buildParts) {
-      const expr = parseArithmeticExpression(body) ?? void 0;
-      this._resultPart = { type: "ArithmeticExpansion", text, expression: expr };
-    } else {
-      this._resultPart = void 0;
-    }
-  }
-  readArithmeticCommand(out, tokenStart) {
-    const body = this.scanArithmeticBody();
-    setToken(out, Token.ArithCmd, body, tokenStart, this.pos);
-  }
-  readCommandSubstitution() {
-    const dollarPos = this.pos - 1;
-    this.pos++;
-    this.extractBalanced();
-    const text = this.src.slice(dollarPos, this.pos);
-    this._resultText = text;
-    this._resultHasExpansion = true;
-    if (this._buildParts) {
-      const inner = text.slice(2, -1);
-      this._resultPart = { type: "CommandExpansion", text, script: void 0, inner };
-      this.collectedExpansions.push({ inner, _part: this._resultPart });
-    } else {
-      this._resultPart = void 0;
-    }
-  }
-  readBraceCommandSubstitution() {
-    this.readBraceSubstitution("${ ", 1);
-  }
-  readValueSubstitution() {
-    this.readBraceSubstitution("${| ", 2);
-  }
-  readBraceSubstitution(prefix, skip) {
-    this.pos += skip;
-    const src = this.src;
-    const len = src.length;
-    let depth = 1;
-    const start = this.pos;
-    while (this.pos < len) {
-      const c = src.charCodeAt(this.pos);
-      if (c === CH_LBRACE)
-        depth++;
-      else if (c === CH_RBRACE) {
-        if (--depth === 0) {
-          this.pos++;
-          break;
-        }
-      } else if (c === CH_SQUOTE) {
-        this.pos++;
-        this.skipSQ();
-        continue;
-      } else if (c === CH_DQUOTE) {
-        this.pos++;
-        this.skipDQ();
-        continue;
-      } else if (c === CH_BACKSLASH)
-        this.pos++;
-      this.pos++;
-    }
-    const inner = src.slice(start, this.pos - 1).trim();
-    const text = prefix + inner + " }";
-    this._resultText = text;
-    this._resultHasExpansion = true;
-    if (this._buildParts) {
-      this._resultPart = { type: "CommandExpansion", text, script: void 0, inner };
-      this.collectedExpansions.push({ inner, _part: this._resultPart });
-    } else {
-      this._resultPart = void 0;
-    }
-  }
-  readBacktickExpansion() {
-    this.pos++;
-    const src = this.src;
-    const len = src.length;
-    let inner = "";
-    const start = this.pos;
-    let hasEscapes = false;
-    while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
-      if (src.charCodeAt(this.pos) === CH_BACKSLASH) {
-        hasEscapes = true;
-        break;
-      }
-      this.pos++;
-    }
-    if (!hasEscapes) {
-      inner = src.slice(start, this.pos);
-    } else {
-      inner = src.slice(start, this.pos);
-      while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
-        if (src.charCodeAt(this.pos) === CH_BACKSLASH) {
-          this.pos++;
-          if (this.pos < len) {
-            const c = src.charCodeAt(this.pos);
-            if (c === CH_DOLLAR || c === CH_BACKTICK || c === CH_BACKSLASH) {
-              inner += src[this.pos];
-            } else {
-              inner += "\\" + src[this.pos];
-            }
-            this.pos++;
-          }
-        } else {
-          const runStart = this.pos;
-          while (this.pos < len) {
-            const c = src.charCodeAt(this.pos);
-            if (c === CH_BACKTICK || c === CH_BACKSLASH)
-              break;
-            this.pos++;
-          }
-          inner += src.slice(runStart, this.pos);
-        }
-      }
-    }
-    if (this.pos < len)
-      this.pos++;
-    else
-      this.errors.push({ message: "unterminated backtick", pos: start - 1 });
-    const text = src.slice(start - 1, this.pos);
-    this._resultText = inner;
-    this._resultHasExpansion = true;
-    if (this._buildParts) {
-      this._resultPart = { type: "CommandExpansion", text, script: void 0, inner };
-      this.collectedExpansions.push({ inner, _part: this._resultPart });
-    } else {
-      this._resultPart = void 0;
-    }
-  }
-  readParameterExpansion() {
-    const src = this.src;
-    const len = src.length;
-    const start = this.pos;
-    this.pos++;
-    let depth = 1;
-    while (this.pos < len && depth > 0) {
-      const ch = src.charCodeAt(this.pos);
-      if (ch === CH_LBRACE && this.pos > 0 && src.charCodeAt(this.pos - 1) === CH_DOLLAR)
-        depth++;
-      else if (ch === CH_RBRACE) {
-        if (--depth === 0) {
-          this.pos++;
-          break;
-        }
-      } else if (ch === CH_BACKSLASH) {
-        this.pos++;
-      } else if (ch === CH_SQUOTE) {
-        this.pos++;
-        this.skipSQ();
-        continue;
-      } else if (ch === CH_DQUOTE) {
-        this.pos++;
-        this.skipDQ();
-        continue;
-      }
-      this.pos++;
-    }
-    const text = src.slice(start - 1, this.pos);
-    this._resultText = text;
-    this._resultHasExpansion = false;
-    if (this._buildParts) {
-      const inner = src.slice(start + 1, this.pos - 1);
-      this._resultPart = this.parseParamInner(text, inner);
-    } else {
-      this._resultPart = void 0;
-    }
-  }
-  parseParamInner(text, inner) {
-    const result = {
-      type: "ParameterExpansion",
-      text,
-      parameter: "",
-      index: void 0,
-      indirect: void 0,
-      length: void 0,
-      operator: void 0,
-      operand: void 0,
-      slice: void 0,
-      replace: void 0
-    };
-    const ilen = inner.length;
-    if (ilen === 0)
-      return result;
-    let i = 0;
-    if (inner.charCodeAt(0) === CH_BANG) {
-      result.indirect = true;
-      i = 1;
-    }
-    if (!result.indirect && inner.charCodeAt(0) === CH_HASH) {
-      if (ilen === 1) {
-        result.parameter = "#";
-        return result;
-      }
-      if (inner.charCodeAt(1) === CH_HASH) {
-        result.parameter = "#";
-        i = 1;
-      } else {
-        const tryI = this.scanParamName(inner, 1);
-        if (tryI > 1) {
-          let endI = tryI;
-          if (endI < ilen && inner.charCodeAt(endI) === CH_LBRACKET) {
-            const closeB = this.findCloseBracket(inner, endI + 1);
-            if (closeB !== -1)
-              endI = closeB + 1;
-          }
-          if (endI >= ilen) {
-            result.length = true;
-            result.parameter = inner.slice(1, tryI);
-            if (tryI < ilen && inner.charCodeAt(tryI) === CH_LBRACKET) {
-              const closeB = this.findCloseBracket(inner, tryI + 1);
-              if (closeB !== -1)
-                result.index = inner.slice(tryI + 1, closeB);
-            }
-            return result;
-          }
-        }
-        result.parameter = "#";
-        i = 1;
-      }
-    }
-    if (!result.parameter) {
-      const nameStart = i;
-      i = this.scanParamName(inner, i);
-      result.parameter = inner.slice(nameStart, i);
-    }
-    if (i < ilen && inner.charCodeAt(i) === CH_LBRACKET) {
-      const closeB = this.findCloseBracket(inner, i + 1);
-      if (closeB !== -1) {
-        result.index = inner.slice(i + 1, closeB);
-        i = closeB + 1;
-      }
-    }
-    if (i >= ilen)
-      return result;
-    const opChar = inner.charCodeAt(i);
-    if (opChar === CH_COLON) {
-      if (i + 1 < ilen) {
-        const nc = inner.charCodeAt(i + 1);
-        if (nc === CH_DASH || nc === CH_EQ || nc === CH_PLUS || nc === CH_QUESTION) {
-          result.operator = inner.slice(i, i + 2);
-          result.operand = this.parseSubFieldWord(inner.slice(i + 2));
-          return result;
-        }
-      }
-      i++;
-      const sliceRest = inner.slice(i);
-      const colonIdx = findUnnested(sliceRest, CH_COLON);
-      if (colonIdx === -1) {
-        result.slice = { offset: this.parseSubFieldWord(sliceRest), length: void 0 };
-      } else {
-        result.slice = {
-          offset: this.parseSubFieldWord(sliceRest.slice(0, colonIdx)),
-          length: this.parseSubFieldWord(sliceRest.slice(colonIdx + 1))
-        };
-      }
-      return result;
-    }
-    if (opChar === CH_DASH || opChar === CH_EQ || opChar === CH_PLUS || opChar === CH_QUESTION) {
-      result.operator = inner[i];
-      result.operand = this.parseSubFieldWord(inner.slice(i + 1));
-      return result;
-    }
-    if (opChar === CH_HASH) {
-      if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_HASH) {
-        result.operator = "##";
-        result.operand = this.parseSubFieldWord(inner.slice(i + 2));
-      } else {
-        result.operator = "#";
-        result.operand = this.parseSubFieldWord(inner.slice(i + 1));
-      }
-      return result;
-    }
-    if (opChar === CH_PERCENT) {
-      if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_PERCENT) {
-        result.operator = "%%";
-        result.operand = this.parseSubFieldWord(inner.slice(i + 2));
-      } else {
-        result.operator = "%";
-        result.operand = this.parseSubFieldWord(inner.slice(i + 1));
-      }
-      return result;
-    }
-    if (opChar === CH_SLASH) {
-      i++;
-      let replOp = "/";
-      if (i < ilen) {
-        const nc = inner.charCodeAt(i);
-        if (nc === CH_SLASH) {
-          replOp = "//";
-          i++;
-        } else if (nc === CH_HASH) {
-          replOp = "/#";
-          i++;
-        } else if (nc === CH_PERCENT) {
-          replOp = "/%";
-          i++;
-        }
-      }
-      result.operator = replOp;
-      const rest = inner.slice(i);
-      const sepIdx = findUnnested(rest, CH_SLASH);
-      if (sepIdx === -1) {
-        result.replace = {
-          pattern: this.parseSubFieldWord(rest),
-          replacement: new WordImpl("", 0, 0)
-        };
-      } else {
-        result.replace = {
-          pattern: this.parseSubFieldWord(rest.slice(0, sepIdx)),
-          replacement: this.parseSubFieldWord(rest.slice(sepIdx + 1))
-        };
-      }
-      return result;
-    }
-    if (opChar === CH_CARET) {
-      if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_CARET) {
-        result.operator = "^^";
-        const rest = inner.slice(i + 2);
-        if (rest)
-          result.operand = this.parseSubFieldWord(rest);
-      } else {
-        result.operator = "^";
-        const rest = inner.slice(i + 1);
-        if (rest)
-          result.operand = this.parseSubFieldWord(rest);
-      }
-      return result;
-    }
-    if (opChar === CH_COMMA) {
-      if (i + 1 < ilen && inner.charCodeAt(i + 1) === CH_COMMA) {
-        result.operator = ",,";
-        const rest = inner.slice(i + 2);
-        if (rest)
-          result.operand = this.parseSubFieldWord(rest);
-      } else {
-        result.operator = ",";
-        const rest = inner.slice(i + 1);
-        if (rest)
-          result.operand = this.parseSubFieldWord(rest);
-      }
-      return result;
-    }
-    if (opChar === CH_AT) {
-      result.operator = "@";
-      result.operand = this.parseSubFieldWord(inner.slice(i + 1));
-      return result;
-    }
-    result.operator = inner.slice(i);
-    return result;
-  }
-  scanParamName(s, start) {
-    let i = start;
-    if (i >= s.length)
-      return i;
-    const c = s.charCodeAt(i);
-    if (c === CH_AT || c === CH_STAR || c === CH_HASH || c === CH_QUESTION || c === CH_DASH || c === CH_DOLLAR || c === CH_BANG) {
-      return i + 1;
-    }
-    if (c >= CH_0 && c <= CH_9) {
-      while (i < s.length && s.charCodeAt(i) >= CH_0 && s.charCodeAt(i) <= CH_9)
-        i++;
-      return i;
-    }
-    if (c >= CH_a && c <= CH_z || c >= CH_A && c <= CH_Z || c === CH_UNDERSCORE) {
-      i++;
-      while (i < s.length) {
-        const ch = s.charCodeAt(i);
-        if (ch >= CH_a && ch <= CH_z || ch >= CH_A && ch <= CH_Z || ch >= CH_0 && ch <= CH_9 || ch === CH_UNDERSCORE)
-          i++;
-        else
-          break;
-      }
-    }
-    return i;
-  }
-  findCloseBracket(s, start) {
-    let depth = 1;
-    for (let i = start; i < s.length; i++) {
-      const c = s.charCodeAt(i);
-      if (c === CH_LBRACKET)
-        depth++;
-      else if (c === CH_RBRACKET) {
-        if (--depth === 0)
-          return i;
-      }
-    }
-    return -1;
-  }
-  readAnsiCQuoted() {
-    const src = this.src;
-    const len = src.length;
-    let text = "";
-    while (this.pos < len && src.charCodeAt(this.pos) !== CH_SQUOTE) {
-      if (src.charCodeAt(this.pos) === CH_BACKSLASH && this.pos + 1 < len) {
-        this.pos++;
-        const ch = src[this.pos];
-        switch (ch) {
-          case "n":
-            text += "\n";
-            break;
-          case "t":
-            text += "	";
-            break;
-          case "r":
-            text += "\r";
-            break;
-          case "\\":
-            text += "\\";
-            break;
-          case "'":
-            text += "'";
-            break;
-          case '"':
-            text += '"';
-            break;
-          case "a":
-            text += "\x07";
-            break;
-          case "b":
-            text += "\b";
-            break;
-          case "e":
-          case "E":
-            text += "\x1B";
-            break;
-          case "f":
-            text += "\f";
-            break;
-          case "v":
-            text += "\v";
-            break;
-          default:
-            text += "\\" + ch;
-            break;
-        }
-        this.pos++;
-      } else {
-        const runStart = this.pos;
-        while (this.pos < len) {
-          const c = src.charCodeAt(this.pos);
-          if (c === CH_SQUOTE || c === CH_BACKSLASH)
-            break;
-          this.pos++;
-        }
-        text += src.slice(runStart, this.pos);
-      }
-    }
-    if (this.pos < len)
-      this.pos++;
-    return text;
-  }
-  // Extract balanced parens for $(...) — respects nested quotes and case..esac
-  extractBalanced() {
-    const src = this.src;
-    const len = src.length;
-    let depth = 1;
-    const start = this.pos;
-    while (this.pos < len && depth > 0) {
-      const c = src.charCodeAt(this.pos);
-      if (c === CH_RPAREN) {
-        depth--;
-        if (depth === 0) {
-          const result = src.slice(start, this.pos);
-          this.pos++;
-          return result;
-        }
-        this.pos++;
-      } else if (c === CH_LPAREN || c === CH_BACKSLASH || c === CH_SQUOTE || c === CH_DQUOTE || c === CH_BACKTICK) {
-        break;
-      } else if (c === 99 && // Ensure word start boundary (not inside e.g. "lowercase")
-      (this.pos === start || src.charCodeAt(this.pos - 1) < 128 && charType[src.charCodeAt(this.pos - 1)] !== 0) && this.pos + 3 < len && src.charCodeAt(this.pos + 1) === 97 && src.charCodeAt(this.pos + 2) === 115 && src.charCodeAt(this.pos + 3) === 101 && (this.pos + 4 >= len || src.charCodeAt(this.pos + 4) < 128 && charType[src.charCodeAt(this.pos + 4)] & 1)) {
-        break;
-      } else {
-        this.pos++;
-      }
-    }
-    if (depth === 0)
-      return src.slice(start, this.pos);
-    let caseDepth = 0;
-    while (this.pos < len && depth > 0) {
-      const ch = src.charCodeAt(this.pos);
-      if (ch === CH_LPAREN) {
-        depth++;
-        this.pos++;
-      } else if (ch === CH_RPAREN) {
-        if (caseDepth > 0) {
-          this.pos++;
-        } else {
-          depth--;
-          if (depth === 0) {
-            const result = src.slice(start, this.pos);
-            this.pos++;
-            return result;
-          }
-          this.pos++;
-        }
-      } else if (ch === CH_BACKSLASH) {
-        this.pos++;
-        if (this.pos < len)
-          this.pos++;
-      } else if (ch === CH_SQUOTE) {
-        this.pos++;
-        this.skipSQ();
-      } else if (ch === CH_DQUOTE) {
-        this.pos++;
-        this.skipDQ();
-      } else if (ch === CH_BACKTICK) {
-        this.pos++;
-        while (this.pos < len && src.charCodeAt(this.pos) !== CH_BACKTICK) {
-          if (src.charCodeAt(this.pos) === CH_BACKSLASH)
-            this.pos++;
-          if (this.pos < len)
-            this.pos++;
-        }
-        if (this.pos < len)
-          this.pos++;
-      } else {
-        const wStart = this.pos;
-        while (this.pos < len) {
-          const wc = src.charCodeAt(this.pos);
-          if (wc < 128 && charType[wc])
-            break;
-          this.pos++;
-        }
-        if (this.pos > wStart) {
-          const wLen = this.pos - wStart;
-          if (wLen === 4) {
-            const c0 = src.charCodeAt(wStart);
-            if (c0 === 99 && src.charCodeAt(wStart + 1) === 97 && src.charCodeAt(wStart + 2) === 115 && src.charCodeAt(wStart + 3) === 101) {
-              caseDepth++;
-            } else if (c0 === 101 && src.charCodeAt(wStart + 1) === 115 && src.charCodeAt(wStart + 2) === 97 && src.charCodeAt(wStart + 3) === 99 && caseDepth > 0) {
-              caseDepth--;
-            }
-          }
-        } else {
-          this.pos++;
-        }
-      }
-    }
-    return src.slice(start, this.pos);
-  }
-};
-
-// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/parts.js
-function computeWordParts(source, word) {
-  const lexer = new Lexer(source);
-  let parts;
-  if (word.text.includes("\n") && word.pos > 0) {
-    parts = lexer.buildHereDocParts(word.pos, word.end);
-  } else {
-    parts = lexer.buildWordParts(word.pos);
-  }
-  if (!parts)
-    return void 0;
-  for (const exp of lexer.getCollectedExpansions()) {
-    resolveExpansion(exp);
-  }
-  return parts;
-}
-function resolveExpansion(e) {
-  if (e.inner !== void 0 && e._part) {
-    e._part.script = parse(e.inner);
-    e._part.inner = void 0;
-    e._part = void 0;
-    e.inner = void 0;
-  }
-}
-
-// node_modules/.pnpm/unbash@2.2.0/node_modules/unbash/dist/parser.js
-WordImpl._resolve = computeWordParts;
-var ArithmeticCommandImpl = class {
-  type = "ArithmeticCommand";
-  pos;
-  end;
-  body;
-  #expression = null;
-  constructor(pos, end, body) {
-    this.pos = pos;
-    this.end = end;
-    this.body = body;
-  }
-  get expression() {
-    if (this.#expression === null) {
-      this.#expression = parseArithmeticExpression(this.body, this.pos + 2) ?? void 0;
-    }
-    return this.#expression;
-  }
-  set expression(v) {
-    this.#expression = v ?? void 0;
-  }
-};
-var ArithmeticForImpl = class {
-  type = "ArithmeticFor";
-  pos;
-  end;
-  body;
-  #initStr;
-  #testStr;
-  #updateStr;
-  #initPos;
-  #testPos;
-  #updatePos;
-  #initialize = null;
-  #test = null;
-  #update = null;
-  constructor(pos, end, body, initStr, testStr, updateStr, initPos, testPos, updatePos) {
-    this.pos = pos;
-    this.end = end;
-    this.body = body;
-    this.#initStr = initStr;
-    this.#testStr = testStr;
-    this.#updateStr = updateStr;
-    this.#initPos = initPos;
-    this.#testPos = testPos;
-    this.#updatePos = updatePos;
-  }
-  get initialize() {
-    if (this.#initialize === null) {
-      if (this.#initStr) {
-        const expr = parseArithmeticExpression(this.#initStr);
-        if (expr)
-          offsetArith(expr, this.#initPos);
-        this.#initialize = expr ?? void 0;
-      } else {
-        this.#initialize = void 0;
-      }
-    }
-    return this.#initialize;
-  }
-  set initialize(v) {
-    this.#initialize = v ?? void 0;
-  }
-  get test() {
-    if (this.#test === null) {
-      if (this.#testStr) {
-        const expr = parseArithmeticExpression(this.#testStr);
-        if (expr)
-          offsetArith(expr, this.#testPos);
-        this.#test = expr ?? void 0;
-      } else {
-        this.#test = void 0;
-      }
-    }
-    return this.#test;
-  }
-  set test(v) {
-    this.#test = v ?? void 0;
-  }
-  get update() {
-    if (this.#update === null) {
-      if (this.#updateStr) {
-        const expr = parseArithmeticExpression(this.#updateStr);
-        if (expr)
-          offsetArith(expr, this.#updatePos);
-        this.#update = expr ?? void 0;
-      } else {
-        this.#update = void 0;
-      }
-    }
-    return this.#update;
-  }
-  set update(v) {
-    this.#update = v ?? void 0;
-  }
-};
-var CASE_TERMINATORS = {
-  [Token.DoubleSemi]: ";;",
-  [Token.SemiAmp]: ";&",
-  [Token.DoubleSemiAmp]: ";;&"
-};
-var REDIRECT_OPS = {
-  ">": ">",
-  ">>": ">>",
-  "<": "<",
-  "<<": "<<",
-  "<<-": "<<-",
-  "<<<": "<<<",
-  "<>": "<>",
-  "<&": "<&",
-  ">&": ">&",
-  ">|": ">|",
-  "&>": "&>",
-  "&>>": "&>>"
-};
-function offsetArith(node, base) {
-  node.pos += base;
-  node.end += base;
-  switch (node.type) {
-    case "ArithmeticBinary":
-      offsetArith(node.left, base);
-      offsetArith(node.right, base);
-      break;
-    case "ArithmeticUnary":
-      offsetArith(node.operand, base);
-      break;
-    case "ArithmeticTernary":
-      offsetArith(node.test, base);
-      offsetArith(node.consequent, base);
-      offsetArith(node.alternate, base);
-      break;
-    case "ArithmeticGroup":
-      offsetArith(node.expression, base);
-      break;
-  }
-}
-var listTerminators = new Uint8Array(37);
-listTerminators[Token.EOF] = 1;
-listTerminators[Token.RParen] = 1;
-listTerminators[Token.RBrace] = 1;
-listTerminators[Token.Then] = 1;
-listTerminators[Token.Else] = 1;
-listTerminators[Token.Elif] = 1;
-listTerminators[Token.Fi] = 1;
-listTerminators[Token.Do] = 1;
-listTerminators[Token.Done] = 1;
-listTerminators[Token.Esac] = 1;
-listTerminators[Token.DoubleSemi] = 1;
-listTerminators[Token.SemiAmp] = 1;
-listTerminators[Token.DoubleSemiAmp] = 1;
-var commandStarts = new Uint8Array(37);
-commandStarts[Token.Word] = 1;
-commandStarts[Token.Assignment] = 1;
-commandStarts[Token.Bang] = 1;
-commandStarts[Token.LParen] = 1;
-commandStarts[Token.LBrace] = 1;
-commandStarts[Token.DblLBracket] = 1;
-commandStarts[Token.If] = 1;
-commandStarts[Token.For] = 1;
-commandStarts[Token.While] = 1;
-commandStarts[Token.Until] = 1;
-commandStarts[Token.Case] = 1;
-commandStarts[Token.Function] = 1;
-commandStarts[Token.Select] = 1;
-commandStarts[Token.ArithCmd] = 1;
-commandStarts[Token.Coproc] = 1;
-commandStarts[Token.Redirect] = 1;
-var UNARY_TEST_OPS = {
-  "-a": 1,
-  "-b": 1,
-  "-c": 1,
-  "-d": 1,
-  "-e": 1,
-  "-f": 1,
-  "-g": 1,
-  "-h": 1,
-  "-k": 1,
-  "-p": 1,
-  "-r": 1,
-  "-s": 1,
-  "-t": 1,
-  "-u": 1,
-  "-v": 1,
-  "-w": 1,
-  "-x": 1,
-  "-z": 1,
-  "-n": 1,
-  "-N": 1,
-  "-S": 1,
-  "-L": 1,
-  "-G": 1,
-  "-O": 1,
-  "-R": 1
-};
-var BINARY_TEST_OPS = {
-  "==": 1,
-  "!=": 1,
-  "=~": 1,
-  "=": 1,
-  "-eq": 1,
-  "-ne": 1,
-  "-lt": 1,
-  "-le": 1,
-  "-gt": 1,
-  "-ge": 1,
-  "-nt": 1,
-  "-ot": 1,
-  "-ef": 1,
-  "<": 1,
-  ">": 1
-};
-var EMPTY_PREFIX = [];
-var EMPTY_SUFFIX = [];
-var EMPTY_REDIRECTS = [];
-function parse(source) {
-  const parser = new Parser(source);
-  return parser.parse(source.length);
-}
-var Parser = class {
-  tok;
-  source;
-  errors = [];
-  _redirects = [];
-  constructor(source) {
-    this.tok = new Lexer(source);
-    this.source = source;
-  }
-  parse(sourceLen) {
-    let shebang;
-    if (this.source.charCodeAt(0) === 35 && this.source.charCodeAt(1) === 33) {
-      const nl = this.source.indexOf("\n");
-      shebang = nl === -1 ? this.source : this.source.slice(0, nl);
-    }
-    const commands = this.list();
-    const lexerErrors = this.tok._errors;
-    if (lexerErrors !== null) {
-      for (let i = 0; i < lexerErrors.length; i++)
-        this.errors.push(lexerErrors[i]);
-    }
-    const result = {
-      type: "Script",
-      pos: 0,
-      end: sourceLen,
-      shebang,
-      commands,
-      errors: this.errors.length > 0 ? this.errors : void 0
-    };
-    return result;
-  }
-  error(message, pos) {
-    this.errors.push({ message, pos });
-  }
-  skipSemi() {
-    if (this.tok.peek(LexContext.Normal).token === Token.Semi)
-      this.tok.next(LexContext.Normal);
-  }
-  accept(token, ctx = LexContext.Normal) {
-    if (this.tok.peek(ctx).token === token)
-      return this.tok.next(ctx);
-    return null;
-  }
-  acceptEnd(token, ctx = LexContext.Normal) {
-    if (this.tok.peek(ctx).token === token)
-      return this.tok.next(ctx).end;
-    return -1;
-  }
-  skipNewlines(ctx = LexContext.Normal) {
-    while (this.tok.peek(ctx).token === Token.Newline)
-      this.tok.next(ctx);
-  }
-  makeStatement(command, redirects) {
-    const end = redirects.length > 0 ? redirects[redirects.length - 1].end : command.end;
-    return {
-      type: "Statement",
-      pos: command.pos,
-      end,
-      command,
-      background: void 0,
-      redirects
-    };
-  }
-  // list := and_or ((';' | '&' | NEWLINE) and_or)* [';' | '&' | NEWLINE]
-  list() {
-    const commands = [];
-    this.skipNewlines(LexContext.CommandStart);
-    let t = this.tok.peek(LexContext.CommandStart).token;
-    if (listTerminators[t] || !commandStarts[t])
-      return commands;
-    const first = this.andOr();
-    if (first) {
-      const redirects = this._redirects;
-      this._redirects = [];
-      commands.push(this.makeStatement(first, redirects));
-    }
-    for (; ; ) {
-      t = this.tok.peek(LexContext.Normal).token;
-      if (t !== Token.Semi && t !== Token.Newline && t !== Token.Amp)
-        break;
-      const isBackground = t === Token.Amp;
-      const sepEnd = this.tok.next(LexContext.Normal).end;
-      if (isBackground) {
-        const stmt = commands[commands.length - 1];
-        stmt.background = true;
-        stmt.end = sepEnd;
-      }
-      this.skipNewlines(LexContext.CommandStart);
-      t = this.tok.peek(LexContext.CommandStart).token;
-      if (listTerminators[t] || !commandStarts[t])
-        break;
-      const node = this.andOr();
-      if (node) {
-        const redirects = this._redirects;
-        this._redirects = [];
-        commands.push(this.makeStatement(node, redirects));
-      }
-    }
-    return commands;
-  }
-  // and_or := pipeline (('&&' | '||') newlines pipeline)*
-  andOr() {
-    const first = this.pipeline();
-    if (!first)
-      return null;
-    let t = this.tok.peek(LexContext.Normal).token;
-    if (t !== Token.And && t !== Token.Or)
-      return first;
-    let wrappedFirst = first;
-    if (this._redirects.length > 0) {
-      wrappedFirst = this.makeStatement(first, this._redirects);
-      this._redirects = [];
-    }
-    const commands = [wrappedFirst];
-    const operators = [];
-    do {
-      operators.push(this.tok.next(LexContext.Normal).token === Token.And ? "&&" : "||");
-      this.skipNewlines(LexContext.CommandStart);
-      const next = this.pipeline();
-      if (!next)
-        break;
-      commands.push(next);
-      t = this.tok.peek(LexContext.Normal).token;
-    } while (t === Token.And || t === Token.Or);
-    return {
-      type: "AndOr",
-      pos: first.pos,
-      end: commands[commands.length - 1].end,
-      commands,
-      operators
-    };
-  }
-  wrapCompoundRedirects(node) {
-    const redirects = this._redirects;
-    this._redirects = [];
-    if (redirects.length === 0)
-      return node;
-    return this.makeStatement(node, redirects);
-  }
-  // pipeline := ['time' ['-p']] ['!'] command ('|' newlines command)*
-  pipeline() {
-    let time = false;
-    let pipelinePos = 0;
-    if (this.tok.peek(LexContext.CommandStart).token === Token.Word && this.tok.peek(LexContext.CommandStart).value === "time") {
-      time = true;
-      pipelinePos = this.tok.next(LexContext.CommandStart).pos;
-      if (this.tok.peek(LexContext.CommandStart).token === Token.Word && this.tok.peek(LexContext.CommandStart).value === "-p")
-        this.tok.next(LexContext.CommandStart);
-    }
-    const negated = this.tok.peek(LexContext.CommandStart).token === Token.Bang;
-    if (negated) {
-      if (!time)
-        pipelinePos = this.tok.peek(LexContext.CommandStart).pos;
-      this.tok.next(LexContext.CommandStart);
-    }
-    const first = this.command();
-    if (!first) {
-      if (time || negated) {
-        const pipeline2 = {
-          type: "Pipeline",
-          pos: pipelinePos,
-          end: pipelinePos,
-          commands: [],
-          negated: negated ? true : void 0,
-          operators: [],
-          time: time ? true : void 0
-        };
-        return pipeline2;
-      }
-      return null;
-    }
-    if (!time && !negated)
-      pipelinePos = first.pos;
-    const commands = [first];
-    const operators = [];
-    let firstRedirects = this._redirects;
-    this._redirects = [];
-    while (this.tok.peek(LexContext.Normal).token === Token.Pipe) {
-      if (commands.length === 1 && firstRedirects.length > 0) {
-        commands[0] = this.makeStatement(first, firstRedirects);
-        firstRedirects = [];
-      }
-      const pipeVal = this.tok.next(LexContext.Normal).value;
-      operators.push(pipeVal === "|&" ? "|&" : "|");
-      this.skipNewlines(LexContext.CommandStart);
-      const cmd = this.command();
-      if (cmd)
-        commands.push(this.wrapCompoundRedirects(cmd));
-    }
-    if (commands.length === 1 && !negated && !time) {
-      this._redirects = firstRedirects;
-      return commands[0];
-    }
-    if (firstRedirects.length > 0) {
-      commands[0] = this.makeStatement(first, firstRedirects);
-    }
-    const pipeline = {
-      type: "Pipeline",
-      pos: pipelinePos,
-      end: commands[commands.length - 1].end,
-      commands,
-      negated: negated ? true : void 0,
-      operators,
-      time: time ? true : void 0
-    };
-    return pipeline;
-  }
-  // command := compound_command | function_def | simple_command
-  command() {
-    switch (this.tok.peek(LexContext.CommandStart).token) {
-      case Token.LParen:
-        return this.subshell();
-      case Token.LBrace:
-        return this.braceGroup();
-      case Token.If:
-        return this.ifClause();
-      case Token.For:
-        return this.forClause();
-      case Token.While:
-        return this.whileClause();
-      case Token.Until:
-        return this.untilClause();
-      case Token.Case:
-        return this.caseClause();
-      case Token.Function:
-        return this.functionDef();
-      case Token.Select:
-        return this.selectClause();
-      case Token.DblLBracket:
-        return this.testCommand();
-      case Token.ArithCmd:
-        return this.arithCommand();
-      case Token.Coproc:
-        return this.coprocCommand();
-      case Token.Word:
-      case Token.Assignment:
-      case Token.Redirect:
-        return this.simpleCommandOrFunction();
-      default:
-        return null;
-    }
-  }
-  collectTrailingRedirects() {
-    let redirects = [];
-    while (this.tok.peek(LexContext.Normal).token === Token.Redirect) {
-      redirects = this.collectRedirect(redirects, LexContext.Normal);
-    }
-    return redirects;
-  }
-  // arith_command := (( expr ))
-  arithCommand() {
-    const tok = this.tok.next(LexContext.CommandStart);
-    this._redirects = this.collectTrailingRedirects();
-    return new ArithmeticCommandImpl(tok.pos, tok.end, tok.value);
-  }
-  // coproc := COPROC [name] command [redirections]
-  coprocCommand() {
-    const startTok = this.tok.next(LexContext.CommandStart);
-    const pos = startTok.pos;
-    const startEnd = startTok.end;
-    const t = this.tok.peek(LexContext.CommandStart);
-    if (t.token !== Token.Word && t.token !== Token.Assignment && t.token !== Token.Redirect) {
-      const body2 = this.pipeline() ?? {
-        type: "Command",
-        pos,
-        end: startEnd,
-        name: void 0,
-        prefix: EMPTY_PREFIX,
-        suffix: EMPTY_SUFFIX,
-        redirects: EMPTY_REDIRECTS
-      };
-      const bodyRedirects2 = this._redirects;
-      this._redirects = [];
-      const redirects2 = this.collectTrailingRedirects();
-      const allRedirects2 = [...bodyRedirects2, ...redirects2];
-      const end2 = allRedirects2.length > 0 ? allRedirects2[allRedirects2.length - 1].end : body2.end;
-      return { type: "Coproc", pos, end: end2, name: void 0, body: body2, redirects: allRedirects2 };
-    }
-    const tentativeWord = this.toWord(this.tok.next(LexContext.CommandStart));
-    const body = this.pipeline();
-    if (body === null) {
-      const cmd = {
-        type: "Command",
-        pos: tentativeWord.pos,
-        end: tentativeWord.end,
-        name: tentativeWord,
-        prefix: EMPTY_PREFIX,
-        suffix: EMPTY_SUFFIX,
-        redirects: EMPTY_REDIRECTS
-      };
-      const redirects2 = this.collectTrailingRedirects();
-      const end2 = redirects2.length > 0 ? redirects2[redirects2.length - 1].end : cmd.end;
-      return { type: "Coproc", pos, end: end2, name: void 0, body: cmd, redirects: redirects2 };
-    }
-    if (body.type === "Command") {
-      const cmd = body;
-      if (cmd.name) {
-        cmd.suffix = [cmd.name, ...cmd.suffix];
-      }
-      cmd.name = tentativeWord;
-      cmd.pos = tentativeWord.pos;
-      const redirects2 = this.collectTrailingRedirects();
-      const end2 = redirects2.length > 0 ? redirects2[redirects2.length - 1].end : cmd.end;
-      return { type: "Coproc", pos, end: end2, name: void 0, body: cmd, redirects: redirects2 };
-    }
-    const bodyRedirects = this._redirects;
-    this._redirects = [];
-    const redirects = this.collectTrailingRedirects();
-    const allRedirects = [...bodyRedirects, ...redirects];
-    const end = allRedirects.length > 0 ? allRedirects[allRedirects.length - 1].end : body.end;
-    return { type: "Coproc", pos, end, name: tentativeWord, body, redirects: allRedirects };
-  }
-  // subshell := '(' list ')'
-  subshell() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const commands = this.list();
-    const closeEnd = this.acceptEnd(Token.RParen, LexContext.Normal);
-    if (closeEnd < 0)
-      this.error("expected ')' to close subshell", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "Subshell", pos, end, body: this.makeCompoundList(commands) };
-  }
-  // brace_group := '{' list '}'
-  braceGroup() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const commands = this.list();
-    const closeEnd = this.acceptEnd(Token.RBrace, LexContext.Normal);
-    if (closeEnd < 0)
-      this.error("expected '}' to close brace group", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "BraceGroup", pos, end, body: this.makeCompoundList(commands) };
-  }
-  // if_clause := IF list THEN list (ELIF list THEN list)* [ELSE list] FI
-  ifClause() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const clause = this.makeCompoundList(this.list());
-    this.skipSemi();
-    if (!this.accept(Token.Then, LexContext.CommandStart))
-      this.error("expected 'then'", this.tok.getPos());
-    const then_ = this.makeCompoundList(this.list());
-    this.skipSemi();
-    let else_;
-    let end;
-    if (this.tok.peek(LexContext.CommandStart).token === Token.Elif) {
-      else_ = this.ifClause();
-      end = else_.end;
-    } else if (this.accept(Token.Else, LexContext.CommandStart)) {
-      else_ = this.makeCompoundList(this.list());
-      this.skipSemi();
-      const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
-      if (closeEnd < 0)
-        this.error("expected 'fi' to close 'if'", this.tok.getPos());
-      end = closeEnd >= 0 ? closeEnd : pos;
-    } else {
-      const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
-      if (closeEnd < 0)
-        this.error("expected 'fi' to close 'if'", this.tok.getPos());
-      end = closeEnd >= 0 ? closeEnd : pos;
-    }
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "If", pos, end, clause, then: then_, else: else_ };
-  }
-  // for_clause := FOR word [IN word* (';'|NL)] DO list DONE
-  //            | FOR '((' expr '))' [';'|NL] DO list DONE
-  forClause() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    if (this.tok.peek(LexContext.Normal).token === Token.LParen) {
-      return this.cStyleFor(pos);
-    }
-    const name = this.readWord(LexContext.Normal);
-    const wordlist = [];
-    this.skipNewlines(LexContext.CommandStart);
-    if (this.tok.peek(LexContext.CommandStart).token === Token.In) {
-      this.tok.next(LexContext.CommandStart);
-      while (this.tok.peek(LexContext.Normal).token === Token.Word) {
-        wordlist.push(this.readWord(LexContext.Normal));
-      }
-    }
-    this.skipSemi();
-    this.skipNewlines(LexContext.CommandStart);
-    if (!this.accept(Token.Do, LexContext.CommandStart))
-      this.error("expected 'do'", this.tok.getPos());
-    const body = this.list();
-    this.skipSemi();
-    const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
-    if (closeEnd < 0)
-      this.error("expected 'done' to close 'for'", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "For", pos, end, name, wordlist, body: this.makeCompoundList(body) };
-  }
-  // C-style for: (( expr; expr; expr )) [;|NL] do list done | { list }
-  cStyleFor(pos) {
-    const [initStr, testStr, updateStr, initPos, testPos, updatePos] = this.tok.readCStyleForExprs();
-    if (this.tok.peek(LexContext.CommandStart).token === Token.Semi)
-      this.tok.next(LexContext.CommandStart);
-    this.skipNewlines(LexContext.CommandStart);
-    if (this.tok.peek(LexContext.CommandStart).token === Token.LBrace) {
-      const bg = this.braceGroup();
-      return new ArithmeticForImpl(pos, bg.end, bg.body, initStr, testStr, updateStr, initPos, testPos, updatePos);
-    }
-    if (!this.accept(Token.Do, LexContext.CommandStart))
-      this.error("expected 'do'", this.tok.getPos());
-    const body = this.list();
-    const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
-    if (closeEnd < 0)
-      this.error("expected 'done' to close 'for'", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return new ArithmeticForImpl(pos, end, this.makeCompoundList(body), initStr, testStr, updateStr, initPos, testPos, updatePos);
-  }
-  whileClause() {
-    return this.whileOrUntil("while");
-  }
-  untilClause() {
-    return this.whileOrUntil("until");
-  }
-  whileOrUntil(kind) {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const clause = this.makeCompoundList(this.list());
-    this.skipSemi();
-    if (!this.accept(Token.Do, LexContext.CommandStart))
-      this.error("expected 'do'", this.tok.getPos());
-    const body = this.list();
-    this.skipSemi();
-    const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
-    if (closeEnd < 0)
-      this.error(`expected 'done' to close '${kind}'`, this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "While", pos, end, kind, clause, body: this.makeCompoundList(body) };
-  }
-  // case_clause := CASE word IN (pattern) list (;; | ;& | ;;&) ... ESAC
-  caseClause() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const word = this.readWord(LexContext.Normal);
-    this.skipNewlines(LexContext.CommandStart);
-    if (!this.accept(Token.In, LexContext.CommandStart))
-      this.error("expected 'in' after 'case' word", this.tok.getPos());
-    this.skipNewlines(LexContext.CommandStart);
-    const items = [];
-    let t = this.tok.peek(LexContext.CommandStart).token;
-    while (t !== Token.Esac && t !== Token.EOF) {
-      const itemPos = this.tok.peek(LexContext.Normal).pos;
-      this.accept(Token.LParen, LexContext.Normal);
-      const pattern = [];
-      t = this.tok.peek(LexContext.Normal).token;
-      while (t !== Token.RParen && t !== Token.EOF) {
-        if (t !== Token.Pipe)
-          pattern.push(this.toWord(this.tok.next(LexContext.Normal)));
-        else
-          this.tok.next(LexContext.Normal);
-        t = this.tok.peek(LexContext.Normal).token;
-      }
-      const rparenEnd = this.acceptEnd(Token.RParen, LexContext.Normal);
-      const cmds = this.list();
-      let itemEnd = rparenEnd >= 0 ? rparenEnd : itemPos;
-      if (cmds.length > 0)
-        itemEnd = cmds[cmds.length - 1].end;
-      const item = {
-        type: "CaseItem",
-        pos: itemPos,
-        end: itemEnd,
-        pattern,
-        body: this.makeCompoundList(cmds),
-        terminator: void 0
-      };
-      t = this.tok.peek(LexContext.CommandStart).token;
-      if (t === Token.DoubleSemi || t === Token.SemiAmp || t === Token.DoubleSemiAmp) {
-        const termTok = this.tok.next(LexContext.CommandStart);
-        item.terminator = CASE_TERMINATORS[termTok.token];
-        item.end = termTok.end;
-      }
-      items.push(item);
-      this.skipNewlines(LexContext.CommandStart);
-      t = this.tok.peek(LexContext.CommandStart).token;
-    }
-    const closeEnd = this.acceptEnd(Token.Esac, LexContext.CommandStart);
-    if (closeEnd < 0)
-      this.error("expected 'esac' to close 'case'", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "Case", pos, end, word, items };
-  }
-  // select_clause := SELECT word [IN word* (';'|NL)] DO list DONE
-  selectClause() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const name = this.readWord(LexContext.Normal);
-    const wordlist = [];
-    this.skipNewlines(LexContext.CommandStart);
-    if (this.tok.peek(LexContext.CommandStart).token === Token.In) {
-      this.tok.next(LexContext.CommandStart);
-      while (this.tok.peek(LexContext.Normal).token === Token.Word) {
-        wordlist.push(this.readWord(LexContext.Normal));
-      }
-    }
-    this.skipSemi();
-    this.skipNewlines(LexContext.CommandStart);
-    if (!this.accept(Token.Do, LexContext.CommandStart))
-      this.error("expected 'do'", this.tok.getPos());
-    const body = this.list();
-    this.skipSemi();
-    const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
-    if (closeEnd < 0)
-      this.error("expected 'done' to close 'select'", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "Select", pos, end, name, wordlist, body: this.makeCompoundList(body) };
-  }
-  // test_command := [[ test_expr ]]
-  testCommand() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const expr = this.parseTestOr();
-    const closeEnd = this.acceptEnd(Token.DblRBracket, LexContext.TestMode);
-    if (closeEnd < 0 && this.tok.peek(LexContext.Normal).token === Token.EOF)
-      this.error("expected ']]' to close '[['", this.tok.getPos());
-    const end = closeEnd >= 0 ? closeEnd : pos;
-    this._redirects = this.collectTrailingRedirects();
-    return { type: "TestCommand", pos, end, expression: expr };
-  }
-  // test_or := test_and ('||' test_and)*
-  parseTestOr() {
-    let left = this.parseTestAnd();
-    while (this.tok.peek(LexContext.TestMode).token === Token.Or) {
-      this.tok.next(LexContext.TestMode);
-      const right = this.parseTestAnd();
-      left = {
-        type: "TestLogical",
-        pos: left.pos,
-        end: right.end,
-        operator: "||",
-        left,
-        right
-      };
-    }
-    return left;
-  }
-  // test_and := test_not ('&&' test_not)*
-  parseTestAnd() {
-    let left = this.parseTestNot();
-    while (this.tok.peek(LexContext.TestMode).token === Token.And) {
-      this.tok.next(LexContext.TestMode);
-      const right = this.parseTestNot();
-      left = {
-        type: "TestLogical",
-        pos: left.pos,
-        end: right.end,
-        operator: "&&",
-        left,
-        right
-      };
-    }
-    return left;
-  }
-  // test_not := '!' test_not | test_primary
-  parseTestNot() {
-    if (this.tok.peek(LexContext.TestMode).token === Token.Word && this.tok.peek(LexContext.TestMode).value === "!") {
-      const notPos = this.tok.next(LexContext.TestMode).pos;
-      const operand = this.parseTestNot();
-      return { type: "TestNot", pos: notPos, end: operand.end, operand };
-    }
-    return this.parseTestPrimary();
-  }
-  // test_primary := '(' test_or ')' | unary_op word | word binary_op word | word
-  parseTestPrimary() {
-    if (this.tok.peek(LexContext.TestMode).token === Token.LParen) {
-      const openPos = this.tok.next(LexContext.TestMode).pos;
-      const expr = this.parseTestOr();
-      const closeEnd = this.acceptEnd(Token.RParen, LexContext.TestMode);
-      if (closeEnd < 0)
-        this.error("expected ')' to close test group", this.tok.getPos());
-      const end = closeEnd >= 0 ? closeEnd : openPos;
-      return { type: "TestGroup", pos: openPos, end, expression: expr };
-    }
-    const first = this.tok.next(LexContext.TestMode);
-    const val = first.value;
-    const firstPos = first.pos;
-    const firstEnd = first.end;
-    if (UNARY_TEST_OPS[val] === 1) {
-      const nt2 = this.tok.peek(LexContext.TestMode).token;
-      if (nt2 === Token.Word) {
-        const operand = this.readWord(LexContext.TestMode);
-        return {
-          type: "TestUnary",
-          pos: firstPos,
-          end: operand.end,
-          operator: val,
-          operand
-        };
-      }
-    }
-    const nt = this.tok.peek(LexContext.TestMode);
-    if (nt.token === Token.Word && BINARY_TEST_OPS[nt.value] === 1) {
-      const op = this.tok.next(LexContext.TestMode).value;
-      let right;
-      if (op === "=~") {
-        right = this.toWord(this.tok.readTestRegexWord());
-      } else {
-        right = this.readWord(LexContext.TestMode);
-      }
-      const left = this.toWordFromPosEnd(first, firstPos, firstEnd);
-      return {
-        type: "TestBinary",
-        pos: firstPos,
-        end: right.end,
-        operator: op,
-        left,
-        right
-      };
-    }
-    const w = this.toWordFromPosEnd(first, firstPos, firstEnd);
-    return { type: "TestUnary", pos: firstPos, end: w.end, operator: "-n", operand: w };
-  }
-  // function_def with 'function' keyword
-  functionDef() {
-    const pos = this.tok.next(LexContext.CommandStart).pos;
-    const name = this.readWord(LexContext.Normal);
-    if (this.tok.peek(LexContext.CommandStart).token === Token.LParen) {
-      this.tok.next(LexContext.CommandStart);
-      if (!this.accept(Token.RParen, LexContext.CommandStart))
-        this.error("expected ')' after '('", this.tok.getPos());
-    }
-    this.skipNewlines(LexContext.CommandStart);
-    const body = this.commandAsBody();
-    const redirects = this._redirects;
-    this._redirects = [];
-    const end = redirects.length > 0 ? redirects[redirects.length - 1].end : body.end;
-    return { type: "Function", pos, end, name, body, redirects };
-  }
-  // simple_command or function_def (word '(' ')' body)
-  simpleCommandOrFunction() {
-    const prefix = [];
-    let redirects = [];
-    let cmdPos = this.tok.peek(LexContext.CommandStart).pos;
-    let lastEnd = cmdPos;
-    while (this.tok.peek(LexContext.CommandStart).token === Token.Assignment) {
-      const t = this.tok.next(LexContext.CommandStart);
-      lastEnd = t.end;
-      prefix.push(this.parseAssignment(t));
-    }
-    while (this.tok.peek(LexContext.CommandStart).token === Token.Redirect) {
-      redirects = this.collectRedirect(redirects, LexContext.CommandStart);
-      lastEnd = redirects[redirects.length - 1].end;
-    }
-    if (this.tok.peek(LexContext.Normal).token !== Token.Word) {
-      if (prefix.length > 0) {
-        return {
-          type: "Command",
-          pos: cmdPos,
-          end: lastEnd,
-          name: void 0,
-          prefix,
-          suffix: EMPTY_SUFFIX,
-          redirects
-        };
-      }
-      return {
-        type: "Command",
-        pos: cmdPos,
-        end: lastEnd,
-        name: void 0,
-        prefix: EMPTY_PREFIX,
-        suffix: EMPTY_SUFFIX,
-        redirects: EMPTY_REDIRECTS
-      };
-    }
-    const name = this.readWord(LexContext.Normal);
-    lastEnd = name.end;
-    if (this.tok.peek(LexContext.Normal).token === Token.LParen) {
-      this.tok.next(LexContext.Normal);
-      if (this.tok.peek(LexContext.Normal).token === Token.RParen) {
-        this.tok.next(LexContext.Normal);
-        this.skipNewlines(LexContext.CommandStart);
-        const body = this.commandAsBody();
-        const bodyRedirects = this._redirects;
-        this._redirects = [];
-        const end = bodyRedirects.length > 0 ? bodyRedirects[bodyRedirects.length - 1].end : body.end;
-        return { type: "Function", pos: name.pos, end, name, body, redirects: bodyRedirects };
-      }
-    }
-    const suffix = [];
-    for (; ; ) {
-      const st = this.tok.peek(LexContext.Normal).token;
-      if (st === Token.Word || st === Token.Assignment) {
-        const w = this.readWord(LexContext.Normal);
-        suffix.push(w);
-        lastEnd = w.end;
-      } else if (st === Token.Redirect) {
-        redirects = this.collectRedirect(redirects, LexContext.Normal);
-        lastEnd = redirects[redirects.length - 1].end;
-      } else {
-        break;
-      }
-    }
-    return { type: "Command", pos: cmdPos, end: lastEnd, name, prefix, suffix, redirects };
-  }
-  collectRedirect(redirects, ctx) {
-    const t = this.tok.next(ctx);
-    const tPos = t.pos;
-    const tEnd = t.end;
-    const r = {
-      pos: tPos,
-      end: tEnd,
-      operator: REDIRECT_OPS[t.value] ?? ">",
-      target: void 0,
-      fileDescriptor: t.fileDescriptor,
-      variableName: t.variableName,
-      content: t.content,
-      heredocQuoted: void 0,
-      body: void 0
-    };
-    if (t.content != null) {
-      r.target = new WordImpl(t.content, t.targetPos, t.targetEnd, this.source);
-    }
-    if (t.value === "<<" || t.value === "<<-")
-      this.tok.registerHereDocTarget(r);
-    redirects.push(r);
-    return redirects;
-  }
-  commandAsBody() {
-    const t = this.tok.peek(LexContext.CommandStart).token;
-    if (t === Token.LBrace)
-      return this.braceGroup();
-    if (t === Token.LParen)
-      return this.subshell();
-    const cmd = this.command();
-    const p = this.tok.getPos();
-    return cmd ?? { type: "CompoundList", pos: p, end: p, commands: [] };
-  }
-  readWord(ctx) {
-    return this.toWord(this.tok.next(ctx));
-  }
-  toWord(tok) {
-    return new WordImpl(this.source.slice(tok.pos, tok.end), tok.pos, tok.end, this.source);
-  }
-  toWordFromPosEnd(tok, pos, end) {
-    return new WordImpl(this.source.slice(pos, end), pos, end, this.source);
-  }
-  parseAssignment(tok) {
-    const text = this.source.slice(tok.pos, tok.end);
-    const tokPos = tok.pos;
-    const tokEnd = tok.end;
-    const result = {
-      type: "Assignment",
-      pos: tokPos,
-      end: tokEnd,
-      text,
-      name: void 0,
-      value: void 0,
-      append: void 0,
-      index: void 0,
-      array: void 0
-    };
-    const eqIdx = text.indexOf("=");
-    if (eqIdx <= 0)
-      return result;
-    let nameEnd = eqIdx;
-    let append = false;
-    let index;
-    if (text.charCodeAt(eqIdx - 1) === 43) {
-      append = true;
-      nameEnd = eqIdx - 1;
-    }
-    const bracketIdx = text.indexOf("[");
-    if (bracketIdx > 0 && bracketIdx < nameEnd) {
-      const rbracketIdx = text.indexOf("]", bracketIdx);
-      if (rbracketIdx > bracketIdx && rbracketIdx + 1 === nameEnd) {
-        index = text.slice(bracketIdx + 1, rbracketIdx);
-        nameEnd = bracketIdx;
-      }
-    }
-    const name = text.slice(0, nameEnd);
-    result.name = name;
-    if (append)
-      result.append = true;
-    if (index !== void 0)
-      result.index = index;
-    const valStart = eqIdx + 1;
-    const valText = text.slice(valStart);
-    if (valText.charCodeAt(0) === 40 && valText.charCodeAt(valText.length - 1) === 41) {
-      const inner = valText.slice(1, -1);
-      const arrayOffset = tokPos + valStart + 1;
-      const elements = this.parseArrayElements(inner, arrayOffset);
-      result.array = elements;
-    } else {
-      result.value = new WordImpl(valText, tokPos + valStart, tokEnd, this.source);
-    }
-    return result;
-  }
-  parseArrayElements(inner, offset = 0) {
-    const subTok = new Lexer(inner);
-    const elements = [];
-    while (subTok.peek(LexContext.Normal).token !== Token.EOF) {
-      if (subTok.peek(LexContext.Normal).token === Token.Newline) {
-        subTok.next(LexContext.Normal);
-        continue;
-      }
-      const t = subTok.next(LexContext.Normal);
-      if (t.token === Token.Word || t.token === Token.Assignment) {
-        const pos = t.pos + offset;
-        const end = t.end + offset;
-        elements.push(new WordImpl(this.source.slice(pos, end), pos, end, this.source));
-      }
-    }
-    return elements;
-  }
-  makeCompoundList(commands) {
-    const p = this.tok.getPos();
-    const pos = commands.length > 0 ? commands[0].pos : p;
-    const end = commands.length > 0 ? commands[commands.length - 1].end : p;
-    return { type: "CompoundList", pos, end, commands };
-  }
-};
-
-// src/parser.ts
-var import_path = require("path");
-var import_os = require("os");
-
-// src/shells.ts
-var SHELL_INTERPRETERS = /* @__PURE__ */ new Set([
-  "sh",
-  "bash",
-  "zsh",
-  "dash",
-  "ksh",
-  "mksh",
-  "ash"
-]);
-
-// src/parser.ts
-var NO_COMMAND_NODE_TYPES = /* @__PURE__ */ new Set([]);
-var VAR_REF_REGEX = /^\$\{?(\w+)\}?$/;
-function resolveVarRef(text, chainAssignments) {
-  const m = text.match(VAR_REF_REGEX);
-  if (!m) return null;
-  const assignment = chainAssignments.get(m[1]);
-  if (!assignment || assignment.isDynamic || assignment.value === null) return null;
-  return assignment.value;
-}
-function isCatHeredocInterpolation(part) {
-  if (!part.script) return false;
-  const { commands } = part.script;
-  if (commands.length !== 1) return false;
-  const node = commands[0].command;
-  if (node.type !== "Command") return false;
-  if (node.name?.value !== "cat") return false;
-  if (node.suffix.length > 0) return false;
-  const heredoc = node.redirects.find(
-    (r) => r.operator === "<<" || r.operator === "<<-"
-  );
-  if (!heredoc) return false;
-  return heredoc.content != null && heredoc.content.includes("\n");
-}
-function extractHeredoc(cmd) {
-  const heredocs = cmd.redirects.filter(
-    (r) => r.operator === "<<" || r.operator === "<<-"
-  );
-  if (heredocs.length !== 1) return void 0;
-  const h = heredocs[0];
-  if (h.content == null || h.content.length === 0) return void 0;
-  return { content: h.content, quotedDelimiter: h.heredocQuoted === true };
-}
-function preprocessPathParentheses(input) {
-  const result = [];
-  let i = 0;
-  while (i < input.length) {
-    const ch = input[i];
-    if (ch === '"' || ch === "'") {
-      const quote = ch;
-      let j = i + 1;
-      while (j < input.length && input[j] !== quote) {
-        if (input[j] === "\\" && quote === '"') j++;
-        j++;
-      }
-      result.push(input.slice(i, j + 1));
-      i = j + 1;
-      continue;
-    }
-    if ((ch === "$" || ch === "<" || ch === ">") && i + 1 < input.length && input[i + 1] === "(") {
-      let depth = 1;
-      let j = i + 2;
-      while (j < input.length && depth > 0) {
-        if (input[j] === "(") depth++;
-        else if (input[j] === ")") depth--;
-        if (depth > 0) j++;
-      }
-      result.push(input.slice(i, j + 1));
-      i = j + 1;
-      continue;
-    }
-    if (ch !== " " && ch !== "	" && ch !== "\n") {
-      let j = i;
-      while (j < input.length && !" 	\n".includes(input[j]) && input[j] !== '"' && input[j] !== "'" && !(input[j] === "$" && j + 1 < input.length && input[j + 1] === "(")) {
-        j++;
-      }
-      const token = input.slice(i, j);
-      if (token.includes("/") && /[()]/.test(token) && !/^[<>|;&]/.test(token)) {
-        result.push('"' + token + '"');
-      } else {
-        result.push(token);
-      }
-      i = j;
-      continue;
-    }
-    result.push(ch);
-    i++;
-  }
-  return result.join("");
-}
-function extractExpansionCommand(text) {
-  if (text.startsWith("$(") && text.endsWith(")")) return text.slice(2, -1);
-  if (text.startsWith("`") && text.endsWith("`")) return text.slice(1, -1);
-  return text;
-}
-function scanWordPart(part, result) {
-  switch (part.type) {
-    case "CommandExpansion":
-      if (isCatHeredocInterpolation(part)) break;
-      result.hasSubshell = true;
-      result.subshellCommands.push(extractExpansionCommand(part.text));
-      break;
-    case "ProcessSubstitution":
-      result.hasSubshell = true;
-      result.subshellCommands.push(
-        part.inner ?? part.text.replace(/^[<>]\(/, "").replace(/\)$/, "")
-      );
-      break;
-    case "DoubleQuoted":
-    case "LocaleString":
-      for (const child of part.parts) scanWordPart(child, result);
-      break;
-    case "ParameterExpansion":
-      if (part.operand) collectExpansionsFromWord(part.operand, result);
-      if (part.slice?.offset) collectExpansionsFromWord(part.slice.offset, result);
-      if (part.slice?.length) collectExpansionsFromWord(part.slice.length, result);
-      if (part.replace?.pattern) collectExpansionsFromWord(part.replace.pattern, result);
-      if (part.replace?.replacement) collectExpansionsFromWord(part.replace.replacement, result);
-      break;
-    case "ArithmeticExpansion":
-      break;
-  }
-}
-function collectExpansionsFromWord(word, result) {
-  if (!word.parts) return;
-  for (const part of word.parts) scanWordPart(part, result);
-}
-function scanTestExpression(expr, result) {
-  switch (expr.type) {
-    case "TestUnary":
-      collectExpansionsFromWord(expr.operand, result);
-      break;
-    case "TestBinary":
-      collectExpansionsFromWord(expr.left, result);
-      collectExpansionsFromWord(expr.right, result);
-      break;
-    case "TestLogical":
-      scanTestExpression(expr.left, result);
-      scanTestExpression(expr.right, result);
-      break;
-    case "TestNot":
-      scanTestExpression(expr.operand, result);
-      break;
-    case "TestGroup":
-      scanTestExpression(expr.expression, result);
-      break;
-  }
-}
-function extractAssignments(cmd) {
-  const assignments = [];
-  for (const p of cmd.prefix) {
-    if (!p.name) continue;
-    const isDynamic = p.value?.parts?.some((part) => part.type === "CommandExpansion") ?? false;
-    const value = isDynamic ? null : p.value?.value ?? "";
-    assignments.push({ name: p.name, value, isDynamic });
-  }
-  return assignments;
-}
-function convertCommand(cmd, chainAssignments) {
-  if (!cmd.name) return null;
-  let originalCommand = cmd.name.value;
-  let resolvedFrom;
-  const varMatch = originalCommand.match(VAR_REF_REGEX);
-  if (varMatch) {
-    const resolved = resolveVarRef(originalCommand, chainAssignments);
-    if (resolved !== null) {
-      resolvedFrom = originalCommand;
-      originalCommand = resolved;
-    } else if (chainAssignments.has(varMatch[1])) {
-      resolvedFrom = originalCommand;
-    }
-  }
-  const command = originalCommand.includes("/") ? (0, import_path.basename)(originalCommand) : originalCommand;
-  const envPrefixes = cmd.prefix.map((p) => p.text);
-  const args = cmd.suffix.map((s) => s.value);
-  const rawParts = [...envPrefixes, cmd.name.value, ...args];
-  const raw = rawParts.join(" ");
-  const result = { command, originalCommand, args, envPrefixes, raw };
-  if (originalCommand.includes("/")) result.originalPath = originalCommand;
-  if (resolvedFrom) result.resolvedFrom = resolvedFrom;
-  const heredoc = extractHeredoc(cmd);
-  if (heredoc) result.heredoc = heredoc;
-  return result;
-}
-function updateEffectiveCwd(cdCmd, result) {
-  const target = cdCmd.args[0];
-  if (!target || target === "-") {
-    result.effectiveCwd = void 0;
-    return;
-  }
-  let resolved = target;
-  const varMatch = target.match(VAR_REF_REGEX);
-  if (varMatch) {
-    const assignment = result.chainAssignments.get(varMatch[1]);
-    if (assignment && !assignment.isDynamic && assignment.value !== null) {
-      resolved = assignment.value;
-    } else {
-      result.effectiveCwd = void 0;
-      return;
-    }
-  }
-  if (resolved.startsWith("/")) {
-    result.effectiveCwd = resolved;
-  } else if (result.effectiveCwd) {
-    result.effectiveCwd = (0, import_path.resolve)(result.effectiveCwd, resolved);
-  } else {
-    result.effectiveCwd = void 0;
-  }
-}
-function walkCompoundList(list, result) {
-  for (const stmt of list.commands) {
-    walkNode(stmt, result);
-  }
-}
-function walkIfNode(ifNode, result) {
-  walkCompoundList(ifNode.clause, result);
-  walkCompoundList(ifNode.then, result);
-  if (ifNode.else) {
-    if (ifNode.else.type === "If") {
-      walkIfNode(ifNode.else, result);
-    } else {
-      walkCompoundList(ifNode.else, result);
-    }
-  }
-}
-function walkNode(node, result) {
-  switch (node.type) {
-    case "Statement": {
-      const stmt = node;
-      for (const r of stmt.redirects) {
-        if (r.target) collectExpansionsFromWord(r.target, result);
-        if (r.body) collectExpansionsFromWord(r.body, result);
-      }
-      walkNode(stmt.command, result);
-      break;
-    }
-    case "Command": {
-      const cmd = node;
-      if (cmd.name) collectExpansionsFromWord(cmd.name, result);
-      for (const s of cmd.suffix) collectExpansionsFromWord(s, result);
-      for (const r of cmd.redirects) {
-        if (r.target) collectExpansionsFromWord(r.target, result);
-        if (r.body) collectExpansionsFromWord(r.body, result);
-      }
-      for (const p of cmd.prefix) {
-        if (p.value) collectExpansionsFromWord(p.value, result);
-        if (p.array) for (const w of p.array) collectExpansionsFromWord(w, result);
-      }
-      const parsed = convertCommand(cmd, result.chainAssignments);
-      if (!parsed) {
-        for (const a of extractAssignments(cmd)) {
-          result.chainAssignments.set(a.name, {
-            value: a.value,
-            isDynamic: a.isDynamic
-          });
-        }
-        break;
-      }
-      if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 2 && parsed.args[0] === "-c") {
-        const innerResult = parseCommand(parsed.args[1]);
-        if (innerResult.parseError) {
-          result.commands.push(parsed);
-        } else if (innerResult.commands.length === 0 && parsed.envPrefixes.length > 0) {
-          result.commands.push(parsed);
-        } else {
-          if (parsed.envPrefixes.length > 0) {
-            result.commands.push(
-              ...innerResult.commands.map((cmd2) => ({
-                ...cmd2,
-                envPrefixes: [...parsed.envPrefixes, ...cmd2.envPrefixes]
-              }))
-            );
-          } else {
-            result.commands.push(...innerResult.commands);
-          }
-          if (innerResult.hasSubshell) result.hasSubshell = true;
-          result.subshellCommands.push(...innerResult.subshellCommands);
-          if (innerResult.incomplete) result.incomplete = true;
-          if (innerResult.incompleteNodeTypes) {
-            result.incompleteNodeTypes ??= [];
-            for (const t of innerResult.incompleteNodeTypes) {
-              if (!result.incompleteNodeTypes.includes(t)) {
-                result.incompleteNodeTypes.push(t);
-              }
-            }
-          }
-        }
-      } else if (SHELL_INTERPRETERS.has(parsed.command) && parsed.args.length >= 1) {
-        const scriptIdx = parsed.args.findIndex((a) => !a.startsWith("-"));
-        if (scriptIdx !== -1) {
-          let scriptPath = parsed.args[scriptIdx];
-          if (scriptPath.startsWith("~/")) {
-            scriptPath = (0, import_os.homedir)() + scriptPath.slice(1);
-          }
-          const scriptCommand = scriptPath.includes("/") ? (0, import_path.basename)(scriptPath) : scriptPath;
-          const scriptArgs = parsed.args.slice(scriptIdx + 1);
-          const scriptCmd = {
-            command: scriptCommand,
-            originalCommand: scriptPath,
-            args: scriptArgs,
-            envPrefixes: parsed.envPrefixes,
-            raw: parsed.raw
-          };
-          if (scriptPath.includes("/")) scriptCmd.originalPath = scriptPath;
-          result.commands.push(scriptCmd);
-        } else {
-          result.commands.push(parsed);
-        }
-      } else {
-        result.commands.push(parsed);
-      }
-      break;
-    }
-    case "Pipeline": {
-      const pipeline = node;
-      for (const cmd of pipeline.commands) walkNode(cmd, result);
-      break;
-    }
-    case "AndOr": {
-      const andOr = node;
-      const savedCwd = result.effectiveCwd;
-      result.effectiveCwd = void 0;
-      for (const cmd of andOr.commands) {
-        const before = result.commands.length;
-        walkNode(cmd, result);
-        for (let i = before; i < result.commands.length; i++) {
-          if (result.effectiveCwd && !result.commands[i].effectiveCwd) {
-            result.commands[i].effectiveCwd = result.effectiveCwd;
-          }
-        }
-        for (let i = before; i < result.commands.length; i++) {
-          const pc = result.commands[i];
-          if (pc.command === "cd") {
-            updateEffectiveCwd(pc, result);
-          }
-        }
-      }
-      result.effectiveCwd = savedCwd;
-      break;
-    }
-    case "While": {
-      const loop = node;
-      walkCompoundList(loop.clause, result);
-      walkCompoundList(loop.body, result);
-      break;
-    }
-    case "If": {
-      walkIfNode(node, result);
-      break;
-    }
-    case "For": {
-      const f = node;
-      for (const w of f.wordlist) collectExpansionsFromWord(w, result);
-      walkCompoundList(f.body, result);
-      break;
-    }
-    case "Case": {
-      const c = node;
-      collectExpansionsFromWord(c.word, result);
-      for (const item of c.items) {
-        for (const p of item.pattern) collectExpansionsFromWord(p, result);
-        walkCompoundList(item.body, result);
-      }
-      break;
-    }
-    case "Function": {
-      walkNode(node.body, result);
-      break;
-    }
-    case "Subshell": {
-      walkCompoundList(node.body, result);
-      break;
-    }
-    case "BraceGroup": {
-      walkCompoundList(node.body, result);
-      break;
-    }
-    case "CompoundList": {
-      walkCompoundList(node, result);
-      break;
-    }
-    case "Select": {
-      const s = node;
-      for (const w of s.wordlist) collectExpansionsFromWord(w, result);
-      walkCompoundList(s.body, result);
-      break;
-    }
-    case "Coproc": {
-      result.hasSubshell = true;
-      walkNode(node.body, result);
-      break;
-    }
-    case "ArithmeticFor": {
-      walkCompoundList(node.body, result);
-      break;
-    }
-    case "TestCommand": {
-      const e = node.expression;
-      if (e) scanTestExpression(e, result);
-      break;
-    }
-    case "ArithmeticCommand": {
-      const body = node.body;
-      if (/\$\((?!\()|`/.test(body)) {
-        result.incomplete = true;
-        result.incompleteNodeTypes ??= [];
-        if (!result.incompleteNodeTypes.includes("ArithmeticCommand")) {
-          result.incompleteNodeTypes.push("ArithmeticCommand");
-        }
-      }
-      break;
-    }
-    default: {
-      const nodeType = node.type;
-      if (!NO_COMMAND_NODE_TYPES.has(nodeType)) {
-        result.incomplete = true;
-        result.incompleteNodeTypes ??= [];
-        if (!result.incompleteNodeTypes.includes(nodeType)) {
-          result.incompleteNodeTypes.push(nodeType);
-        }
-      }
-      break;
-    }
-  }
-}
-function dropHeredocsIfMultiple(input, commands) {
-  let skeleton = input;
-  for (const cmd of commands) {
-    if (cmd.heredoc) skeleton = skeleton.replaceAll(cmd.heredoc.content, "");
-  }
-  if ((skeleton.match(/<<(?!<)/g) ?? []).length > 1) {
-    for (const cmd of commands) delete cmd.heredoc;
-  }
-}
-function parseCommand(input) {
-  if (!input || !input.trim()) {
-    return {
-      commands: [],
-      hasSubshell: false,
-      subshellCommands: [],
-      parseError: false,
-      chainAssignments: /* @__PURE__ */ new Map()
-    };
-  }
-  const preprocessed = preprocessPathParentheses(input);
-  const ast = parse(preprocessed);
-  if (ast.errors?.length) {
-    return {
-      commands: [],
-      hasSubshell: false,
-      subshellCommands: [],
-      parseError: true,
-      chainAssignments: /* @__PURE__ */ new Map()
-    };
-  }
-  const result = {
-    commands: [],
-    hasSubshell: false,
-    subshellCommands: [],
-    chainAssignments: /* @__PURE__ */ new Map()
-  };
-  for (const stmt of ast.commands) {
-    walkNode(stmt, result);
-  }
-  dropHeredocsIfMultiple(input, result.commands);
-  return {
-    commands: result.commands,
-    hasSubshell: result.hasSubshell,
-    subshellCommands: result.subshellCommands,
-    parseError: false,
-    chainAssignments: result.chainAssignments,
-    incomplete: result.incomplete === true,
-    incompleteNodeTypes: result.incompleteNodeTypes
-  };
-}
+// src/core.ts
+init_parser2();
 
 // src/evaluator.ts
-var import_os5 = require("os");
+var import_os6 = require("os");
+init_parser2();
 
 // src/glob.ts
 function globToRegexString(pattern, pathAware) {
@@ -11589,6 +11719,7 @@ function matchesDangerousEnv(token) {
 var DANGEROUS_EXEC_ENV_PATTERN = `^(${[...DANGEROUS_EXEC_ENV].join("|")})=`;
 
 // src/defaults.ts
+init_shells();
 var SAFE_DEV_TOOLS = [
   "jest",
   "vitest",
@@ -13059,6 +13190,9 @@ function evaluateTargetPolicies(cmd, cwd, config) {
   };
 }
 
+// src/remote-exec.ts
+init_parser2();
+
 // src/args.ts
 function makeCommand(command, args) {
   return {
@@ -13104,6 +13238,7 @@ function skipLeadingFlags(args, spec) {
 }
 
 // src/remote-exec.ts
+init_shells();
 function findMatchingTarget(value, targets) {
   return targets.find((t) => globToRegex(t.name).test(value)) || null;
 }
@@ -13595,6 +13730,8 @@ function tryRemoteExec(cmd, config, depth) {
 }
 
 // src/subcommand-runner.ts
+init_parser2();
+init_shells();
 function asParseResult(cmd) {
   return {
     commands: [cmd],
@@ -13646,7 +13783,7 @@ function parseUvRunSubcommand(args) {
     }
   };
 }
-function evaluateUvCommand(cmd, config, depth = 0) {
+function evaluateUvCommand(cmd, config, depth = 0, cwd) {
   const { command, args } = cmd;
   if (args[0] !== "run") return null;
   const { subcommand, unresolved } = parseUvRunSubcommand(args);
@@ -13662,7 +13799,7 @@ function evaluateUvCommand(cmd, config, depth = 0) {
     }
     return null;
   }
-  const result = evaluate(asParseResult(subcommand), config, depth + 1);
+  const result = evaluate(asParseResult(subcommand), config, depth + 1, cwd);
   return {
     command,
     args,
@@ -13747,7 +13884,7 @@ function parseXargsSubcommand(args) {
     subcommand: makeCommand(args[i], args.slice(i + 1))
   };
 }
-function evaluateXargsCommand(cmd, config, depth = 0) {
+function evaluateXargsCommand(cmd, config, depth = 0, cwd) {
   const { command, args } = cmd;
   const { subcommand, unresolved } = parseXargsSubcommand(args);
   if (unresolved || !subcommand) {
@@ -13767,7 +13904,7 @@ function evaluateXargsCommand(cmd, config, depth = 0) {
   } else {
     parsed = asParseResult(subcommand);
   }
-  const result = evaluate(parsed, config, depth + 1);
+  const result = evaluate(parsed, config, depth + 1, cwd);
   return {
     command,
     args,
@@ -13799,7 +13936,7 @@ function parseFindExecCommands(args) {
   }
   return commands;
 }
-function evaluateFindCommand(cmd, config, depth = 0) {
+function evaluateFindCommand(cmd, config, depth = 0, cwd) {
   const { command, args } = cmd;
   if (args.some((a) => a === "-delete")) {
     return { command, args, decision: "ask", reason: "find -delete can remove files", matchedRule: "find:delete" };
@@ -13812,7 +13949,7 @@ function evaluateFindCommand(cmd, config, depth = 0) {
     return { command, args, decision: "allow", reason: "find without dangerous flags", matchedRule: "find:safe" };
   }
   for (const execCmd of execCommands) {
-    const result = evaluate(asParseResult(execCmd), config, depth + 1);
+    const result = evaluate(asParseResult(execCmd), config, depth + 1, cwd);
     if (result.decision === "deny") {
       return { command, args, decision: "deny", reason: `find -exec: ${result.reason}`, matchedRule: "find:exec" };
     }
@@ -13843,11 +13980,11 @@ function evaluatePkgRunnerSubcommand(cmd, config, depth, cwd) {
 function trySubcommandRunner(cmd, config, depth, cwd) {
   switch (cmd.command) {
     case "uv":
-      return evaluateUvCommand(cmd, config, depth);
+      return evaluateUvCommand(cmd, config, depth, cwd);
     case "xargs":
-      return evaluateXargsCommand(cmd, config, depth);
+      return evaluateXargsCommand(cmd, config, depth, cwd);
     case "find":
-      return evaluateFindCommand(cmd, config, depth);
+      return evaluateFindCommand(cmd, config, depth, cwd);
     case "npx":
     case "bunx":
     case "pnpx":
@@ -14299,6 +14436,323 @@ function tryScriptEval(cmd, config, cwd) {
   return null;
 }
 
+// src/write-scope.ts
+var import_fs3 = require("fs");
+var import_os5 = require("os");
+var import_path6 = require("path");
+var MARKER = "CLAUDE_UNATTENDED";
+var KILL_SWITCH = "_AUTOPILOT_WRITE_SCOPE";
+var EXTRA_ROOTS_VAR = "_AUTOPILOT_WRITE_SCOPE_EXTRA";
+var TMP_ROOTS = ["/tmp"];
+var REPO_MARKER = ["dev", "local", "autopilot"];
+var EVERY_ARG_WRITES = /* @__PURE__ */ new Set(["tee", "mkdir", "touch", "rm", "rmdir", "mv", "ln"]);
+var DEST_ARG_WRITES = /* @__PURE__ */ new Set(["cp", "install"]);
+var VALUE_FLAGS = {
+  touch: /* @__PURE__ */ new Set(["-r", "--reference", "-d", "--date", "-t"]),
+  cp: /* @__PURE__ */ new Set(["-t", "--target-directory", "--sparse", "--reflink"]),
+  mv: /* @__PURE__ */ new Set(["-t", "--target-directory", "-S", "--suffix"]),
+  ln: /* @__PURE__ */ new Set(["-S", "--suffix", "-t", "--target-directory"]),
+  install: /* @__PURE__ */ new Set([
+    "-g",
+    "--group",
+    "-m",
+    "--mode",
+    "-o",
+    "--owner",
+    "-t",
+    "--target-directory",
+    "--strip-program",
+    "-Z",
+    "--context",
+    "--backup",
+    "-S",
+    "--suffix"
+  ])
+};
+var WRAPPERS = {
+  env: /* @__PURE__ */ new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]),
+  command: /* @__PURE__ */ new Set([]),
+  nohup: /* @__PURE__ */ new Set([]),
+  nice: /* @__PURE__ */ new Set(["-n", "--adjustment"]),
+  timeout: /* @__PURE__ */ new Set(["-s", "--signal", "-k", "--kill-after"]),
+  ionice: /* @__PURE__ */ new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid"]),
+  stdbuf: /* @__PURE__ */ new Set(["-i", "--input", "-o", "--output", "-e", "--error"]),
+  setsid: /* @__PURE__ */ new Set([]),
+  time: /* @__PURE__ */ new Set(["-o", "--output", "-f", "--format"])
+};
+function writeScopeState(cwd, env = process.env) {
+  if (env[MARKER] !== "1") return { armed: false, disarmed: false };
+  if (env[KILL_SWITCH] === "off") return { armed: false, disarmed: true };
+  return { armed: true, roots: allowedRoots(cwd, env) };
+}
+var DISARM_LINE = `[warden] write-scope fence disarmed by ${KILL_SWITCH}=off`;
+function isInside(path, root) {
+  return path === root || path.startsWith(root.endsWith("/") ? root : root + "/");
+}
+function homeOf(env) {
+  return env.HOME || (0, import_os5.homedir)();
+}
+function expandHome2(p, env) {
+  if (p === "~") return homeOf(env);
+  if (p.startsWith("~/")) return homeOf(env) + p.slice(1);
+  return p;
+}
+function realpathLenient(p, seen = /* @__PURE__ */ new Set()) {
+  const abs = (0, import_path6.resolve)(p);
+  const parent = (0, import_path6.dirname)(abs);
+  const base = (0, import_path6.basename)(abs);
+  const realParent = parent === abs ? abs : realpathLenient(parent, seen);
+  const full = (0, import_path6.join)(realParent, base);
+  let link;
+  try {
+    if (!(0, import_fs3.lstatSync)(full).isSymbolicLink()) return full;
+    link = (0, import_fs3.readlinkSync)(full);
+  } catch {
+    return full;
+  }
+  if (seen.has(full)) return full;
+  seen.add(full);
+  const target = (0, import_path6.isAbsolute)(link) ? link : (0, import_path6.join)(realParent, link);
+  return realpathLenient(target, seen);
+}
+function isDir(p) {
+  try {
+    return (0, import_fs3.statSync)(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+function repoRoot(cwd, env) {
+  const home = homeOf(env);
+  let dir = cwd;
+  for (; ; ) {
+    if (isInside(home, dir)) break;
+    if (isDir((0, import_path6.join)(dir, ...REPO_MARKER))) return dir;
+    const parent = (0, import_path6.dirname)(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return cwd;
+}
+function allowedRoots(cwd, env = process.env) {
+  const repo = repoRoot((0, import_path6.resolve)(cwd), env);
+  const candidates = [repo, (0, import_path6.join)(repo, "dev", "local")];
+  if (env.TMPDIR) candidates.push(env.TMPDIR);
+  candidates.push(...TMP_ROOTS);
+  for (const extra of (env[EXTRA_ROOTS_VAR] ?? "").split(":")) {
+    if (extra) candidates.push(expandHome2(extra, env));
+  }
+  const home = realpathLenient(homeOf(env));
+  const roots = [];
+  for (const candidate of candidates) {
+    const root = realpathLenient((0, import_path6.resolve)(candidate));
+    if (isInside(home, root) || roots.includes(root)) continue;
+    roots.push(root);
+  }
+  return roots;
+}
+function positionals(args) {
+  const out = [];
+  let literal = false;
+  for (const a of args) {
+    if (literal) {
+      out.push(a);
+      continue;
+    }
+    if (a === "--") {
+      literal = true;
+      continue;
+    }
+    if (a === "" || !a.startsWith("-")) out.push(a);
+  }
+  return out;
+}
+function operands(command, args) {
+  const valueFlags = VALUE_FLAGS[command];
+  if (!valueFlags) return positionals(args);
+  const kept = [];
+  let literal = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (literal) {
+      kept.push(a);
+      continue;
+    }
+    if (a === "--") {
+      literal = true;
+      continue;
+    }
+    if (valueFlags.has(a)) {
+      i++;
+      continue;
+    }
+    if (a === "" || !a.startsWith("-")) kept.push(a);
+  }
+  return kept;
+}
+function destination(command, args) {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "-t" || args[i] === "--target-directory") {
+      return i + 1 < args.length ? [args[i + 1]] : positionals(args);
+    }
+    if (args[i].startsWith("--target-directory=")) return [args[i].slice("--target-directory=".length)];
+  }
+  const pos = operands(command, args);
+  if (command === "install" && args.includes("-d")) return pos;
+  if (pos.length === 0) return [];
+  return [pos[pos.length - 1]];
+}
+function sedFiles(args) {
+  const files = [];
+  let scriptSeen = false;
+  let literal = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (literal) {
+      files.push(a);
+      continue;
+    }
+    if (a === "--") {
+      literal = true;
+      continue;
+    }
+    if (a === "-e" || a === "-f" || a === "--expression" || a === "--file") {
+      i++;
+      scriptSeen = true;
+      continue;
+    }
+    if (a.startsWith("-e") || a.startsWith("-f") || a.startsWith("--expression=") || a.startsWith("--file=")) {
+      scriptSeen = true;
+      continue;
+    }
+    if (a === "-i") {
+      i++;
+      continue;
+    }
+    if (a.startsWith("-")) continue;
+    if (!scriptSeen) {
+      scriptSeen = true;
+      continue;
+    }
+    files.push(a);
+  }
+  return files;
+}
+function peelWrappers(command, args) {
+  let cmd = command;
+  let rest = args;
+  const guard = /* @__PURE__ */ new Set();
+  while (WRAPPERS[cmd] && rest.length > 0 && !guard.has(cmd)) {
+    guard.add(cmd);
+    const valueFlags = WRAPPERS[cmd];
+    let i = 0;
+    while (i < rest.length) {
+      const a = rest[i];
+      if (a === "--") {
+        i++;
+        break;
+      }
+      if (cmd === "env" && /^\w+=/.test(a)) {
+        i++;
+        continue;
+      }
+      if (cmd === "timeout" && /^\d/.test(a)) {
+        i++;
+        break;
+      }
+      if (valueFlags.has(a)) {
+        i += 2;
+        continue;
+      }
+      if (a.startsWith("-")) {
+        i++;
+        continue;
+      }
+      break;
+    }
+    if (i >= rest.length) return { command: cmd, args: rest };
+    const inner = rest[i];
+    cmd = inner.includes("/") ? inner.split("/").pop() : inner;
+    rest = rest.slice(i + 1);
+  }
+  return { command: cmd, args: rest };
+}
+function writeTargets(cmd) {
+  const targets = [...cmd.writeRedirects ?? []];
+  const { command, args } = peelWrappers(cmd.command, cmd.args);
+  if (EVERY_ARG_WRITES.has(command)) {
+    targets.push(...operands(command, args));
+  } else if (DEST_ARG_WRITES.has(command)) {
+    targets.push(...destination(command, args));
+  } else if (command === "sed" && args.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith("--in-place"))) {
+    targets.push(...sedFiles(args));
+  } else if (command === "dd") {
+    targets.push(...args.filter((a) => a.startsWith("of=")).map((a) => a.slice(3)));
+  }
+  return targets;
+}
+function expandVars(word, env, assignments) {
+  let unresolved = false;
+  const lookup = (name) => {
+    const assigned = assignments.get(name);
+    if (assigned) return assigned.isDynamic || assigned.value === null ? void 0 : assigned.value;
+    return env[name];
+  };
+  const expanded = word.replace(/\$(\w+)|\$\{(\w+)\}/g, (_m, a, b) => {
+    const value = lookup(a ?? b);
+    if (value === void 0) unresolved = true;
+    return value ?? "";
+  });
+  return unresolved || /[$`]/.test(expanded) ? null : expanded;
+}
+function quoted(paths) {
+  return paths.map((p) => `'${p}'`).join(", ");
+}
+function breachReason(resolved, roots) {
+  return `BLOCKED: autopilot write-scope fence: '${resolved}' is outside the allowed scope (${quoted(roots)}). Write inside the session's repo, its dev/local, or a temp dir; add a root via ${EXTRA_ROOTS_VAR}, or set ${KILL_SWITCH}=off to disarm.`;
+}
+function unresolvableReason(target, command, roots) {
+  return `BLOCKED: autopilot write-scope fence: cannot resolve the write target '${target}' of \`${command}\` (shell expression, unset variable, ~user, or a directory change the fence could not follow); use a literal path inside the allowed scope (${quoted(roots)}), or set ${KILL_SWITCH}=off to disarm.`;
+}
+function resolveTarget(target, base, env, assignments) {
+  const expanded = expandVars(target, env, assignments);
+  if (expanded === null) return null;
+  const homed = expandHome2(expanded, env);
+  if (homed.startsWith("~")) return null;
+  if ((0, import_path6.isAbsolute)(homed)) return realpathLenient(homed);
+  if (base === null) return null;
+  return realpathLenient((0, import_path6.join)(base, homed));
+}
+var NO_SCOPE_REASON = "enforce_write_scope: no usable write scope (every candidate root was $HOME or above); refusing all writes";
+function writeScopeBreach(commands, roots, cwd, env = process.env, assignments = /* @__PURE__ */ new Map()) {
+  let base = realpathLenient(cwd);
+  for (const cmd of commands) {
+    if (cmd.command === "cd" || cmd.command === "pushd") {
+      const arg = cmd.args.find((a) => a === "-" || a !== "" && !a.startsWith("-"));
+      if (cmd.command === "cd" && arg === void 0) {
+        base = realpathLenient(homeOf(env));
+      } else if (arg === void 0 || arg === "-") {
+        base = null;
+      } else {
+        base = resolveTarget(arg, base, env, assignments);
+      }
+      continue;
+    }
+    if (cmd.command === "popd") {
+      base = null;
+      continue;
+    }
+    for (const target of writeTargets(cmd)) {
+      if (roots.length === 0) return NO_SCOPE_REASON;
+      const resolved = resolveTarget(target, base, env, assignments);
+      if (resolved === null) return unresolvableReason(target, cmd.command, roots);
+      if (resolved.startsWith("/dev/")) continue;
+      if (!roots.some((root) => isInside(resolved, root))) return breachReason(resolved, roots);
+    }
+  }
+  return null;
+}
+
 // src/evaluator.ts
 function safeRegexTest(pattern, input) {
   try {
@@ -14310,7 +14764,7 @@ function safeRegexTest(pattern, input) {
   }
 }
 function expandTilde(path) {
-  return path.startsWith("~/") ? (0, import_os5.homedir)() + path.slice(1) : path;
+  return path.startsWith("~/") ? (0, import_os6.homedir)() + path.slice(1) : path;
 }
 function commandMatchesName(cmd, name) {
   if (name.includes("*")) {
@@ -14328,7 +14782,7 @@ function commandMatchesName(cmd, name) {
     return expandTilde(cmd.originalCommand) === name;
   }
   if (name.startsWith("~/")) {
-    return expandTilde(cmd.originalCommand) === (0, import_os5.homedir)() + name.slice(1);
+    return expandTilde(cmd.originalCommand) === (0, import_os6.homedir)() + name.slice(1);
   }
   return cmd.command === name;
 }
@@ -14344,6 +14798,12 @@ function evaluate(parsed, config, depth = 0, cwd) {
     const types = parsed.incompleteNodeTypes;
     const reason = types && types.length ? `unrecognized shell construct: ${types.join(", ")}` : "unrecognized shell construct";
     return { decision: "ask", reason, details: [] };
+  }
+  const sessionCwd = cwd ?? process.cwd();
+  const scope = writeScopeState(sessionCwd);
+  if (scope.armed) {
+    const breach = writeScopeBreach(parsed.commands, scope.roots, sessionCwd, process.env, parsed.chainAssignments);
+    if (breach) return { decision: "deny", reason: breach, details: [] };
   }
   if (parsed.hasSubshell && parsed.subshellCommands.length > 0) {
     for (const subCmd of parsed.subshellCommands) {

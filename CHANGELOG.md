@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **hook**: autopilot write-scope fence for Bash. When `CLAUDE_UNATTENDED=1` is set (the autopilot loop exports it), any Bash command whose write target resolves outside the session scope is denied. Covered write vectors: shell redirects (`>`, `>>`, `>|`, `&>`, `<>`, fd-numbered forms, compound-statement and `bash -c` redirects, and a bare `> file` unbash otherwise drops); every operand of `tee`/`mkdir`/`touch`/`rm`/`rmdir`; both source and destination of `mv` (source is removed) and `ln` (a link can point out of scope); the destination of `cp`/`install`; the files of `sed -i` (BSD/GNU/attached/empty-script forms); and `dd of=`. Transparent wrappers (`env`, `command`, `timeout`, `nohup`, `nice`, `stdbuf`, ...) are peeled before classification; `touch -r`/`-t`/`-d` and other value-flags are excluded; `--` is honoured. The scope is the session repo (nearest ancestor holding `dev/local/autopilot`), its `dev/local`, `$TMPDIR`, `/tmp`, and `_AUTOPILOT_WRITE_SCOPE_EXTRA` roots, all resolved with a symlink-following realpath (dangling leaf included) and `$HOME` and above excluded; the same contract as `~/.claude/hooks/enforce_write_scope.py`, which gates the edit tools. The fence tracks `cd`/`pushd` itself across `&&`, `;`, and newlines (the parser only carries cwd across `&&`) so a relative write cannot re-anchor; it expands `$VAR` from in-command assignments before the environment; and it fails closed on anything it cannot resolve to a concrete path (`$(...)`, unset variable, `~user`, or a `cd` it could not follow). It runs ahead of `WARDEN_YOLO`, `bypassPermissions`, and `alwaysAllow`, so nothing lifts it for the session; reads are untouched; `_AUTOPILOT_WRITE_SCOPE=off` disarms it for one batch and says so on stderr. See the new "Write-Scope Fence" guide page for the covered vectors and the named gaps (interpreter scripts, `git -C`, archive/sync tools, staged `/tmp/x.sh` bodies, runtime-substituted find/xargs operands, glob-through-symlink)
+- **parser**: `ParsedCommand.writeRedirects` lists the files a command's redirects write (fd duplications excluded), on the command itself, on every command under a compound-statement redirect, through `sh -c` wrappers and script invocations, and as a synthetic command for a bare command-less redirect
+
+### Changed
+
+- **subcommand-runner**: `uv run`, `xargs`, and `find -exec` inner commands are now evaluated against the session cwd (threaded through), so the write-scope fence judges them against the right root set
+
 ### Fixed
 
 - **release**: releasing warden no longer overwrites every other plugin's version in the buvis/claude-plugins marketplace. The release script stamped all entries with warden's version (this caused the clobbers on v0.11.1, v0.12.0, v0.13.0); it now updates only warden's entry and aborts the push if any other entry changed

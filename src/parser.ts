@@ -63,6 +63,34 @@ function isCatHeredocInterpolation(part: CommandExpansionPart): boolean {
   return heredoc.content != null && heredoc.content.includes('\n');
 }
 
+const WRITE_REDIRECT_OPERATORS = new Set<string>(['>', '>>', '>|', '&>', '&>>', '<>', '>&']);
+
+// Extract redirect targets from a source slice unbash reduced to no command
+// (a bare `> f`). Only reached for a statement that yielded zero commands, so
+// the slice is the redirect list itself; an fd-duplication target (`>&1`, `>&-`)
+// is not a file and is skipped.
+const BARE_REDIRECT_RE = /(?:\d+|&)?(?:>>|>\||&>>|&>|<>|>&|>)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/g;
+function bareRedirectTargets(slice: string): string[] {
+  const targets: string[] = [];
+  for (const m of slice.matchAll(BARE_REDIRECT_RE)) {
+    const raw = m[1].replace(/^["']|["']$/g, '');
+    if (raw && !/^(\d+|-)$/.test(raw)) targets.push(raw);
+  }
+  return targets;
+}
+
+/** Files a redirect list writes to; fd duplications (`2>&1`, `>&-`) are not files. */
+function writeRedirectTargets(redirects: Redirect[]): string[] {
+  const targets: string[] = [];
+  for (const r of redirects) {
+    if (!WRITE_REDIRECT_OPERATORS.has(r.operator) || !r.target) continue;
+    const value = r.target.value;
+    if (r.operator === '>&' && /^(\d+|-)$/.test(value)) continue;
+    targets.push(value);
+  }
+  return targets;
+}
+
 function extractHeredoc(
   cmd: UnbashCommand,
 ): { content: string; quotedDelimiter: boolean } | undefined {
@@ -248,6 +276,8 @@ function convertCommand(
   if (resolvedFrom) result.resolvedFrom = resolvedFrom;
   const heredoc = extractHeredoc(cmd);
   if (heredoc) result.heredoc = heredoc;
+  const writes = writeRedirectTargets(cmd.redirects);
+  if (writes.length > 0) result.writeRedirects = writes;
   return result;
 }
 
@@ -306,7 +336,25 @@ export function walkNode(node: Node, result: WalkResult): void {
         if (r.target) collectExpansionsFromWord(r.target, result);
         if (r.body) collectExpansionsFromWord(r.body, result);
       }
+      const before = result.commands.length;
       walkNode(stmt.command, result);
+      // A statement redirect writes: `{ a; b; } > f` and `for ...; done > f`
+      // stamp every inner command; a bare `> f` (no command) produced none, so
+      // emit a synthetic command carrying the write so the fence still sees it.
+      const writes = writeRedirectTargets(stmt.redirects);
+      if (writes.length > 0) {
+        if (result.commands.length === before) {
+          result.commands.push({
+            command: '', originalCommand: '', args: [], envPrefixes: [],
+            raw: writes.join(' '), writeRedirects: writes,
+          });
+        } else {
+          for (let i = before; i < result.commands.length; i++) {
+            const cmd = result.commands[i];
+            cmd.writeRedirects = [...(cmd.writeRedirects ?? []), ...writes];
+          }
+        }
+      }
       break;
     }
 
@@ -336,6 +384,18 @@ export function walkNode(node: Node, result: WalkResult): void {
           result.chainAssignments.set(a.name, {
             value: a.value,
             isDynamic: a.isDynamic,
+          });
+        }
+        // A nameless command that still redirects (`> out`, `2>err`,
+        // `VAR=x >out`) truncates/creates its target. Emit a synthetic command
+        // carrying the write targets so the write-scope fence can judge them;
+        // without this a bare redirect parsed to zero commands and evaluated as
+        // "Empty command: allow".
+        const bareWrites = writeRedirectTargets(cmd.redirects);
+        if (bareWrites.length > 0) {
+          result.commands.push({
+            command: '', originalCommand: '', args: [], envPrefixes: [],
+            raw: bareWrites.join(' '), writeRedirects: bareWrites,
           });
         }
         break;
@@ -404,6 +464,7 @@ export function walkNode(node: Node, result: WalkResult): void {
             raw: parsed.raw,
           };
           if (scriptPath.includes('/')) scriptCmd.originalPath = scriptPath;
+          if (parsed.writeRedirects) scriptCmd.writeRedirects = parsed.writeRedirects;
           result.commands.push(scriptCmd);
         } else {
           result.commands.push(parsed);
@@ -605,7 +666,21 @@ export function parseCommand(input: string): ParseResult {
   };
 
   for (const stmt of ast.commands) {
+    const before = result.commands.length;
     walkNode(stmt, result);
+    // unbash DROPS a command-less redirect (`> f`, `2>> f`) entirely - it lands
+    // on neither the Statement nor the empty Command node. Recover its write
+    // targets from the statement's own source slice so the fence still sees the
+    // file the shell would truncate/create.
+    if (result.commands.length === before && typeof stmt.pos === 'number' && typeof stmt.end === 'number') {
+      const bareWrites = bareRedirectTargets(preprocessed.slice(stmt.pos, stmt.end));
+      if (bareWrites.length > 0) {
+        result.commands.push({
+          command: '', originalCommand: '', args: [], envPrefixes: [],
+          raw: bareWrites.join(' '), writeRedirects: bareWrites,
+        });
+      }
+    }
   }
 
   dropHeredocsIfMultiple(input, result.commands);

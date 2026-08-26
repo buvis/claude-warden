@@ -1,3 +1,4 @@
+import { writeSync } from 'fs';
 import { wardenEvalWithConfig } from './core';
 import { loadConfig } from './rules';
 import { formatSystemMessage } from './suggest';
@@ -6,6 +7,7 @@ import { logDecision } from './audit';
 import { getYoloState, activateYolo, deactivateYolo, parseYoloCommand } from './yolo';
 import { buildDefaultSessionGuidance, DEFAULT_TEMP_SCRIPT_DIR } from './defaults';
 import { readStdin } from './stdin';
+import { writeScopeState, writeScopeDeny, DISARM_LINE } from './write-scope';
 import type { ConfigWarning, HookInput, HookOutput, WardenConfig } from './types';
 
 function buildConfigHealthNote(warnings: ConfigWarning[]): string {
@@ -75,6 +77,32 @@ async function main() {
     process.exit(0);
   }
 
+  const command = input.tool_input?.command;
+
+  // Autopilot write-scope fence (write-scope.ts), FIRST — ahead of
+  // bypassPermissions, WARDEN_YOLO, and the yolo-command/state paths below. It
+  // is a scope bound, not a permission, so nothing may lift it for the session:
+  // a disarmed batch says so on stderr; an armed out-of-scope write is denied
+  // here before any of those short-circuits can allow it.
+  if (typeof command === 'string' && command) {
+    const scope = writeScopeState(input.cwd);
+    // writeSync: process.stderr on a macOS pipe is async and process.exit() would drop it.
+    if (!scope.armed && scope.disarmed) writeSync(2, `${DISARM_LINE}\n`);
+    const breach = writeScopeDeny(command, input.cwd);
+    if (breach) {
+      const output: HookOutput = {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: breach,
+        },
+      };
+      process.stdout.write(JSON.stringify(output));
+      writeSync(2, `${breach}\n`);
+      process.exit(2);
+    }
+  }
+
   // Claude Code sends the internal enum value, not the CLI flag name.
   if (input.permission_mode === 'bypassPermissions') {
     process.exit(0);
@@ -85,7 +113,6 @@ async function main() {
     process.exit(0);
   }
 
-  const command = input.tool_input?.command;
   if (!command || typeof command !== 'string') {
     process.exit(0);
   }

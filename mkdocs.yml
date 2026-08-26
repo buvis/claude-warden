@@ -56,6 +56,7 @@ nav:
       - Trusted Remotes: guide/trusted-remotes.md
       - Target Policies: guide/target-policies.md
       - YOLO Mode: guide/yolo-mode.md
+      - Write-Scope Fence: guide/write-scope.md
       - Slash Commands: guide/slash-commands.md
       - Notifications & Audit: guide/notifications-audit.md
       - Troubleshooting: guide/troubleshooting.md

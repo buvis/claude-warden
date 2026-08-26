@@ -12,6 +12,10 @@ export interface ParsedCommand {
    *  content (those keep the pre-existing ask). `quotedDelimiter` is true for
    *  `<<'EOF'`/`<<"EOF"` (shell does no expansion in the body). */
   heredoc?: { content: string; quotedDelimiter: boolean };
+  /** Files this command's redirects write (`>`, `>>`, `>|`, `&>`, `&>>`, `<>`,
+   *  `>&file`); fd duplications (`2>&1`, `>&-`) are not listed. Absent when
+   *  the command has no writing redirect. */
+  writeRedirects?: string[];
 }
 
 export interface ChainAssignment {

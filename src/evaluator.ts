@@ -11,6 +11,7 @@ import { tryRemoteExec } from './remote-exec';
 import { matchesDangerousEnv } from './env-danger';
 import { trySubcommandRunner } from './subcommand-runner';
 import { tryScriptEval } from './script-eval';
+import { writeScopeState, writeScopeBreach } from './write-scope';
 
 /** Safely test a regex pattern, returning false on invalid patterns. */
 function safeRegexTest(pattern: string, input: string): boolean {
@@ -72,6 +73,18 @@ export function evaluate(parsed: ParseResult, config: WardenConfig, depth: numbe
       ? `unrecognized shell construct: ${types.join(', ')}`
       : 'unrecognized shell construct';
     return { decision: 'ask', reason, details: [] };
+  }
+
+  // Autopilot write-scope fence: armed by CLAUDE_UNATTENDED=1 only. Checked
+  // before the subshell early-returns (so a subshell's `ask` cannot preempt a
+  // deny while the outer redirect still writes) and before any allowlist (so an
+  // `echo`/`cp`/`sed` in alwaysAllow cannot write outside scope). Reads are
+  // untouched. index.ts runs the same check first, ahead of YOLO/bypass.
+  const sessionCwd = cwd ?? process.cwd();
+  const scope = writeScopeState(sessionCwd);
+  if (scope.armed) {
+    const breach = writeScopeBreach(parsed.commands, scope.roots, sessionCwd, process.env, parsed.chainAssignments);
+    if (breach) return { decision: 'deny', reason: breach, details: [] };
   }
 
   // Recursively evaluate extracted subshell commands

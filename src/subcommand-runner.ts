@@ -55,7 +55,7 @@ function parseUvRunSubcommand(args: string[]): { subcommand: ParsedCommand | nul
   };
 }
 
-function evaluateUvCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail | null {
+function evaluateUvCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, cwd?: string): CommandEvalDetail | null {
   const { command, args } = cmd;
   if (args[0] !== 'run') return null;
 
@@ -74,7 +74,7 @@ function evaluateUvCommand(cmd: ParsedCommand, config: WardenConfig, depth: numb
     return null;
   }
 
-  const result = evaluate(asParseResult(subcommand), config, depth + 1);
+  const result = evaluate(asParseResult(subcommand), config, depth + 1, cwd);
 
   return {
     command, args,
@@ -172,7 +172,7 @@ function parseXargsSubcommand(args: string[]): { subcommand: ParsedCommand | nul
   };
 }
 
-function evaluateXargsCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail {
+function evaluateXargsCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, cwd?: string): CommandEvalDetail {
   const { command, args } = cmd;
   const { subcommand, unresolved } = parseXargsSubcommand(args);
 
@@ -200,7 +200,7 @@ function evaluateXargsCommand(cmd: ParsedCommand, config: WardenConfig, depth: n
     parsed = asParseResult(subcommand);
   }
 
-  const result = evaluate(parsed, config, depth + 1);
+  const result = evaluate(parsed, config, depth + 1, cwd);
 
   return {
     command,
@@ -239,7 +239,7 @@ function parseFindExecCommands(args: string[]): ParsedCommand[] {
   return commands;
 }
 
-function evaluateFindCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0): CommandEvalDetail {
+function evaluateFindCommand(cmd: ParsedCommand, config: WardenConfig, depth: number = 0, cwd?: string): CommandEvalDetail {
   const { command, args } = cmd;
 
   // -delete, -ok, -okdir are inherently dangerous
@@ -258,7 +258,7 @@ function evaluateFindCommand(cmd: ParsedCommand, config: WardenConfig, depth: nu
   }
 
   for (const execCmd of execCommands) {
-    const result = evaluate(asParseResult(execCmd), config, depth + 1);
+    const result = evaluate(asParseResult(execCmd), config, depth + 1, cwd);
     if (result.decision === 'deny') {
       return { command, args, decision: 'deny', reason: `find -exec: ${result.reason}`, matchedRule: 'find:exec' };
     }
@@ -307,9 +307,9 @@ function evaluatePkgRunnerSubcommand(cmd: ParsedCommand, config: WardenConfig, d
  */
 export function trySubcommandRunner(cmd: ParsedCommand, config: WardenConfig, depth: number, cwd?: string): CommandEvalDetail | null {
   switch (cmd.command) {
-    case 'uv': return evaluateUvCommand(cmd, config, depth);
-    case 'xargs': return evaluateXargsCommand(cmd, config, depth);
-    case 'find': return evaluateFindCommand(cmd, config, depth);
+    case 'uv': return evaluateUvCommand(cmd, config, depth, cwd);
+    case 'xargs': return evaluateXargsCommand(cmd, config, depth, cwd);
+    case 'find': return evaluateFindCommand(cmd, config, depth, cwd);
     case 'npx':
     case 'bunx':
     case 'pnpx': return evaluatePkgRunnerSubcommand(cmd, config, depth, cwd);
