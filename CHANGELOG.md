@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-12
+
 ### Changed
 
 - **write-scope**: treat `docs/dev/tmp/` as the repository-local disposable
