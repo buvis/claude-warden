@@ -14,7 +14,7 @@ import type { WardenConfig } from '../types';
 /**
  * Autopilot write-scope fence, Bash half (PRD 00145). Mirrors
  * ~/.claude/hooks/tests/test_enforce_write_scope.py: a fixture repo holding
- * dev/local/autopilot, a fixture TMPDIR, and a fixture HOME so the root floor
+ * docs/dev/project-management/autopilot, a fixture TMPDIR, and a fixture HOME so the root floor
  * and `~` expansion are under test control. Out-of-scope fixtures sit beside
  * the repo, never under it or under a temp root.
  */
@@ -30,7 +30,7 @@ let outside: string;
 beforeEach(() => {
   base = realpathSync(mkdtempSync(join(tmpdir(), 'warden-write-scope-')));
   repo = join(base, 'repo');
-  mkdirSync(join(repo, 'dev', 'local', 'autopilot'), { recursive: true });
+  mkdirSync(join(repo, 'docs', 'dev', 'project-management', 'autopilot'), { recursive: true });
   mkdirSync(join(repo, 'src'));
   tmp = join(base, 'tmproot');
   mkdirSync(tmp);
@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 function defaultRoots(): string[] {
-  return [repo, join(repo, 'dev', 'local'), tmp, REAL_TMP];
+  return [repo, join(repo, 'docs', 'dev', 'tmp'), tmp, REAL_TMP];
 }
 
 /** Default config plus an allowlist for every write command, so an in-scope
@@ -119,26 +119,26 @@ describe('parser: writing redirects surface on the command', () => {
 });
 
 describe('allowedRoots: the shared root contract', () => {
-  it('is repo, repo/dev/local, TMPDIR, /tmp for a cwd inside the repo', () => {
+  it('is repo, repo/docs/dev/tmp, TMPDIR, /tmp for a cwd inside the repo', () => {
     mkdirSync(join(repo, 'sub', 'deeper'), { recursive: true });
     expect(allowedRoots(join(repo, 'sub', 'deeper'))).toEqual(defaultRoots());
     expect(allowedRoots(repo)).toEqual(defaultRoots());
   });
 
-  it('uses cwd itself when no ancestor carries dev/local/autopilot', () => {
+  it('uses cwd itself when no ancestor carries docs/dev/project-management/autopilot', () => {
     const plain = join(base, 'plain');
     mkdirSync(plain);
-    expect(allowedRoots(plain)).toEqual([plain, join(plain, 'dev', 'local'), tmp, REAL_TMP]);
+    expect(allowedRoots(plain)).toEqual([plain, join(plain, 'docs', 'dev', 'tmp'), tmp, REAL_TMP]);
   });
 
-  it('walks past a decoy dev/local without autopilot/ inside', () => {
+  it('walks past a decoy docs/dev/project-management without autopilot/ inside', () => {
     const sub = join(repo, 'sub');
-    mkdirSync(join(sub, 'dev', 'local'), { recursive: true });
+    mkdirSync(join(sub, 'docs', 'dev', 'project-management'), { recursive: true });
     expect(allowedRoots(sub)).toEqual(defaultRoots());
   });
 
   it('stops the walk below $HOME', () => {
-    mkdirSync(join(home, 'dev', 'local', 'autopilot'), { recursive: true });
+    mkdirSync(join(home, 'docs', 'dev', 'project-management', 'autopilot'), { recursive: true });
     const proj = join(home, 'proj');
     mkdirSync(proj);
     expect(allowedRoots(proj)[0]).toBe(proj);
@@ -146,9 +146,9 @@ describe('allowedRoots: the shared root contract', () => {
 
   it('drops $HOME and its ancestors, keeps a descendant', () => {
     vi.stubEnv('TMPDIR', '');
-    expect(allowedRoots(home)).toEqual([join(home, 'dev', 'local'), REAL_TMP]);
+    expect(allowedRoots(home)).toEqual([join(home, 'docs', 'dev', 'tmp'), REAL_TMP]);
     vi.stubEnv('_AUTOPILOT_WRITE_SCOPE_EXTRA', `${home}:${base}:/`);
-    expect(allowedRoots(repo)).toEqual([repo, join(repo, 'dev', 'local'), REAL_TMP]);
+    expect(allowedRoots(repo)).toEqual([repo, join(repo, 'docs', 'dev', 'tmp'), REAL_TMP]);
   });
 
   it('widens through _AUTOPILOT_WRITE_SCOPE_EXTRA with ~ expansion and dedupes', () => {
@@ -159,12 +159,12 @@ describe('allowedRoots: the shared root contract', () => {
     expect(allowedRoots(repo)).toEqual([...defaultRoots(), join(home, 'extra-one'), two]);
   });
 
-  it('realpaths a symlinked dev/local to its target', () => {
+  it('realpaths a symlinked docs/dev/tmp to its target', () => {
     const symrepo = join(base, 'symrepo');
     const external = join(base, 'claude-dev');
-    mkdirSync(join(external, 'autopilot'), { recursive: true });
-    mkdirSync(join(symrepo, 'dev'), { recursive: true });
-    symlinkSync(external, join(symrepo, 'dev', 'local'));
+    mkdirSync(external, { recursive: true });
+    mkdirSync(join(symrepo, 'docs', 'dev'), { recursive: true });
+    symlinkSync(external, join(symrepo, 'docs', 'dev', 'tmp'));
     expect(allowedRoots(symrepo)).toEqual([symrepo, external, tmp, REAL_TMP]);
   });
 });
@@ -311,18 +311,18 @@ describe('evaluate(): armed fence denies out-of-scope writes', () => {
 describe('evaluate(): armed fence allows in-scope writes and reads', () => {
   it('allows writes inside the session scope', () => {
     const commands = [
-      'echo x > dev/local/tmp/x.txt',
-      `echo x > ${join(repo, 'dev', 'local', 'autopilot', 'state.json')}`,
+      'echo x > docs/dev/tmp/x.txt',
+      `echo x > ${join(repo, 'docs', 'dev', 'project-management', 'autopilot', 'state.json')}`,
       "sed -i '' 's/a/b/' src/foo.py",
       `cp src/foo.py ${join(tmp, 'copy.py')}`,
       `mv src/foo.py ${join(repo, 'src', 'bar.py')}`,
-      'tee dev/local/tmp/out.txt',
+      'tee docs/dev/tmp/out.txt',
       `mkdir -p ${join(REAL_TMP, 'review-00145')}`,
-      'rm -f dev/local/tmp/x.txt',
+      'rm -f docs/dev/tmp/x.txt',
       'echo x > $TMPDIR/x.txt',
-      'rg foo src 2>/dev/null > dev/local/tmp/hits.txt',
-      'cd dev/local && echo x > tmp/y.txt',
-      'touch -r src/foo.py dev/local/tmp/z.txt',
+      'rg foo src 2>/dev/null > docs/dev/tmp/hits.txt',
+      'cd docs/dev/project-management && echo x > reviews/y.txt',
+      'touch -r src/foo.py docs/dev/tmp/z.txt',
     ];
     for (const command of commands) {
       expect(judge(command).decision, command).toBe('allow');
@@ -337,7 +337,7 @@ describe('evaluate(): armed fence allows in-scope writes and reads', () => {
 
   it('outranks alwaysAllow but the in-scope write resolves to a plain ok', () => {
     expect(judge(`echo x > ${join(outside, 'x.txt')}`).decision).toBe('deny');
-    expect(judge('echo x > dev/local/tmp/x.txt').reason).toBe('ok');
+    expect(judge('echo x > docs/dev/tmp/x.txt').reason).toBe('ok');
   });
 
   it('carries the deny reason in the hook wording, byte for byte with the Python fence', () => {
@@ -416,7 +416,7 @@ describe('hook binary end to end', () => {
   });
 
   it('allows the in-scope write and stays silent', () => {
-    const r = runHook('echo x > dev/local/tmp/x.txt', { CLAUDE_UNATTENDED: '1' });
+    const r = runHook('echo x > docs/dev/tmp/x.txt', { CLAUDE_UNATTENDED: '1' });
     expect(r.decision).toBe('allow');
     expect(r.stderr).toBe('');
   });

@@ -18,10 +18,10 @@ The autopilot loop exports `CLAUDE_UNATTENDED=1` for every session it spawns. Se
 
 ## Allowed roots
 
-Every root is realpath'd (so a symlinked `dev/local` resolves to its target), `$HOME` and its ancestors never grant scope, and duplicates are dropped. In order:
+Every root is realpath'd (so a symlinked `docs/dev/tmp` resolves to its target), `$HOME` and its ancestors never grant scope, and duplicates are dropped. In order:
 
-1. The session repo: the nearest ancestor of the session cwd that holds `dev/local/autopilot`, searched below `$HOME` only; the cwd itself when none does.
-2. `<repo>/dev/local`
+1. The session repo: the nearest ancestor of the session cwd that holds `docs/dev/project-management/autopilot`, searched below `$HOME` only; the cwd itself when none does.
+2. `<repo>/docs/dev/tmp`
 3. `$TMPDIR`, when set
 4. `/tmp`
 5. Each `:`-joined entry of `_AUTOPILOT_WRITE_SCOPE_EXTRA` (`~` expands)
@@ -29,7 +29,7 @@ Every root is realpath'd (so a symlinked `dev/local` resolves to its target), `$
 A write target is resolved the same way (`~` expanded, relative paths anchored at the cwd the chain reached, realpath'd) and must land inside one root. The deny reason names the resolved path and every root:
 
 ```
-BLOCKED: autopilot write-scope fence: '/Users/me/other-repo/x.py' is outside the allowed scope ('/Users/me/repo', '/Users/me/repo/dev/local', '/private/tmp'). Write inside the session's repo, its dev/local, or a temp dir; add a root via _AUTOPILOT_WRITE_SCOPE_EXTRA, or set _AUTOPILOT_WRITE_SCOPE=off to disarm.
+BLOCKED: autopilot write-scope fence: '/Users/me/other-repo/x.py' is outside the allowed scope ('/Users/me/repo', '/Users/me/repo/docs/dev/tmp', '/private/tmp'). Write inside the session's repo, its docs/dev/tmp, or a temp dir; add a root via _AUTOPILOT_WRITE_SCOPE_EXTRA, or set _AUTOPILOT_WRITE_SCOPE=off to disarm.
 ```
 
 ## Covered write vectors

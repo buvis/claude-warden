@@ -14447,7 +14447,7 @@ var MARKER = "CLAUDE_UNATTENDED";
 var KILL_SWITCH = "_AUTOPILOT_WRITE_SCOPE";
 var EXTRA_ROOTS_VAR = "_AUTOPILOT_WRITE_SCOPE_EXTRA";
 var TMP_ROOTS = ["/tmp"];
-var REPO_MARKER = ["dev", "local", "autopilot"];
+var REPO_MARKER = ["docs", "dev", "project-management", "autopilot"];
 var EVERY_ARG_WRITES = /* @__PURE__ */ new Set(["tee", "mkdir", "touch", "rm", "rmdir", "mv", "ln"]);
 var DEST_ARG_WRITES = /* @__PURE__ */ new Set(["cp", "install"]);
 var VALUE_FLAGS = {
@@ -14539,7 +14539,7 @@ function repoRoot(cwd, env) {
 }
 function allowedRoots(cwd, env = process.env) {
   const repo = repoRoot((0, import_path6.resolve)(cwd), env);
-  const candidates = [repo, (0, import_path6.join)(repo, "dev", "local")];
+  const candidates = [repo, (0, import_path6.join)(repo, "docs", "dev", "tmp")];
   if (env.TMPDIR) candidates.push(env.TMPDIR);
   candidates.push(...TMP_ROOTS);
   for (const extra of (env[EXTRA_ROOTS_VAR] ?? "").split(":")) {
@@ -14712,7 +14712,7 @@ function quoted(paths) {
   return paths.map((p) => `'${p}'`).join(", ");
 }
 function breachReason(resolved, roots) {
-  return `BLOCKED: autopilot write-scope fence: '${resolved}' is outside the allowed scope (${quoted(roots)}). Write inside the session's repo, its dev/local, or a temp dir; add a root via ${EXTRA_ROOTS_VAR}, or set ${KILL_SWITCH}=off to disarm.`;
+  return `BLOCKED: autopilot write-scope fence: '${resolved}' is outside the allowed scope (${quoted(roots)}). Write inside the session's repo, its docs/dev/tmp, or a temp dir; add a root via ${EXTRA_ROOTS_VAR}, or set ${KILL_SWITCH}=off to disarm.`;
 }
 function unresolvableReason(target, command, roots) {
   return `BLOCKED: autopilot write-scope fence: cannot resolve the write target '${target}' of \`${command}\` (shell expression, unset variable, ~user, or a directory change the fence could not follow); use a literal path inside the allowed scope (${quoted(roots)}), or set ${KILL_SWITCH}=off to disarm.`;

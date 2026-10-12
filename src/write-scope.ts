@@ -19,9 +19,9 @@ import type { ChainAssignment, ParsedCommand } from './types';
  *   CLAUDE_UNATTENDED=1                        -> enforce
  *
  * Roots (realpath'd, in this order, $HOME and its ancestors dropped):
- *   1. the session repo: nearest ancestor of cwd holding dev/local/autopilot,
+ *   1. the session repo: nearest ancestor of cwd holding docs/dev/project-management/autopilot,
  *      searched below $HOME only; cwd itself when none
- *   2. <repo>/dev/local
+ *   2. <repo>/docs/dev/tmp
  *   3. $TMPDIR when set
  *   4. /tmp
  *   5. each ':'-joined entry of _AUTOPILOT_WRITE_SCOPE_EXTRA (~ expanded)
@@ -38,7 +38,7 @@ export const MARKER = 'CLAUDE_UNATTENDED';
 export const KILL_SWITCH = '_AUTOPILOT_WRITE_SCOPE';
 export const EXTRA_ROOTS_VAR = '_AUTOPILOT_WRITE_SCOPE_EXTRA';
 const TMP_ROOTS = ['/tmp'];
-const REPO_MARKER = ['dev', 'local', 'autopilot'];
+const REPO_MARKER = ['docs', 'dev', 'project-management', 'autopilot'];
 
 /** Commands whose every positional argument is a path they create/change/remove. */
 const EVERY_ARG_WRITES = new Set(['tee', 'mkdir', 'touch', 'rm', 'rmdir', 'mv', 'ln']);
@@ -136,7 +136,7 @@ function isDir(p: string): boolean {
   }
 }
 
-/** Nearest ancestor of `cwd` (below $HOME) holding dev/local/autopilot; `cwd` if none. */
+/** Nearest ancestor of `cwd` (below $HOME) holding docs/dev/project-management/autopilot; `cwd` if none. */
 function repoRoot(cwd: string, env: NodeJS.ProcessEnv): string {
   const home = homeOf(env);
   let dir = cwd;
@@ -153,7 +153,7 @@ function repoRoot(cwd: string, env: NodeJS.ProcessEnv): string {
 /** Realpath'd roots an autopilot session may write under; see the module doc. */
 export function allowedRoots(cwd: string, env: NodeJS.ProcessEnv = process.env): string[] {
   const repo = repoRoot(resolve(cwd), env);
-  const candidates = [repo, join(repo, 'dev', 'local')];
+  const candidates = [repo, join(repo, 'docs', 'dev', 'tmp')];
   if (env.TMPDIR) candidates.push(env.TMPDIR);
   candidates.push(...TMP_ROOTS);
   for (const extra of (env[EXTRA_ROOTS_VAR] ?? '').split(':')) {
@@ -338,7 +338,7 @@ export function breachReason(resolved: string, roots: string[]): string {
   return (
     `BLOCKED: autopilot write-scope fence: '${resolved}' is outside the ` +
     `allowed scope (${quoted(roots)}). ` +
-    "Write inside the session's repo, its dev/local, or a temp dir; " +
+    "Write inside the session's repo, its docs/dev/tmp, or a temp dir; " +
     `add a root via ${EXTRA_ROOTS_VAR}, or set ${KILL_SWITCH}=off to disarm.`
   );
 }
